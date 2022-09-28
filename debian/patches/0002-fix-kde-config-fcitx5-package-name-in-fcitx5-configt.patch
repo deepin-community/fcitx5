@@ -1,0 +1,215 @@
+From: Shengjing Zhu <zhsj@debian.org>
+Date: Wed, 26 Aug 2020 01:38:16 +0800
+Subject: fix kde-config-fcitx5 package name in fcitx5-configtool
+
+Last-Update: 2022-03-16
+---
+ data/fcitx5-configtool.sh | 2 +-
+ po/ca.po                  | 2 +-
+ po/da.po                  | 4 ++--
+ po/de.po                  | 2 +-
+ po/es.po                  | 2 +-
+ po/fcitx5.pot             | 2 +-
+ po/fr.po                  | 2 +-
+ po/he.po                  | 2 +-
+ po/ja.po                  | 4 ++--
+ po/ko.po                  | 4 ++--
+ po/ru.po                  | 2 +-
+ po/zh_CN.po               | 4 ++--
+ po/zh_TW.po               | 4 ++--
+ 13 files changed, 18 insertions(+), 18 deletions(-)
+
+diff --git a/data/fcitx5-configtool.sh b/data/fcitx5-configtool.sh
+index 4de08d2..b495978 100755
+--- a/data/fcitx5-configtool.sh
++++ b/data/fcitx5-configtool.sh
+@@ -128,7 +128,7 @@ run_qt() {
+ run_xdg() {
+     case "$DE" in
+         kde)
+-            message "$(_ "You're currently running KDE, but KCModule for fcitx couldn't be found, the package name of this KCModule is usually kcm-fcitx or kde-config-fcitx. Now it will open config directory.")"
++            message "$(_ "You're currently running KDE, but KCModule for fcitx couldn't be found, the package name of this KCModule is usually kcm-fcitx or kde-config-fcitx5. Now it will open config directory.")"
+             ;;
+         *)
+             message "$(_ "You're currently running Fcitx with GUI, but fcitx5-config-qt couldn't be found. Now it will open config directory.")"
+diff --git a/po/ca.po b/po/ca.po
+index 9b0df02..f880591 100644
+--- a/po/ca.po
++++ b/po/ca.po
+@@ -2433,7 +2433,7 @@ msgstr ""
+ #: data/fcitx5-configtool.sh:131
+ msgid ""
+ "You're currently running KDE, but KCModule for fcitx couldn't be found, the "
+-"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx. Now "
++"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx5. Now "
+ "it will open config directory."
+ msgstr ""
+ 
+diff --git a/po/da.po b/po/da.po
+index f74f380..e4f20fb 100644
+--- a/po/da.po
++++ b/po/da.po
+@@ -2473,11 +2473,11 @@ msgstr ""
+ #: data/fcitx5-configtool.sh:131
+ msgid ""
+ "You're currently running KDE, but KCModule for fcitx couldn't be found, the "
+-"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx. Now "
++"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx5. Now "
+ "it will open config directory."
+ msgstr ""
+ "Du kører i øjeblikket KDE, men KCModule til fcitx blev ikke fundet, "
+-"pakkenavnet for KCModule er typisk kcm-fcitx eller kde-config-fcitx. Den vil "
++"pakkenavnet for KCModule er typisk kcm-fcitx eller kde-config-fcitx5. Den vil "
+ "nu åbne konfigurationsmappen."
+ 
+ #: data/fcitx5-diagnose.sh:1161
+diff --git a/po/de.po b/po/de.po
+index 8aba966..5e6685b 100644
+--- a/po/de.po
++++ b/po/de.po
+@@ -2435,7 +2435,7 @@ msgstr ""
+ #: data/fcitx5-configtool.sh:131
+ msgid ""
+ "You're currently running KDE, but KCModule for fcitx couldn't be found, the "
+-"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx. Now "
++"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx5. Now "
+ "it will open config directory."
+ msgstr ""
+ 
+diff --git a/po/es.po b/po/es.po
+index 5f1ed46..ac18cc6 100644
+--- a/po/es.po
++++ b/po/es.po
+@@ -2433,7 +2433,7 @@ msgstr ""
+ #: data/fcitx5-configtool.sh:131
+ msgid ""
+ "You're currently running KDE, but KCModule for fcitx couldn't be found, the "
+-"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx. Now "
++"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx5. Now "
+ "it will open config directory."
+ msgstr ""
+ 
+diff --git a/po/fcitx5.pot b/po/fcitx5.pot
+index 2e0b720..a2de8aa 100644
+--- a/po/fcitx5.pot
++++ b/po/fcitx5.pot
+@@ -2428,7 +2428,7 @@ msgstr ""
+ #: data/fcitx5-configtool.sh:131
+ msgid ""
+ "You're currently running KDE, but KCModule for fcitx couldn't be found, the "
+-"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx. Now "
++"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx5. Now "
+ "it will open config directory."
+ msgstr ""
+ 
+diff --git a/po/fr.po b/po/fr.po
+index 5329966..745f34d 100644
+--- a/po/fr.po
++++ b/po/fr.po
+@@ -2428,7 +2428,7 @@ msgstr ""
+ #: data/fcitx5-configtool.sh:131
+ msgid ""
+ "You're currently running KDE, but KCModule for fcitx couldn't be found, the "
+-"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx. Now "
++"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx5. Now "
+ "it will open config directory."
+ msgstr ""
+ 
+diff --git a/po/he.po b/po/he.po
+index 39e5d93..ec22fe3 100644
+--- a/po/he.po
++++ b/po/he.po
+@@ -2433,7 +2433,7 @@ msgstr ""
+ #: data/fcitx5-configtool.sh:131
+ msgid ""
+ "You're currently running KDE, but KCModule for fcitx couldn't be found, the "
+-"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx. Now "
++"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx5. Now "
+ "it will open config directory."
+ msgstr ""
+ 
+diff --git a/po/ja.po b/po/ja.po
+index f7d0849..9c05ded 100644
+--- a/po/ja.po
++++ b/po/ja.po
+@@ -2480,11 +2480,11 @@ msgstr ""
+ #: data/fcitx5-configtool.sh:131
+ msgid ""
+ "You're currently running KDE, but KCModule for fcitx couldn't be found, the "
+-"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx. Now "
++"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx5. Now "
+ "it will open config directory."
+ msgstr ""
+ "現在 KDE を使用していますが、fcitx 用の KC モジュールが見つかりません。KC モ"
+-"ジュールのパッケージ名は、たいていの場合 kcm-fcitx か kde-config-fcitx です。"
++"ジュールのパッケージ名は、たいていの場合 kcm-fcitx か kde-config-fcitx5 です。"
+ "今回は設定ディレクトリを開きます。"
+ 
+ #: data/fcitx5-diagnose.sh:1161
+diff --git a/po/ko.po b/po/ko.po
+index aae8011..4523617 100644
+--- a/po/ko.po
++++ b/po/ko.po
+@@ -2467,11 +2467,11 @@ msgstr ""
+ #: data/fcitx5-configtool.sh:131
+ msgid ""
+ "You're currently running KDE, but KCModule for fcitx couldn't be found, the "
+-"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx. Now "
++"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx5. Now "
+ "it will open config directory."
+ msgstr ""
+ "현재 KDE를 실행하고 있지만 Fcitx용 KCModule을 찾을 수 없습니다. 이 KCModule"
+-"의 패키지 이름은 일반적으로 kcm-fcitx 또는 kde-config-fcitx입니다. 이제 구성 "
++"의 패키지 이름은 일반적으로 kcm-fcitx 또는 kde-config-fcitx5입니다. 이제 구성 "
+ "디렉토리가 열립니다."
+ 
+ #: data/fcitx5-diagnose.sh:1168
+diff --git a/po/ru.po b/po/ru.po
+index b970937..cae4367 100644
+--- a/po/ru.po
++++ b/po/ru.po
+@@ -2435,7 +2435,7 @@ msgstr ""
+ #: data/fcitx5-configtool.sh:131
+ msgid ""
+ "You're currently running KDE, but KCModule for fcitx couldn't be found, the "
+-"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx. Now "
++"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx5. Now "
+ "it will open config directory."
+ msgstr ""
+ 
+diff --git a/po/zh_CN.po b/po/zh_CN.po
+index a116666..e801635 100644
+--- a/po/zh_CN.po
++++ b/po/zh_CN.po
+@@ -2466,11 +2466,11 @@ msgstr ""
+ #: data/fcitx5-configtool.sh:131
+ msgid ""
+ "You're currently running KDE, but KCModule for fcitx couldn't be found, the "
+-"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx. Now "
++"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx5. Now "
+ "it will open config directory."
+ msgstr ""
+ "您正在运行 KDE，但是 fcitx 的 KCModule 未被找到，此 KCModule 的软件包名通常"
+-"为 kcm-fcitx 或 kde-config-fcitx。现在将打开配置目录。"
++"为 kcm-fcitx 或 kde-config-fcitx5。现在将打开配置目录。"
+ 
+ #: data/fcitx5-diagnose.sh:1161
+ msgid ""
+diff --git a/po/zh_TW.po b/po/zh_TW.po
+index c0f4e4f..00ad3b1 100644
+--- a/po/zh_TW.po
++++ b/po/zh_TW.po
+@@ -2458,11 +2458,11 @@ msgstr ""
+ #: data/fcitx5-configtool.sh:131
+ msgid ""
+ "You're currently running KDE, but KCModule for fcitx couldn't be found, the "
+-"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx. Now "
++"package name of this KCModule is usually kcm-fcitx or kde-config-fcitx5. Now "
+ "it will open config directory."
+ msgstr ""
+ "您正在執行 KDE，但是找不到 fcitx 的 KCModule，此 KCModule 的套件名稱通常是 "
+-"kcm-fcitx 或 kde-config-fcitx。現在將打開設定目錄。"
++"kcm-fcitx 或 kde-config-fcitx5。現在將打開設定目錄。"
+ 
+ #: data/fcitx5-diagnose.sh:1161
+ msgid ""

@@ -1,0 +1,12 @@
+[Addon]
+Name=Unicode
+Comment=Add Unicode Typing Support
+Type=SharedLibrary
+Library=libunicode
+Category=Module
+Version=@PROJECT_VERSION@
+OnDemand=False
+Configurable=True
+
+[Addon/OptionalDependencies]
+0=clipboard

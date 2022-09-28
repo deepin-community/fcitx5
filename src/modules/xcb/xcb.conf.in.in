@@ -1,0 +1,7 @@
+[Addon]
+Name=XCB
+Type=SharedLibrary
+Library=libxcb
+Category=Module
+Version=@PROJECT_VERSION@
+Configurable=True

@@ -1,0 +1,3 @@
+0001-dict-CMakeLists.txt-Use-dict-from-data-subdir.patch
+0002-fix-kde-config-fcitx5-package-name-in-fcitx5-configt.patch
+#0003-For-lower-versions-gcc-compatible.patch

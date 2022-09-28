@@ -1,0 +1,6 @@
+usr/bin/
+usr/libexec/
+usr/share/applications/
+usr/share/icons/hicolor/*/apps/org.fcitx.Fcitx5.*
+usr/share/icons/hicolor/*/apps/fcitx.*
+usr/share/metainfo/org.fcitx.Fcitx5.metainfo.xml

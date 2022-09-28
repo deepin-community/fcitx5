@@ -1,0 +1,57 @@
+From 6928cbd64be3a1cf45cc93b6be4594d340855ef9 Mon Sep 17 00:00:00 2001
+From: chenshijie <chenshijie@uniontech.com>
+Date: Fri, 11 Mar 2022 10:36:33 +0800
+Subject: [PATCH] For lower versions gcc compatible
+
+Change-Id: Idac70d8966c3321567866d829c69fd2e1e417b22
+---
+ src/frontend/ibusfrontend/ibusfrontend.cpp | 8 ++++++++
+ test/testdbus.cpp                          | 4 ++++
+ 2 files changed, 12 insertions(+)
+
+diff --git a/src/frontend/ibusfrontend/ibusfrontend.cpp b/src/frontend/ibusfrontend/ibusfrontend.cpp
+index 27082d71..bb096db1 100644
+--- a/src/frontend/ibusfrontend/ibusfrontend.cpp
++++ b/src/frontend/ibusfrontend/ibusfrontend.cpp
+@@ -581,14 +581,22 @@ private:
+         ([]() -> dbus::DBusStruct<uint32_t, uint32_t> {
+             return {0, 0};
+         }),
++#if __GNUC__ <= 8
++        ([&](dbus::DBusStruct<uint32_t, uint32_t> type) {
++#else
+         ([this](dbus::DBusStruct<uint32_t, uint32_t> type) {
++#endif
+             setContentType(std::get<0>(type), std::get<1>(type));
+         }),
+         dbus::PropertyOption::Hidden);
+     FCITX_OBJECT_VTABLE_WRITABLE_PROPERTY(
+         clientCommitPreedit, "ClientCommitPreedit", "(b)",
+         ([this]() -> dbus::DBusStruct<bool> { return {clientCommitPreedit_}; }),
++#if __GNUC__ <= 8
++        ([&](dbus::DBusStruct<bool> value) {
++#else
+         ([this](dbus::DBusStruct<bool> value) {
++#endif
+             clientCommitPreedit_ = std::get<0>(value);
+         }),
+         dbus::PropertyOption::Hidden);
+diff --git a/test/testdbus.cpp b/test/testdbus.cpp
+index 75441ff8..e30776ab 100644
+--- a/test/testdbus.cpp
++++ b/test/testdbus.cpp
+@@ -67,7 +67,11 @@ private:
+                                  []() { return 5; });
+     FCITX_OBJECT_VTABLE_WRITABLE_PROPERTY(
+         testProperty2, "testProperty2", "i", [this]() { return prop2; },
++#if __GNUC__ <= 8
++        [&](int32_t v) { prop2 = v; });
++#else
+         [this](int32_t v) { prop2 = v; });
++#endif
+ };
+ 
+ #define TEST_SERVICE "org.fcitx.Fcitx.TestDBus"
+-- 
+2.20.1
+

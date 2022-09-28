@@ -1,0 +1,13 @@
+[Addon]
+Name=Fcitx4 Frontend
+Type=SharedLibrary
+Library=libfcitx4frontend
+Category=Frontend
+Version=@PROJECT_VERSION@
+
+[Addon/Dependencies]
+0=dbus
+
+[Addon/OptionalDependencies]
+0=xcb
+

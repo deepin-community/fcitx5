@@ -1,0 +1,10 @@
+[main]
+host = https://www.transifex.com
+
+[deepin-desktop-environment.fcitx5-pot]
+file_filter = po/<lang>.po
+minimum_perc = 0
+source_file = po/fcitx5.pot
+source_lang = en
+type = PO
+

@@ -1,0 +1,4 @@
+usr/lib/*/fcitx5/libxcb.so
+usr/lib/*/fcitx5/libxim.so
+usr/share/fcitx5/addon/xcb.conf
+usr/share/fcitx5/addon/xim.conf

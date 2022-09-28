@@ -1,0 +1,39 @@
+From: Boyuan Yang <byang@debian.org>
+Date: Tue, 4 Dec 2018 21:08:05 -0500
+Subject: dict CMakeLists.txt: Use dict from data subdir
+
+Forwarded: not-needed
+
+Vanilla fcitx5 buildsystem will download en_dict automatically from website.
+This patch make the buildsystem search for dict file from data subdir which is
+provided by another orig tarball.
+---
+ src/modules/spell/dict/CMakeLists.txt | 12 ++----------
+ 1 file changed, 2 insertions(+), 10 deletions(-)
+
+diff --git a/src/modules/spell/dict/CMakeLists.txt b/src/modules/spell/dict/CMakeLists.txt
+index 825eaa0..7f00586 100644
+--- a/src/modules/spell/dict/CMakeLists.txt
++++ b/src/modules/spell/dict/CMakeLists.txt
+@@ -10,19 +10,11 @@ install(TARGETS comp-spell-dict
+ 
+ set(SPELL_EN_DICT_VER 20121020)
+ set(SPELL_EN_DICT "${CMAKE_CURRENT_BINARY_DIR}/en_dict.fscd")
+-set(SPELL_EN_DICT_SRC "${CMAKE_CURRENT_BINARY_DIR}/en_dict.txt")
+-set(SPELL_EN_DICT_TAR "en_dict-${SPELL_EN_DICT_VER}.tar.gz")
+-set(SPELL_EN_DICT_URL
+-  "https://download.fcitx-im.org/data/en_dict-${SPELL_EN_DICT_VER}.tar.gz")
+-
+-fcitx5_download(spell-en-download ${SPELL_EN_DICT_URL} ${SPELL_EN_DICT_TAR}
+-                c44a5d7847925eea9e4d2d04748d442cd28dd9299a0b572ef7d91eac4f5a6ceb)
+-fcitx5_extract(spell-en-extract "${SPELL_EN_DICT_TAR}" DEPENDS spell-en-download
+-  OUTPUT ${SPELL_EN_DICT_SRC})
++set(SPELL_EN_DICT_SRC "${PROJECT_SOURCE_DIR}/endict/en_dict.txt")
+ 
+ add_custom_command(
+   OUTPUT "${SPELL_EN_DICT}"
+-  DEPENDS "${SPELL_EN_DICT_SRC}" Fcitx5::comp-spell-dict spell-en-extract
++  DEPENDS "${SPELL_EN_DICT_SRC}" Fcitx5::comp-spell-dict
+   COMMAND Fcitx5::comp-spell-dict --comp-dict
+   "${SPELL_EN_DICT_SRC}" "${SPELL_EN_DICT}")
+ add_custom_target(spell_en_dict ALL DEPENDS "${SPELL_EN_DICT}")

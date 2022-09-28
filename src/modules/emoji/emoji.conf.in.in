@@ -1,0 +1,7 @@
+[Addon]
+Name=Emoji
+Type=SharedLibrary
+Library=libemoji
+Category=Module
+Version=@PROJECT_VERSION@
+OnDemand=True
