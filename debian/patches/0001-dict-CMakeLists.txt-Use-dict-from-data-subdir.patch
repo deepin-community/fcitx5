@@ -7,15 +7,18 @@ Forwarded: not-needed
 Vanilla fcitx5 buildsystem will download en_dict automatically from website.
 This patch make the buildsystem search for dict file from data subdir which is
 provided by another orig tarball.
+
+Last-Update: 2023-02-03
+Updated-by: wangyixue <wangyixue@uniontech.com>
 ---
- src/modules/spell/dict/CMakeLists.txt | 12 ++----------
+ src/modules/spell/CMakeLists.txt | 12 ++----------
  1 file changed, 2 insertions(+), 10 deletions(-)
 
-diff --git a/src/modules/spell/dict/CMakeLists.txt b/src/modules/spell/dict/CMakeLists.txt
-index 825eaa0..7f00586 100644
---- a/src/modules/spell/dict/CMakeLists.txt
-+++ b/src/modules/spell/dict/CMakeLists.txt
-@@ -10,19 +10,11 @@ install(TARGETS comp-spell-dict
+diff --git a/src/modules/spell/CMakeLists.txt b/src/modules/spell/CMakeLists.txt
+index 04618b3..65137ca 100644
+--- a/src/modules/spell/CMakeLists.txt
++++ b/src/modules/spell/CMakeLists.txt
+@@ -29,19 +29,11 @@ install(TARGETS comp-spell-dict
  
  set(SPELL_EN_DICT_VER 20121020)
  set(SPELL_EN_DICT "${CMAKE_CURRENT_BINARY_DIR}/en_dict.fscd")
@@ -37,3 +40,5 @@ index 825eaa0..7f00586 100644
    COMMAND Fcitx5::comp-spell-dict --comp-dict
    "${SPELL_EN_DICT_SRC}" "${SPELL_EN_DICT}")
  add_custom_target(spell_en_dict ALL DEPENDS "${SPELL_EN_DICT}")
+-- 
+2.20.1

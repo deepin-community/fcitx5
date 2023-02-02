@@ -76,7 +76,24 @@ void ClassicUI::reloadConfig() {
     reloadTheme();
 }
 
-void ClassicUI::reloadTheme() { theme_.load(*config_.theme); }
+void ClassicUI::reloadTheme() {
+    if (*config_.theme == "plasma") {
+        if (!plasmaThemeWatchdog_) {
+            try {
+                plasmaThemeWatchdog_ = std::make_unique<PlasmaThemeWatchdog>(
+                    &instance_->eventLoop(), [this]() {
+                        CLASSICUI_DEBUG() << "Reload plasma theme";
+                        reloadTheme();
+                    });
+            } catch (...) {
+            }
+        }
+    } else {
+        plasmaThemeWatchdog_.reset();
+    }
+
+    theme_.load(*config_.theme);
+}
 
 void ClassicUI::suspend() {
     suspended_ = true;
@@ -121,7 +138,16 @@ const Configuration *ClassicUI::getConfig() const {
                 themeConfig.metadata.value().name.value().match();
         }
     }
-    config_.theme.annotation().setThemes({themes.begin(), themes.end()});
+
+    bool plasmaTheme = false;
+    if (StandardPath::hasExecutable(PLASMA_THEME_GENERATOR)) {
+        themes.erase("plasma");
+        themes["plasma"] = _("KDE Plasma (Experimental)");
+        plasmaTheme = true;
+    }
+
+    config_.theme.annotation().setThemes({themes.begin(), themes.end()},
+                                         plasmaTheme);
     return &config_;
 }
 
@@ -172,10 +198,24 @@ void ClassicUI::resume() {
                 });
         }
         sni->call<INotificationItem::enable>();
-        auto registered = sni->call<INotificationItem::registered>();
-        for (auto &p : uis_) {
-            p.second->setEnableTray(!registered);
-        }
+        // Delay 1 sec to enable xembed tray icon.
+        deferedEnableTray_ = instance_->eventLoop().addTimeEvent(
+            CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 1000000, 0,
+            [this](EventSource *, uint64_t) {
+                // If we are now suspended, just return.
+                if (suspended()) {
+                    return true;
+                }
+                if (auto *sni = notificationitem()) {
+                    auto registered =
+                        sni->call<INotificationItem::registered>();
+                    for (auto &p : uis_) {
+                        p.second->setEnableTray(!registered);
+                    }
+                }
+                deferedEnableTray_.reset();
+                return true;
+            });
     } else {
         for (auto &p : uis_) {
             p.second->setEnableTray(true);
@@ -241,10 +281,12 @@ void ClassicUI::update(UserInterfaceComponent component,
         // unfortunately, hopefully main display is X wayland.
         // The position will be wrong anyway.
 #ifdef ENABLE_X11
-        auto mainX11Display = xcb()->call<IXCBModule::mainDisplay>();
-        if (!mainX11Display.empty()) {
-            if (auto *uiPtr = findValue(uis_, "x11:" + mainX11Display)) {
-                ui = uiPtr->get();
+        if (auto *xcbAddon = xcb()) {
+            auto mainX11Display = xcbAddon->call<IXCBModule::mainDisplay>();
+            if (!mainX11Display.empty()) {
+                if (auto *uiPtr = findValue(uis_, "x11:" + mainX11Display)) {
+                    ui = uiPtr->get();
+                }
             }
         }
 #endif

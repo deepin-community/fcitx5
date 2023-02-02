@@ -1,14 +1,14 @@
-fcitx5 (5.0.15.4-1+u001) UNRELEASED; urgency=medium
+fcitx5 (5.0.21-1) unstable; urgency=medium
 
-  * update
+  * New upstream release.
 
- -- Debian Input Method Team <debian-input-method@lists.debian.org>  Tue, 21 Jun 2022 18:08:22 +0800
+ -- wangyixue <wangyixue@uniontech.com>  Thu, 02 Feb 2023 10:49:43 +0800
 
 fcitx5 (5.0.15.4-1) unstable; urgency=medium
 
   * Add tray right-click menu to configure
 
- -- chenshijie <chenshijie@uniontech.com>  Fri Jun 17 13:31:51 2022 +0800
+ -- chenshijie <chenshijie@uniontech.com>  Fri, 17 Jun 2022 13:31:51 +0800
 
 fcitx5 (5.0.15-1) unstable; urgency=medium
 

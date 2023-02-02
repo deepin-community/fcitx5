@@ -113,6 +113,14 @@ Clipboard::Clipboard(Instance *instance)
                        FocusGroup *) {
                     auto &callbacks = selectionCallbacks_[name];
 
+                    // Ensure that atom exists. See:
+                    // https://github.com/fcitx/fcitx5/issues/610 PRIMARY /
+                    // CLIPBOARD is not guaranteed to exist if fcitx5 is
+                    // launched at an very early stage. We should try to create
+                    // atom ourselves.
+                    this->xcb()->call<IXCBModule::atom>(name, "PRIMARY", false);
+                    this->xcb()->call<IXCBModule::atom>(name, "CLIPBOARD",
+                                                        false);
                     callbacks.emplace_back(
                         this->xcb()->call<IXCBModule::addSelection>(
                             name, "PRIMARY", [this, name](xcb_atom_t) {
@@ -211,7 +219,7 @@ Clipboard::Clipboard(Instance *instance)
 
             auto candidateList = inputContext->inputPanel().candidateList();
             if (candidateList) {
-                int idx = keyEvent.key().keyListIndex(selectionKeys_);
+                int idx = keyEvent.key().digitSelection();
                 if (idx >= 0) {
                     keyEvent.accept();
                     if (idx < candidateList->size()) {
@@ -285,6 +293,14 @@ Clipboard::Clipboard(Instance *instance)
                 state->reset(inputContext);
                 return;
             }
+            if (keyEvent.key().check(FcitxKey_Delete) ||
+                keyEvent.key().check(FcitxKey_BackSpace)) {
+                keyEvent.accept();
+                history_.clear();
+                primary_.clear();
+                state->reset(inputContext);
+                return;
+            }
             event.accept();
 
             updateUI(inputContext);
@@ -334,7 +350,7 @@ void Clipboard::updateUI(InputContext *inputContext) {
     candidateList->setSelectionKey(selectionKeys_);
     candidateList->setLayoutHint(CandidateLayoutHint::Vertical);
 
-    Text auxUp(_("Clipboard:"));
+    Text auxUp(_("Clipboard (Press BackSpace/Delete to clear history):"));
     if (!candidateList->totalSize()) {
         Text auxDown(_("No clipboard history."));
         inputContext->inputPanel().setAuxDown(auxDown);

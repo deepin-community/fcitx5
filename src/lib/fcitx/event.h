@@ -7,7 +7,7 @@
 #ifndef _FCITX_EVENT_H_
 #define _FCITX_EVENT_H_
 
-#include <stdint.h>
+#include <cstdint>
 #include <fcitx-utils/capabilityflags.h>
 #include <fcitx-utils/key.h>
 #include <fcitx/userinterface.h>
@@ -139,7 +139,7 @@ enum class EventType : uint32_t {
     InputMethodGroupChanged = InstanceEventFlag | 0x1,
     /**
      * InputMethodGroupAboutToChangeEvent is generated when input method group
-     * is about to bed changed.
+     * is about to be changed.
      *
      * @see InputMethodGroupAboutToChange
      */

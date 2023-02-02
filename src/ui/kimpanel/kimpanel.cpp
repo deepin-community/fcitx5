@@ -26,11 +26,6 @@
 
 namespace fcitx {
 
-bool isKDE() {
-    static const DesktopType desktop = getDesktopType();
-    return desktop == DesktopType::KDE4 || desktop == DesktopType::KDE5;
-}
-
 enum class CursorRectMethod {
     SetSpotRect,
     SetRelativeSpotRect,
@@ -114,7 +109,7 @@ Kimpanel::Kimpanel(Instance *instance)
     entry_ = watcher_.watchService(
         "org.kde.impanel", [this](const std::string &, const std::string &,
                                   const std::string &newOwner) {
-            FCITX_INFO() << "Kimpanel new owner" << newOwner;
+            FCITX_INFO() << "Kimpanel new owner: " << newOwner;
             setAvailable(!newOwner.empty());
         });
 }
@@ -408,7 +403,7 @@ void Kimpanel::msgV1Handler(dbus::Message &msg) {
     if (msg.member() == "Exit") {
         instance_->exit();
     } else if (msg.member() == "ReloadConfig") {
-        instance_->reloadConfig();
+        instance_->restart();
     } else if (msg.member() == "Restart") {
         instance_->restart();
     } else if (msg.member() == "Configure") {

@@ -250,11 +250,14 @@ public:
 
     void setCapability(uint64_t cap) {
         CHECK_SENDER_OR_RETURN;
-        // Due to a bug in SDL, it might send garbage over the wire.
+        // 1. Due to a bug in SDL, it might send garbage over the wire.
         // This a workaround to make sure it can work more likely.
         // The flag is most to ClientSideInputPanel (0~39bit).
-        if (!supportedCapability_.has_value() &&
-            (cap & (~static_cast<uint64_t>(0xffffffffffull))) != 0ull) {
+        // 2. For new bits such as 40bit(Disable) or above, we should
+        // use supportedCapability_'s value to get all the effective bits.
+        if (supportedCapability_.has_value()) {
+            cap &= supportedCapability_.value();
+        } else if ((cap & (~static_cast<uint64_t>(0xffffffffffull))) != 0ull) {
             cap &= 0xffffffffull;
         }
         rawCapabilityFlags_ = CapabilityFlags(cap);
@@ -397,10 +400,10 @@ private:
                                "a(si)i");
     FCITX_OBJECT_VTABLE_SIGNAL(deleteSurroundingTextDBus,
                                "DeleteSurroundingText", "iu");
-    // This is contains:
+    // This contains:
     // - a(si)i preedit
     // - a(si) aux up
-    // - a(si) aux aux
+    // - a(si) aux down
     // - a(ss) candidate label + text
     // - i candidate index
     // - i candidate layout

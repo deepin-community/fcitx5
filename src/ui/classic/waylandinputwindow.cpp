@@ -8,6 +8,8 @@
 #include "waylandim_public.h"
 #include "waylandui.h"
 #include "waylandwindow.h"
+#include "wl_compositor.h"
+#include "wl_region.h"
 #include "zwp_input_panel_v1.h"
 #include "zwp_input_popup_surface_v2.h"
 
@@ -77,7 +79,52 @@ WaylandInputWindow::WaylandInputWindow(WaylandUI *ui)
 void WaylandInputWindow::initPanel() {
     if (!window_->surface()) {
         window_->createWindow();
+        updateBlur();
+    }
+
+    setFontDPI(*parent_->config().forceWaylandDPI);
+}
+
+void WaylandInputWindow::setBlurManager(
+    std::shared_ptr<wayland::OrgKdeKwinBlurManager> blur) {
+    blurManager_ = blur;
+    updateBlur();
+}
+
+void WaylandInputWindow::updateBlur() {
+    if (!window_->surface()) {
         return;
+    }
+    blur_.reset();
+    if (!blurManager_) {
+        return;
+    }
+
+    auto compositor = ui_->display()->getGlobal<wayland::WlCompositor>();
+    if (!compositor) {
+        return;
+    }
+    auto width = window_->width(), height = window_->height();
+    Rect rect(0, 0, width, height);
+    shrink(rect, *ui_->parent()->theme().inputPanel->blurMargin);
+    if (!*ui_->parent()->theme().inputPanel->enableBlur || rect.isEmpty()) {
+        return;
+    } else {
+        std::vector<uint32_t> data;
+        std::unique_ptr<wayland::WlRegion> region(compositor->createRegion());
+        if (ui_->parent()->theme().inputPanel->blurMask->empty()) {
+            region->add(rect.left(), rect.top(), rect.width(), rect.height());
+        } else {
+            auto regions = parent_->theme().mask(parent_->theme().maskConfig(),
+                                                 width, height);
+            for (const auto &rect : regions) {
+                region->add(rect.left(), rect.top(), rect.width(),
+                            rect.height());
+            }
+        }
+        blur_.reset(blurManager_->create(window_->surface()));
+        blur_->setRegion(region.get());
+        blur_->commit();
     }
 }
 
@@ -85,8 +132,7 @@ void WaylandInputWindow::resetPanel() { panelSurface_.reset(); }
 
 void WaylandInputWindow::update(fcitx::InputContext *ic) {
     const auto oldVisible = visible();
-    InputWindow::update(ic);
-
+    auto [width, height] = InputWindow::update(ic);
     if (!oldVisible && !visible()) {
         return;
     }
@@ -95,11 +141,13 @@ void WaylandInputWindow::update(fcitx::InputContext *ic) {
         window_->hide();
         panelSurface_.reset();
         panelSurfaceV2_.reset();
+        blur_.reset();
         window_->destroyWindow();
         return;
     }
 
     assert(!visible() || ic != nullptr);
+
     initPanel();
     if (ic->frontend() == std::string_view("wayland_v2")) {
         if (!panelSurfaceV2_ || ic != v2IC_.get()) {
@@ -124,11 +172,10 @@ void WaylandInputWindow::update(fcitx::InputContext *ic) {
     if (!panelSurface_ && !panelSurfaceV2_) {
         return;
     }
-    auto pair = sizeHint();
-    int width = pair.first, height = pair.second;
 
     if (width != window_->width() || height != window_->height()) {
         window_->resize(width, height);
+        updateBlur();
     }
 
     if (auto *surface = window_->prerender()) {

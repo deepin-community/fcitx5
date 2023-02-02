@@ -33,6 +33,9 @@ int main() {
     end = pair.second;
     FCITX_ASSERT(start == end);
 
+    std::string_view testView = stringutils::trimView("\t\n\r ");
+    FCITX_ASSERT(testView.empty());
+
     auto replace_result = stringutils::replaceAll("abcabc", "a", "b");
     FCITX_ASSERT(replace_result == "bbcbbc");
 
@@ -108,6 +111,11 @@ int main() {
     FCITX_ASSERT(
         stringutils::split("", ",", stringutils::SplitBehavior::KeepEmpty) ==
         (std::vector<std::string>{""}));
+
+    FCITX_ASSERT(stringutils::escapeForValue("\"") == R"("\"")");
+    FCITX_ASSERT(stringutils::escapeForValue("abc") == R"(abc)");
+    FCITX_ASSERT(stringutils::escapeForValue("ab\"c") == R"("ab\"c")");
+    FCITX_ASSERT(stringutils::escapeForValue("a c") == R"("a c")");
 
     return 0;
 }
