@@ -47,9 +47,23 @@ void XCBInputWindow::updatePosition(InputContext *inputContext) {
     }
     int x, y, h;
 
+    // add support of input panel offset here.
+    // TODO: RTL support.
+    auto &theme = parent_->theme();
+    int leftSW, rightSW, topSW, bottomSW, actualWidth, actualHeight;
+    leftSW = theme.inputPanel->shadowMargin->marginLeft.value();
+    rightSW = theme.inputPanel->shadowMargin->marginRight.value();
+    topSW = theme.inputPanel->shadowMargin->marginTop.value();
+    bottomSW = theme.inputPanel->shadowMargin->marginBottom.value();
+
     x = inputContext->cursorRect().left();
     y = inputContext->cursorRect().top();
     h = inputContext->cursorRect().height();
+
+    actualWidth = width() - leftSW - rightSW;
+    actualWidth = actualWidth <= 0 ? width() : actualWidth;
+    actualHeight = height() - topSW - bottomSW;
+    actualHeight = actualHeight <= 0 ? height() : actualHeight;
 
     const Rect *closestScreen = nullptr;
     int shortestDistance = INT_MAX;
@@ -76,20 +90,24 @@ void XCBInputWindow::updatePosition(InputContext *inputContext) {
             newY = y + (h ? h : (10 * ((dpi_ < 0 ? 96.0 : dpi_) / 96.0)));
         }
 
-        if ((newX + static_cast<int>(width())) > closestScreen->right()) {
-            newX = closestScreen->right() - width();
+        if ((newX + static_cast<int>(actualWidth)) > closestScreen->right()) {
+            newX = closestScreen->right() - actualWidth;
         }
 
-        if ((newY + static_cast<int>(height())) > closestScreen->bottom()) {
+        if ((newY + static_cast<int>(actualHeight)) > closestScreen->bottom()) {
             if (newY > closestScreen->bottom()) {
-                newY = closestScreen->bottom() - height() - 40;
+                newY = closestScreen->bottom() - actualHeight - 40;
             } else { /* better position the window */
-                newY = newY - height() - ((h == 0) ? 40 : h);
+                newY = newY - actualHeight - ((h == 0) ? 40 : h);
             }
         }
         x = newX;
         y = newY;
     }
+
+    // exclude shadow border width
+    x -= leftSW;
+    y -= topSW;
 
     xcb_params_configure_window_t wc;
     wc.x = x;
@@ -106,16 +124,7 @@ void XCBInputWindow::updateDPI(InputContext *inputContext) {
     dpi_ = ui_->dpiByPosition(inputContext->cursorRect().left(),
                               inputContext->cursorRect().top());
 
-    // Unlike pango cairo context, Cairo font map does not accept negative dpi.
-    // Restore to default value instead.
-    if (dpi_ < 0) {
-        pango_cairo_font_map_set_resolution(
-            PANGO_CAIRO_FONT_MAP(fontMap_.get()), fontMapDefaultDPI_);
-    } else {
-        pango_cairo_font_map_set_resolution(
-            PANGO_CAIRO_FONT_MAP(fontMap_.get()), dpi_);
-    }
-    pango_cairo_context_set_resolution(context_.get(), dpi_);
+    setFontDPI(dpi_);
 }
 
 void XCBInputWindow::update(InputContext *inputContext) {
@@ -126,8 +135,7 @@ void XCBInputWindow::update(InputContext *inputContext) {
     if (inputContext) {
         updateDPI(inputContext);
     }
-    InputWindow::update(inputContext);
-    assert(!visible() || inputContext != nullptr);
+    auto [width, height] = InputWindow::update(inputContext);
     if (!visible()) {
         if (oldVisible) {
             xcb_unmap_window(ui_->connection(), wid_);
@@ -135,8 +143,6 @@ void XCBInputWindow::update(InputContext *inputContext) {
         }
         return;
     }
-    auto pair = sizeHint();
-    int width = pair.first, height = pair.second;
 
     if (width != this->width() || height != this->height()) {
         resize(width, height);
@@ -148,13 +154,29 @@ void XCBInputWindow::update(InputContext *inputContext) {
                 xcb_delete_property(ui_->connection(), wid_, atomBlur_);
             } else {
                 std::vector<uint32_t> data;
-                data.push_back(rect.left());
-                data.push_back(rect.top());
-                data.push_back(rect.width());
-                data.push_back(rect.height());
-                xcb_change_property(ui_->connection(), XCB_PROP_MODE_REPLACE,
-                                    wid_, atomBlur_, XCB_ATOM_CARDINAL, 32,
-                                    data.size(), data.data());
+                if (ui_->parent()->theme().inputPanel->blurMask->empty()) {
+                    data.push_back(rect.left());
+                    data.push_back(rect.top());
+                    data.push_back(rect.width());
+                    data.push_back(rect.height());
+                    xcb_change_property(ui_->connection(),
+                                        XCB_PROP_MODE_REPLACE, wid_, atomBlur_,
+                                        XCB_ATOM_CARDINAL, 32, data.size(),
+                                        data.data());
+                } else {
+                    auto region = parent_->theme().mask(
+                        parent_->theme().maskConfig(), width, height);
+                    for (const auto &rect : region) {
+                        data.push_back(rect.left());
+                        data.push_back(rect.top());
+                        data.push_back(rect.width());
+                        data.push_back(rect.height());
+                    }
+                    xcb_change_property(ui_->connection(),
+                                        XCB_PROP_MODE_REPLACE, wid_, atomBlur_,
+                                        XCB_ATOM_CARDINAL, 32, data.size(),
+                                        data.data());
+                }
             }
         }
     }

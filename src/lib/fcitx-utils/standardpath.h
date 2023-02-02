@@ -270,10 +270,16 @@ public:
     StandardPathTempFile openUserTemp(Type type,
                                       const std::string &pathOrig) const;
 
-    /// \brief Save the file safely with write and rename to make sure the
-    /// operation is atomic.
-    /// \param callback Callback function that accept a file descriptor and
-    /// return whether the save if success or not.
+    /**
+     * \brief Save the file safely with write and rename to make sure the
+     * operation is atomic.
+     *
+     * Callback shall not close the file descriptor. If the API you are using
+     * does cannot do that, you may use UnixFD to help you dup it first.
+     *
+     * \param callback Callback function that accept a file descriptor and
+     * return whether the save if success or not.
+     */
     bool safeSave(Type type, const std::string &pathOrig,
                   const std::function<bool(int)> &callback) const;
 
@@ -315,6 +321,24 @@ public:
     }
 
     int64_t timestamp(Type type, const std::string &path) const;
+
+    /**
+     * Check if certain executable presents in PATH.
+     *
+     * If the file presents, return the absolute PATH. If name is absolute path,
+     * check the absolute path instead of using PATH.
+     *
+     * @since 5.0.18
+     */
+    static std::string findExecutable(const std::string &name);
+
+    /**
+     * Check if certain executable presents in PATH.
+     *
+     * @see findExecutable     *
+     * @since 5.0.18
+     */
+    static bool hasExecutable(const std::string &name);
 
 private:
     std::unique_ptr<StandardPathPrivate> d_ptr;

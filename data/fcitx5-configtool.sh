@@ -65,10 +65,6 @@ detectDE() {
             XFCE)
             DE=xfce
             break
-            ;;
-            Deepin)
-            DE=deepin
-            break
         esac
       done
     fi
@@ -129,13 +125,6 @@ run_qt() {
     return 1
 }
 
-run_dde() {
-    if which dde-control-center > /dev/null 2>&1; then
-        dbus-send --print-reply --dest=com.deepin.dde.ControlCenter /com/deepin/dde/ControlCenter com.deepin.dde.ControlCenter.ShowPage string:'keyboard/Manage Input Methods' > /dev/null 2>&1 
-    fi
-    return 1
-}
-
 run_xdg() {
     case "$DE" in
         kde)
@@ -162,16 +151,13 @@ detectDE
 # even if we are not on KDE, we should still try kde, some wrongly
 # configured kde desktop cannot be detected (usually missing xprop)
 # and if kde one can work, so why not use it if gtk, gtk3 not work?
-# xdg/editor is never a preferred solution
+# xdg is never a preferred solution
 case "$DE" in
     kde)
-        order="kde qt dde xdg"
-        ;;
-    deepin)
-        order="dde"
+        order="kde qt xdg"
         ;;
     *)
-        order="qt kde dde xdg"
+        order="qt kde xdg"
         ;;
 esac
 

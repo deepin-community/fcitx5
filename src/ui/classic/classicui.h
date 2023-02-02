@@ -21,6 +21,7 @@
 #include "fcitx/instance.h"
 #include "fcitx/userinterface.h"
 #include "classicui_public.h"
+#include "plasmathemewatchdog.h"
 #include "theme.h"
 #ifdef ENABLE_X11
 #include "xcb_public.h"
@@ -50,8 +51,10 @@ struct NotEmpty {
 };
 
 struct ThemeAnnotation : public EnumAnnotation {
-    void setThemes(std::vector<std::pair<std::string, std::string>> themes) {
+    void setThemes(std::vector<std::pair<std::string, std::string>> themes,
+                   bool plasmaTheme) {
         themes_ = std::move(themes);
+        plasmaTheme_ = plasmaTheme;
     }
     void dumpDescription(RawConfig &config) const {
         EnumAnnotation::dumpDescription(config);
@@ -61,15 +64,20 @@ struct ThemeAnnotation : public EnumAnnotation {
                                   themes_[i].first);
             config.setValueByPath("EnumI18n/" + std::to_string(i),
                                   themes_[i].second);
-            config.setValueByPath(
-                "SubConfigPath/" + std::to_string(i),
-                stringutils::concat("fcitx://config/addon/classicui/theme/",
-                                    themes_[i].first));
+            if (themes_[i].first != "plasma" || !plasmaTheme_) {
+                config.setValueByPath(
+                    "SubConfigPath/" + std::to_string(i),
+                    stringutils::concat("fcitx://config/addon/classicui/theme/",
+                                        themes_[i].first));
+            } else {
+                config.setValueByPath("SubConfigPath/" + std::to_string(i), "");
+            }
         }
     }
 
 private:
     std::vector<std::pair<std::string, std::string>> themes_;
+    bool plasmaTheme_ = false;
 };
 
 struct MenuFontAnnotation : private FontAnnotation, private ToolTipAnnotation {
@@ -131,7 +139,19 @@ FCITX_CONFIGURATION(
                "configuration needs to support this to use this feature.")}};
     Option<std::string, NotEmpty, DefaultMarshaller<std::string>,
            ThemeAnnotation>
-        theme{this, "Theme", _("Theme"), "default"};);
+        theme{this, "Theme", _("Theme"), "default"};
+    Option<int, IntConstrain, DefaultMarshaller<int>, ToolTipAnnotation>
+        forceWaylandDPI{
+            this,
+            "ForceWaylandDPI",
+            _("Force font DPI on Wayland"),
+            0,
+            IntConstrain(0),
+            {},
+            {_("Normally Wayland uses 96 as font DPI in combinition with the "
+               "screen scale factor. This option allows you to override the "
+               "font DPI. If the value is 0, it means this option is "
+               "disabled.")}};);
 
 class ClassicUI final : public UserInterface {
 public:
@@ -201,6 +221,9 @@ private:
     Theme theme_;
     mutable Theme subconfigTheme_;
     bool suspended_ = true;
+
+    std::unique_ptr<EventSource> deferedEnableTray_;
+    std::unique_ptr<PlasmaThemeWatchdog> plasmaThemeWatchdog_;
 };
 } // namespace classicui
 } // namespace fcitx

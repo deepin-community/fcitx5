@@ -175,13 +175,6 @@ void WaylandIMInputContextV1::deactivate(wayland::ZwpInputMethodContextV1 *ic) {
         ic_.reset();
         keyboard_.reset();
         timeEvent_->setEnabled(false);
-        // If last key to vk is press, send a release.
-        if (lastVKKey_ && lastVKState_ == WL_KEYBOARD_KEY_STATE_PRESSED) {
-            sendKeyToVK(lastVKTime_, lastVKKey_,
-                        WL_KEYBOARD_KEY_STATE_RELEASED);
-            lastVKTime_ = lastVKKey_ = 0;
-            lastVKState_ = WL_KEYBOARD_KEY_STATE_RELEASED;
-        }
         server_->display_->sync();
         focusOut();
     } else {
@@ -219,7 +212,7 @@ void WaylandIMInputContextV1::surroundingTextCallback(const char *text,
     surroundingText().invalidate();
     do {
         auto length = utf8::lengthValidated(str);
-        if (length != utf8::INVALID_LENGTH) {
+        if (length == utf8::INVALID_LENGTH) {
             break;
         }
         if (cursor > str.size() || anchor > str.size()) {
@@ -328,7 +321,15 @@ void WaylandIMInputContextV1::invokeActionCallback(uint32_t button,
     default:
         return;
     }
-    InvokeActionEvent event(action, index, this);
+    auto preedit = inputPanel().clientPreedit().toString();
+    std::string::size_type offset = index;
+    offset = std::min(offset, preedit.length());
+    auto length =
+        utf8::lengthValidated(std::string_view(preedit).substr(0, offset));
+    if (length == utf8::INVALID_LENGTH) {
+        return;
+    }
+    InvokeActionEvent event(action, length, this);
     if (!hasFocus()) {
         focusIn();
     }
@@ -523,9 +524,6 @@ void WaylandIMInputContextV1::sendKeyToVK(uint32_t time, uint32_t key,
     if (!ic_) {
         return;
     }
-    lastVKKey_ = key;
-    lastVKState_ = state;
-    lastVKTime_ = time;
     ic_->key(serial_, time, key, state);
     server_->display_->flush();
 }

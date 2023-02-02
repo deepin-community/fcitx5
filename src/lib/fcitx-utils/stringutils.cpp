@@ -97,8 +97,8 @@ bool endsWith(std::string_view str, std::string_view suffix) {
             0);
 }
 
-std::pair<std::string::size_type, std::string::size_type>
-trimInplace(const std::string &str) {
+inline std::pair<std::string::size_type, std::string::size_type>
+trimInplaceImpl(std::string_view str) {
     auto start = str.find_first_not_of(FCITX_WHITESPACE);
     if (start == std::string::npos) {
         return {str.size(), str.size()};
@@ -112,9 +112,31 @@ trimInplace(const std::string &str) {
     return {start, end};
 }
 
+FCITXUTILS_DEPRECATED_EXPORT
+std::pair<std::string::size_type, std::string::size_type>
+trimInplace(const std::string &str) {
+    return trimInplaceImpl(str);
+}
+
+std::pair<std::string::size_type, std::string::size_type>
+trimInplace(std::string_view str) {
+    return trimInplaceImpl(str);
+}
+
+FCITXUTILS_DEPRECATED_EXPORT
 std::string trim(const std::string &str) {
-    auto pair = trimInplace(str);
+    auto pair = trimInplaceImpl(str);
     return std::string(str.begin() + pair.first, str.begin() + pair.second);
+}
+
+std::string trim(std::string_view str) {
+    auto pair = trimInplaceImpl(str);
+    return std::string(str.begin() + pair.first, str.begin() + pair.second);
+}
+
+std::string_view trimView(std::string_view str) {
+    auto pair = trimInplace(str);
+    return str.substr(pair.first, pair.second - pair.first);
 }
 
 FCITXUTILS_DEPRECATED_EXPORT
@@ -334,5 +356,38 @@ bool unescape(std::string &str, bool unescapeQuote) {
     } while (str[i++]);
     str.resize(j - 1);
     return true;
+}
+
+std::optional<std::string> unescapeForValue(std::string_view str) {
+    bool unescapeQuote = false;
+    // having quote at beginning and end, escape
+    if (str.size() >= 2 && str.front() == '"' && str.back() == '"') {
+        unescapeQuote = true;
+        str = str.substr(1, str.size() - 2);
+    }
+    if (str.empty()) {
+        return std::string();
+    }
+
+    std::string value(str);
+    if (!stringutils::unescape(value, unescapeQuote)) {
+        return std::nullopt;
+    }
+    return value;
+}
+
+std::string escapeForValue(std::string_view str) {
+    std::string value(str);
+    value = stringutils::replaceAll(value, "\\", "\\\\");
+    value = stringutils::replaceAll(value, "\n", "\\n");
+
+    bool needQuote = value.find_first_of("\f\r\t\v \"") != std::string::npos;
+
+    if (needQuote) {
+        value = stringutils::replaceAll(value, "\"", "\\\"");
+        return stringutils::concat("\"", value, "\"");
+    }
+
+    return value;
 }
 } // namespace fcitx::stringutils

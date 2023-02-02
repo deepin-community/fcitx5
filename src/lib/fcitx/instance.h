@@ -262,6 +262,9 @@ public:
     /// Reset the compose state.
     void resetCompose(InputContext *inputContext);
 
+    /// Check whether input contex is composing or not.
+    bool isComposing(InputContext *inputContext);
+
     /**
      * Update the commit string to frontend
      *
@@ -463,6 +466,16 @@ public:
      * @since 5.0.14
      */
     bool isRunning() const;
+
+    /**
+     * Whether restart is requested.
+     * @since 5.0.18
+     */
+    bool isRestartRequested() const;
+
+protected:
+    // For testing purpose
+    InstancePrivate *privateData();
 
 private:
     void handleSignal();

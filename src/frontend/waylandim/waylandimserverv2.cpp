@@ -138,15 +138,19 @@ WaylandIMInputContextV2::WaylandIMInputContextV2(
             pendingDeactivate_ = false;
             keyboardGrab_.reset();
             timeEvent_->setEnabled(false);
-            // If last key to vk is press, send a release.
-            if (lastVKKey_ && lastVKState_ == WL_KEYBOARD_KEY_STATE_PRESSED) {
-                vk_->key(lastVKTime_, lastVKKey_,
-                         WL_KEYBOARD_KEY_STATE_RELEASED);
-                lastVKTime_ = lastVKKey_ = 0;
-                lastVKState_ = WL_KEYBOARD_KEY_STATE_RELEASED;
+            if (hasFocus()) {
+                if (vkReady_) {
+                    // If last key to vk is press, send a release.
+                    while (!pressedVKKey_.empty()) {
+                        auto [vkkey, vktime] = *pressedVKKey_.begin();
+                        sendKeyToVK(vktime, vkkey,
+                                    WL_KEYBOARD_KEY_STATE_RELEASED);
+                    }
+                    vk_->modifiers(0, 0, 0, 0);
+                    server_->display_->sync();
+                }
+                focusOut();
             }
-            server_->display_->sync();
-            focusOut();
         }
         if (pendingActivate_) {
             pendingActivate_ = false;
@@ -182,8 +186,6 @@ WaylandIMInputContextV2::WaylandIMInputContextV2(
                 repeatInfoCallback(repeatRate_, repeatDelay_);
                 focusIn();
                 server_->display_->sync();
-                lastVKTime_ = lastVKKey_ = 0;
-                lastVKState_ = WL_KEYBOARD_KEY_STATE_RELEASED;
             }
         }
     });
@@ -237,7 +239,7 @@ void WaylandIMInputContextV2::surroundingTextCallback(const char *text,
     surroundingText().invalidate();
     do {
         auto length = utf8::lengthValidated(str);
-        if (length != utf8::INVALID_LENGTH) {
+        if (length == utf8::INVALID_LENGTH) {
             break;
         }
         if (cursor > str.size() || anchor > str.size()) {
@@ -405,6 +407,7 @@ void WaylandIMInputContextV2::keymapCallback(uint32_t format, int32_t fd,
 
     if (keymapChanged) {
         vk_->keymap(format, scopeFD.fd(), size);
+        vkReady_ = true;
     }
 
     server_->parent_->wayland()->call<IWaylandModule::reloadXkbOption>();
@@ -508,7 +511,9 @@ void WaylandIMInputContextV2::modifiersCallback(uint32_t,
         server_->modifiers_ |= KeyState::Meta;
     }
 
-    vk_->modifiers(mods_depressed, mods_latched, mods_locked, group);
+    if (vkReady_) {
+        vk_->modifiers(mods_depressed, mods_latched, mods_locked, group);
+    }
 }
 
 void WaylandIMInputContextV2::repeatInfoCallback(int32_t rate, int32_t delay) {
@@ -518,9 +523,14 @@ void WaylandIMInputContextV2::repeatInfoCallback(int32_t rate, int32_t delay) {
 
 void WaylandIMInputContextV2::sendKeyToVK(uint32_t time, uint32_t key,
                                           uint32_t state) {
-    lastVKKey_ = key;
-    lastVKState_ = state;
-    lastVKTime_ = time;
+    if (!vkReady_) {
+        return;
+    }
+    // Erase old to ensure order, and released ones can the be removed.
+    pressedVKKey_.erase(key);
+    if (state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+        pressedVKKey_[key] = time;
+    }
     vk_->key(time, key, state);
     server_->display_->flush();
 }
@@ -585,7 +595,10 @@ void WaylandIMInputContextV2::updatePreeditImpl() {
         }
     }
 
-    ic_->setPreeditString(preedit.toString().data(), cursorStart, cursorEnd);
+    if (preedit.textLength()) {
+        ic_->setPreeditString(preedit.toString().data(), cursorStart,
+                              cursorEnd);
+    }
     ic_->commit(serial_);
 }
 

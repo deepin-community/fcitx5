@@ -110,6 +110,10 @@ if (ENABLE_KEYBOARD)
     target_include_directories(testisocodes PRIVATE ../src)
     target_link_libraries(testisocodes Fcitx5::Core PkgConfig::JsonC)
     add_test(NAME testisocodes COMMAND testisocodes)
+
+    add_executable(testcompose testcompose.cpp)
+    target_link_libraries(testcompose Fcitx5::Core Fcitx5::Module::TestFrontend XKBCommon::XKBCommon keyboard)
+    add_test(NAME testcompose COMMAND testcompose)
 endif()
 
 if (TARGET emoji)
@@ -123,6 +127,14 @@ add_executable(testunicode testunicode.cpp)
 target_link_libraries(testunicode Fcitx5::Core Fcitx5::Module::TestFrontend Fcitx5::Module::TestIM)
 add_dependencies(testunicode copy-addon unicode testui testfrontend testim)
 add_test(NAME testunicode COMMAND testunicode)
+
+
+if (ENABLE_KEYBOARD)
+    add_executable(testspell testspell.cpp)
+    target_link_libraries(testspell Fcitx5::Core Fcitx5::Module::TestFrontend keyboard)
+    add_dependencies(testspell copy-addon spell testui testfrontend spell_en_dict)
+    add_test(NAME testspell COMMAND testspell)
+endif()
 
 add_executable(testquickphrase testquickphrase.cpp)
 target_link_libraries(testquickphrase Fcitx5::Core Fcitx5::Module::QuickPhrase Fcitx5::Module::TestFrontend Fcitx5::Module::TestIM)

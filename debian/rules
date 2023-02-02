@@ -16,4 +16,4 @@ override_dh_auto_configure:
 
 override_dh_auto_test:
 	# DBus-related tests can't run in parallel
-	#dh_auto_test --no-parallel
+	dh_auto_test --no-parallel

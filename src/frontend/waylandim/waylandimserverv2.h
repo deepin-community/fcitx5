@@ -7,10 +7,12 @@
 #ifndef _FCITX5_FRONTEND_WAYLANDIM_WAYLANDIMSERVERV2_H_
 #define _FCITX5_FRONTEND_WAYLANDIM_WAYLANDIMSERVERV2_H_
 
+#include <cstdint>
 #include <fcitx-utils/event.h>
 #include <fcitx/focusgroup.h>
 #include <fcitx/instance.h>
 #include <xkbcommon/xkbcommon.h>
+#include "fcitx-utils/misc_p.h"
 #include "display.h"
 #include "zwp_input_method_keyboard_grab_v2.h"
 #include "zwp_input_method_manager_v2.h"
@@ -131,6 +133,7 @@ private:
 
     bool pendingActivate_ = false;
     bool pendingDeactivate_ = false;
+    bool vkReady_ = false;
 
     uint32_t serial_ = 0;
     uint32_t time_ = 0;
@@ -141,9 +144,7 @@ private:
 
     int32_t repeatRate_ = 40, repeatDelay_ = 400;
 
-    uint32_t lastVKKey_ = 0;
-    uint32_t lastVKState_ = WL_KEYBOARD_KEY_STATE_RELEASED;
-    uint32_t lastVKTime_ = 0;
+    OrderedMap<uint32_t, uint32_t> pressedVKKey_;
 };
 
 } // namespace fcitx

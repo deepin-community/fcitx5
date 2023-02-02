@@ -31,31 +31,31 @@ FCITX_CONFIGURATION(
         this,
         "TriggerKeys",
         _("Trigger Input Method"),
-        {Key("Control+space")},
+        {Key("Control+space"), Key("Zenkaku_Hankaku"), Key("Hangul")},
         KeyListConstrain({KeyConstrainFlag::AllowModifierLess,
                           KeyConstrainFlag::AllowModifierOnly})};
     Option<bool> enumerateWithTriggerKeys{
         this, "EnumerateWithTriggerKeys",
-        _("Enumerate when press trigger key repeatedly"), false};
+        _("Enumerate when press trigger key repeatedly"), true};
     KeyListOption altTriggerKeys{
         this,
         "AltTriggerKeys",
         _("Temporally switch between first and current Input Method"),
-        {},
+        {Key("Shift_L")},
         KeyListConstrain({KeyConstrainFlag::AllowModifierLess,
                           KeyConstrainFlag::AllowModifierOnly})};
     KeyListOption enumerateForwardKeys{
         this,
         "EnumerateForwardKeys",
         _("Enumerate Input Method Forward"),
-        {Key("Control+Shift_L"), Key("Control+Shift_R")},
+        {Key("Control+Shift_L")},
         KeyListConstrain({KeyConstrainFlag::AllowModifierLess,
                           KeyConstrainFlag::AllowModifierOnly})};
     KeyListOption enumerateBackwardKeys{
         this,
         "EnumerateBackwardKeys",
         _("Enumerate Input Method Backward"),
-        {},
+        {Key("Control+Shift_R")},
         KeyListConstrain({KeyConstrainFlag::AllowModifierLess,
                           KeyConstrainFlag::AllowModifierOnly})};
     Option<bool> enumerateSkipFirst{
@@ -65,14 +65,14 @@ FCITX_CONFIGURATION(
         this,
         "EnumerateGroupForwardKeys",
         _("Enumerate Input Method Group Forward"),
-        {},
+        {Key("Super+space")},
         KeyListConstrain({KeyConstrainFlag::AllowModifierLess,
                           KeyConstrainFlag::AllowModifierOnly})};
     KeyListOption enumerateGroupBackwardKeys{
         this,
         "EnumerateGroupBackwardKeys",
         _("Enumerate Input Method Group Backward"),
-        {},
+        {Key("Super+Shift+space")},
         KeyListConstrain({KeyConstrainFlag::AllowModifierLess,
                           KeyConstrainFlag::AllowModifierOnly})};
     KeyListOption activateKeys{
@@ -129,7 +129,7 @@ FCITX_CONFIGURATION(
     KeyListOption togglePreedit{this,
                                 "TogglePreedit",
                                 _("Toggle embedded preedit"),
-                                {},
+                                {Key("Control+Alt+P")},
                                 KeyListConstrain()};);
 
 FCITX_CONFIGURATION(

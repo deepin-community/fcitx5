@@ -52,8 +52,7 @@ public:
 class InputWindow {
 public:
     InputWindow(ClassicUI *parent);
-    void update(InputContext *inputContext);
-    std::pair<unsigned int, unsigned int> sizeHint();
+    std::pair<int, int> update(InputContext *inputContext);
     void paint(cairo_t *cr, unsigned int width, unsigned int height);
     void hide();
     bool visible() const { return visible_; }
@@ -62,6 +61,9 @@ public:
     void wheel(bool up);
 
 protected:
+    // Override the font DPI in cairo/pango context. If less-equal than zero, it
+    // will restore to font map default dpi.
+    void setFontDPI(int dpi);
     void resizeCandidates(size_t n);
     void appendText(std::string &s, PangoAttrList *attrList,
                     PangoAttrList *highlightAttrList, const Text &text);
@@ -99,7 +101,11 @@ protected:
     CandidateLayoutHint layoutHint_ = CandidateLayoutHint::NotSet;
     size_t candidatesHeight_ = 0;
     int hoverIndex_ = -1;
+
+private:
+    std::pair<unsigned int, unsigned int> sizeHint();
 };
+
 } // namespace classicui
 } // namespace fcitx
 

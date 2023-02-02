@@ -16,7 +16,26 @@
 #include "inputcontext_p.h"
 #include "inputcontextproperty_p.h"
 
+namespace fcitx {
+
 namespace {
+
+// The dummy input context can be used to propagate context state when the
+// PropertyPropagatePolicy is All
+class DummyInputContext : public InputContext {
+public:
+    DummyInputContext(InputContextManager &manager)
+        : InputContext(manager, "") {}
+
+    ~DummyInputContext() { destroy(); }
+
+    const char *frontend() const override { return "dummy"; }
+
+    void commitStringImpl(const std::string &) override {}
+    void deleteSurroundingTextImpl(int, unsigned int) override {}
+    void forwardKeyImpl(const ForwardKeyEvent &) override {}
+    void updatePreeditImpl() override {}
+};
 
 void hash_combine(std::size_t &seed, std::size_t value) {
     seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
@@ -32,33 +51,44 @@ struct container_hasher {
         return seed;
     }
 };
-} // namespace
-
-namespace fcitx {
 
 struct InputContextListHelper {
-    static IntrusiveListNode &toNode(InputContext &value) noexcept;
-    static InputContext &toValue(IntrusiveListNode &node) noexcept;
-    static const IntrusiveListNode &toNode(const InputContext &value) noexcept;
-    static const InputContext &toValue(const IntrusiveListNode &node) noexcept;
+    [[maybe_unused]] static IntrusiveListNode &
+    toNode(InputContext &value) noexcept;
+    [[maybe_unused]] static InputContext &
+    toValue(IntrusiveListNode &node) noexcept;
+    [[maybe_unused]] static const IntrusiveListNode &
+    toNode(const InputContext &value) noexcept;
+    [[maybe_unused]] static const InputContext &
+    toValue(const IntrusiveListNode &node) noexcept;
 };
 
 struct InputContextFocusedListHelper {
-    static IntrusiveListNode &toNode(InputContext &value) noexcept;
-    static InputContext &toValue(IntrusiveListNode &node) noexcept;
-    static const IntrusiveListNode &toNode(const InputContext &value) noexcept;
-    static const InputContext &toValue(const IntrusiveListNode &node) noexcept;
+    [[maybe_unused]] static IntrusiveListNode &
+    toNode(InputContext &value) noexcept;
+    [[maybe_unused]] static InputContext &
+    toValue(IntrusiveListNode &node) noexcept;
+    [[maybe_unused]] static const IntrusiveListNode &
+    toNode(const InputContext &value) noexcept;
+    [[maybe_unused]] static const InputContext &
+    toValue(const IntrusiveListNode &node) noexcept;
 };
 
 struct FocusGroupListHelper {
-    static IntrusiveListNode &toNode(FocusGroup &value) noexcept;
-    static FocusGroup &toValue(IntrusiveListNode &node) noexcept;
-    static const IntrusiveListNode &toNode(const FocusGroup &value) noexcept;
-    static const FocusGroup &toValue(const IntrusiveListNode &node) noexcept;
+    [[maybe_unused]] static IntrusiveListNode &
+    toNode(FocusGroup &value) noexcept;
+    [[maybe_unused]] static FocusGroup &
+    toValue(IntrusiveListNode &node) noexcept;
+    [[maybe_unused]] static const IntrusiveListNode &
+    toNode(const FocusGroup &value) noexcept;
+    [[maybe_unused]] static const FocusGroup &
+    toValue(const IntrusiveListNode &node) noexcept;
 };
 
 inline InputContext *toInputContextPointer(InputContext *self) { return self; }
 inline InputContext *toInputContextPointer(InputContext &self) { return &self; }
+
+} // namespace
 
 class InputContextManagerPrivate {
 public:
@@ -177,7 +207,8 @@ public:
     PropertyPropagatePolicy propertyPropagatePolicy_ =
         PropertyPropagatePolicy::No;
     bool finalized_ = false;
-    bool preeditEnabledByDefault_ = false;
+    bool preeditEnabledByDefault_ = true;
+    std::unique_ptr<InputContext> dummyInputContext_;
 };
 
 #define DEFINE_LIST_HELPERS(HELPERTYPE, TYPE, MEMBER)                          \
@@ -200,9 +231,17 @@ DEFINE_LIST_HELPERS(InputContextFocusedListHelper, InputContext,
 DEFINE_LIST_HELPERS(FocusGroupListHelper, FocusGroup, listNode_)
 
 InputContextManager::InputContextManager()
-    : d_ptr(std::make_unique<InputContextManagerPrivate>()) {}
+    : d_ptr(std::make_unique<InputContextManagerPrivate>()) {
+    FCITX_D();
 
-InputContextManager::~InputContextManager() {}
+    d->dummyInputContext_ = std::make_unique<DummyInputContext>(*this);
+}
+
+InputContextManager::~InputContextManager() {
+    FCITX_D();
+    // Need to reset this before d becomes invalid.
+    d->dummyInputContext_.reset();
+}
 
 InputContext *InputContextManager::findByUUID(ICUUID uuid) {
     FCITX_D();
@@ -260,6 +299,7 @@ void InputContextManager::setPropertyPropagatePolicy(
 void InputContextManager::finalize() {
     FCITX_D();
     d->finalized_ = true;
+    d->dummyInputContext_.reset();
     while (!d->inputContexts_.empty()) {
         delete &d->inputContexts_.front();
     }
@@ -404,10 +444,15 @@ InputContext *InputContextManager::lastFocusedInputContext() {
 InputContext *InputContextManager::mostRecentInputContext() {
     FCITX_D();
     auto *ic = lastFocusedInputContext();
-    if (ic) {
-        return ic;
+    if (!ic) {
+        ic = d->mostRecentInputContext_.get();
     }
-    return d->mostRecentInputContext_.get();
+
+    if (!ic && d->propertyPropagatePolicy_ == PropertyPropagatePolicy::All) {
+        ic = d->dummyInputContext_.get();
+    }
+
+    return ic;
 }
 
 void InputContextManager::setPreeditEnabledByDefault(bool enable) {

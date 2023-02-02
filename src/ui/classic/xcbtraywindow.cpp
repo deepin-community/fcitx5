@@ -35,7 +35,7 @@ XCBTrayWindow::XCBTrayWindow(XCBUI *ui) : XCBWindow(ui, 48, 48) {
     }
     groupAction_.setShortText(_("Group"));
     groupAction_.setMenu(&groupMenu_);
-    configureAction_.setShortText(_("Input Method Configure"));
+    configureAction_.setShortText(_("Configure"));
     restartAction_.setShortText(_("Restart"));
     exitAction_.setShortText(_("Exit"));
     menu_.addAction(&groupAction_);
@@ -113,6 +113,7 @@ bool XCBTrayWindow::filterEvent(xcb_generic_event_t *event) {
         if (expose->window == wid_) {
             CLASSICUI_DEBUG() << "Tray recevied expose event";
             update();
+            return true;
         }
         break;
     }
@@ -148,6 +149,7 @@ bool XCBTrayWindow::filterEvent(xcb_generic_event_t *event) {
                    property->window == dockWindow_) {
             isHorizontal_ = trayOrientation();
             resizeTrayWindow();
+            return true;
         }
         break;
     }

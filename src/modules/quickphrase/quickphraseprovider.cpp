@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <fcitx-utils/utf8.h>
 #include <fcitx/inputmethodentry.h>
+#include "fcitx-utils/fs.h"
 #include "fcitx-utils/standardpath.h"
 #include "fcitx-utils/stringutils.h"
 #include "quickphrase.h"
@@ -56,23 +57,21 @@ void BuiltInQuickPhraseProvider::reloadConfig() {
 }
 
 void BuiltInQuickPhraseProvider::load(StandardPathFile &file) {
-    UniqueFilePtr fp{fdopen(file.fd(), "rb")};
+    UniqueFilePtr fp = fs::openFD(file, "rb");
     if (!fp) {
         return;
     }
-    file.release();
 
     UniqueCPtr<char> buf;
     size_t len = 0;
     while (getline(buf, &len, fp.get()) != -1) {
         std::string strBuf(buf.get());
 
-        auto pair = stringutils::trimInplace(strBuf);
-        std::string::size_type start = pair.first, end = pair.second;
+        auto [start, end] = stringutils::trimInplace(strBuf);
         if (start == end) {
             continue;
         }
-        std::string text(strBuf.begin() + start, strBuf.begin() + end);
+        std::string_view text(strBuf.data() + start, end - start);
         if (!utf8::validate(text)) {
             continue;
         }
@@ -87,25 +86,14 @@ void BuiltInQuickPhraseProvider::load(StandardPathFile &file) {
             continue;
         }
 
-        if (text.back() == '\"' &&
-            (text[word] != '\"' || word + 1 != text.size())) {
+        std::string key(text.begin(), text.begin() + pos);
+        auto wordString =
+            stringutils::unescapeForValue(std::string_view(text.substr(word)));
+
+        if (!wordString) {
             continue;
         }
-
-        std::string key(text.begin(), text.begin() + pos);
-        std::string wordString;
-
-        bool escapeQuote;
-        if (text.back() == '\"' && text[word] == '\"') {
-            wordString = text.substr(word + 1, text.size() - word - 1);
-            escapeQuote = true;
-        } else {
-            wordString = text.substr(word);
-            escapeQuote = false;
-        }
-        stringutils::unescape(wordString, escapeQuote);
-
-        map_.emplace(std::move(key), std::move(wordString));
+        map_.emplace(std::move(key), std::move(*wordString));
     }
 }
 

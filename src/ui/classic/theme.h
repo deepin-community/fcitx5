@@ -7,6 +7,7 @@
 #ifndef _FCITX_UI_CLASSIC_THEME_H_
 #define _FCITX_UI_CLASSIC_THEME_H_
 
+#include <cstdint>
 #include <cairo/cairo.h>
 #include "fcitx-config/configuration.h"
 #include "fcitx-config/enum.h"
@@ -103,6 +104,8 @@ FCITX_CONFIGURATION(
                                           Color("#ffffffff")};
     Option<bool> enableBlur{this, "EnableBlur", _("Enable Blur on KWin"),
                             false};
+    Option<std::string> blurMask{this, "BlurMask", _("Blur mask"), ""};
+    Option<MarginConfig> blurMargin{this, "BlurMargin", _("Blur Margin")};
     Option<bool> fullWidthHighlight{
         this, "FullWidthHighlight",
         _("Use all horizontal space for highlight when it is vertical list"),
@@ -122,7 +125,8 @@ FCITX_CONFIGURATION(
                                     _("Margin around text")};
     Option<ActionImageConfig> prev{this, "PrevPage", _("Prev Page Button")};
     Option<ActionImageConfig> next{this, "NextPage", _("Next Page Button")};
-    Option<MarginConfig> blurMargin{this, "BlurMargin", _("Blur Margin")};);
+    Option<MarginConfig> shadowMargin{this, "ShadowMargin",
+                                      _("Shadow Margin")};);
 FCITX_CONFIGURATION(
     MenuThemeConfig,
     Option<Color> normalColor{this, "NormalColor", _("Normal text color"),
@@ -235,7 +239,12 @@ public:
 
     void paint(cairo_t *c, const ActionImageConfig &cfg, double alpha = 1.0);
 
+    std::vector<Rect> mask(const BackgroundImageConfig &cfg, int width,
+                           int height);
+
     bool setIconTheme(const std::string &name);
+
+    const auto &maskConfig() const { return maskConfig_; }
 
 private:
     void reset();
@@ -246,6 +255,7 @@ private:
     std::unordered_map<std::string, ThemeImage> trayImageTable_;
     IconTheme iconTheme_;
     std::string name_;
+    BackgroundImageConfig maskConfig_;
 };
 
 inline void cairoSetSourceColor(cairo_t *cr, const Color &color) {

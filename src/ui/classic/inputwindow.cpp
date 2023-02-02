@@ -251,10 +251,11 @@ void InputWindow::setTextToLayout(
     pango_attr_list_unref(newAttrList);
 }
 
-void InputWindow::update(InputContext *inputContext) {
+std::pair<int, int> InputWindow::update(InputContext *inputContext) {
     if (parent_->suspended() || !inputContext) {
+        hoverIndex_ = -1;
         visible_ = false;
-        return;
+        return {0, 0};
     }
     // | aux up | preedit
     // | aux down
@@ -342,6 +343,15 @@ void InputWindow::update(InputContext *inputContext) {
     visible_ = nCandidates_ ||
                pango_layout_get_character_count(upperLayout_.get()) ||
                pango_layout_get_character_count(lowerLayout_.get());
+    int width = 0, height = 0;
+    if (visible_) {
+        std::tie(width, height) = sizeHint();
+        if (width <= 0 || height <= 0) {
+            width = height = 0;
+            visible_ = false;
+        }
+    }
+    return {width, height};
 }
 
 std::pair<unsigned int, unsigned int> InputWindow::sizeHint() {
@@ -682,6 +692,19 @@ void InputWindow::wheel(bool up) {
             }
         }
     }
+}
+
+void InputWindow::setFontDPI(int dpi) {
+    // Unlike pango cairo context, Cairo font map does not accept negative dpi.
+    // Restore to default value instead.
+    if (dpi <= 0) {
+        pango_cairo_font_map_set_resolution(
+            PANGO_CAIRO_FONT_MAP(fontMap_.get()), fontMapDefaultDPI_);
+    } else {
+        pango_cairo_font_map_set_resolution(
+            PANGO_CAIRO_FONT_MAP(fontMap_.get()), dpi);
+    }
+    pango_cairo_context_set_resolution(context_.get(), dpi);
 }
 
 int InputWindow::highlight() const {

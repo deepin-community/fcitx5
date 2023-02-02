@@ -24,6 +24,15 @@
 // among different modules.
 namespace fcitx {
 
+class Finally {
+public:
+    Finally(std::function<void()> func) : func_(std::move(func)) {}
+    ~Finally() { func_(); }
+
+private:
+    std::function<void()> func_;
+};
+
 static inline std::pair<std::string, std::string>
 parseLayout(const std::string &layout) {
     auto pos = layout.find('-');
@@ -134,11 +143,16 @@ static inline DesktopType getDesktopType() {
             return DesktopType::GNOME;
         } else if (desktop == "xfce") {
             return DesktopType::XFCE;
-        }else if (desktop == "deepin") {
+        } else if (desktop == "deepin") {
             return DesktopType::DEEPIN;
         }
     }
     return DesktopType::Unknown;
+}
+
+static inline bool isKDE() {
+    static const DesktopType desktop = getDesktopType();
+    return desktop == DesktopType::KDE4 || desktop == DesktopType::KDE5;
 }
 
 static inline bool hasTwoKeyboardInCurrentGroup(Instance *instance) {

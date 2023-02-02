@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <initializer_list>
 #include <iterator>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -53,11 +54,17 @@ inline bool isConcatOf(std::string_view str, std::string_view sub1,
 ///
 /// Will return a pair of equal value all characters are whitespace.
 FCITXUTILS_EXPORT std::pair<std::string::size_type, std::string::size_type>
-trimInplace(const std::string &str);
+trimInplace(std::string_view str);
+
+/// \brief Trim the white space in string view
+/// \see trimInplace
+/// \since 5.0.16
+FCITXUTILS_EXPORT
+std::string_view trimView(std::string_view);
 
 /// \brief Trim the white space in str.
 /// \see trimInplace
-FCITXUTILS_EXPORT std::string trim(const std::string &str);
+FCITXUTILS_EXPORT std::string trim(std::string_view str);
 
 /// \brief Split the string by delim.
 FCITXUTILS_EXPORT std::vector<std::string> split(std::string_view str,
@@ -154,6 +161,27 @@ constexpr bool literalEqual(char const *a, char const *b) {
 
 /// \brief Inplace unescape a string contains slash, new line, optionally quote.
 FCITXUTILS_EXPORT bool unescape(std::string &str, bool unescapeQuote);
+
+/**
+ * \brief unescape a string, that is potentially quoted.
+ *
+ * \param str input string.
+ * \return unescaped string
+ * \see escapeForValue
+ * \since 5.0.16
+ */
+FCITXUTILS_EXPORT std::optional<std::string>
+unescapeForValue(std::string_view str);
+
+/**
+ * \brief escape a string, add quote if needed.
+ *
+ * \param str input string.
+ * \return escaped string
+ * \see unescapeForValue
+ * \since 5.0.16
+ */
+FCITXUTILS_EXPORT std::string escapeForValue(std::string_view str);
 
 } // namespace stringutils
 } // namespace fcitx
