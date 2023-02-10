@@ -1,0 +1,67 @@
+From: zsien <quezhiyong@uniontech.com>
+Date: Fri, 10 Feb 2023 17:02:28 +0800
+Subject: configtool opens dde-control-center when using DDE
+
+---
+ data/fcitx5-configtool.sh | 25 +++++++++++++++++++++++--
+ 1 file changed, 23 insertions(+), 2 deletions(-)
+
+diff --git a/data/fcitx5-configtool.sh b/data/fcitx5-configtool.sh
+index 4daf97a..6251da9 100755
+--- a/data/fcitx5-configtool.sh
++++ b/data/fcitx5-configtool.sh
+@@ -65,6 +65,9 @@ detectDE() {
+             XFCE)
+             DE=xfce
+             break
++            ;;
++            Deepin)
++            DE=deepin
+         esac
+       done
+     fi
+@@ -93,6 +96,9 @@ detectDE() {
+          xfce|xfce4|'Xfce Session')
+            DE=xfce;
+            ;;
++         deepin)
++           DE=deepin;
++           ;;
+       esac
+     fi
+ 
+@@ -118,6 +124,18 @@ run_kde() {
+     fi
+ }
+ 
++run_dde() {
++    local dbus_service="org.deepin.dde.ControlCenter1"
++    local dbus_path="/org/deepin/dde/ControlCenter1"
++    local dbus_interface="org.deepin.dde.ControlCenter1"
++    local dcc_module="keyboard/Manage Input Methods"
++
++    if dbus-send --print-reply=literal --dest=$dbus_service $dbus_path $dbus_interface.GetAllModule | jq -e ".[] | select(.url == \"${dcc_module}\")" >> /dev/null 2>&1; then
++        exec dbus-send --print-reply=literal --dest=$dbus_service $dbus_path $dbus_interface.ShowPage string:"$dcc_module"
++    fi
++    return 1
++}
++
+ run_qt() {
+     if which fcitx5-config-qt > /dev/null 2>&1; then
+         exec fcitx5-config-qt
+@@ -154,10 +172,13 @@ detectDE
+ # xdg is never a preferred solution
+ case "$DE" in
+     kde)
+-        order="kde qt xdg"
++        order="kde qt dde xdg"
++        ;;
++    deepin)
++        order="dde qt kde xdg"
+         ;;
+     *)
+-        order="qt kde xdg"
++        order="qt kde dde xdg"
+         ;;
+ esac
+ 

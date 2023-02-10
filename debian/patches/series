@@ -2,3 +2,4 @@
 0002-fix-kde-config-fcitx5-package-name-in-fcitx5-configtool.patch
 # 0003-For-lower-versions-gcc-compatible.patch
 0004-upgrade-cmake-minumum-version-require.patch
+0005-configtool-opens-dde-control-center-when-using-DDE.patch
