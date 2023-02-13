@@ -1,3 +1,9 @@
+fcitx5 (5.0.21-1deepin1) unstable; urgency=medium
+
+  * fcitx5-configtool opens dde-control-center when using DDE
+
+ -- quezhiyong <quezhiyong@uniontech.com>  Mon, 13 Feb 2023 14:34:49 +0800
+
 fcitx5 (5.0.21-1) unstable; urgency=medium
 
   * New upstream release.
