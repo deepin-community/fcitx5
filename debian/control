@@ -57,6 +57,7 @@ Depends:
  libfcitx5config6 (= ${binary:Version}),
  libfcitx5core7 (= ${binary:Version}),
  libfcitx5utils2 (= ${binary:Version}),
+ jq,
  ${misc:Depends},
  ${shlibs:Depends},
 Recommends:

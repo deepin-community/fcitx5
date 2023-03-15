@@ -40,7 +40,7 @@ index 4daf97a..6251da9 100755
 +    local dbus_interface="org.deepin.dde.ControlCenter1"
 +    local dcc_module="keyboard/Manage Input Methods"
 +
-+    if dbus-send --print-reply=literal --dest=$dbus_service $dbus_path $dbus_interface.GetAllModule | jq -e ".[] | select(.url == \"${dcc_module}\")" >> /dev/null 2>&1; then
++    if dbus-send --print-reply=literal --dest=$dbus_service $dbus_path $dbus_interface.GetAllModule 2>> /dev/null | jq --arg url "$dcc_module" -Rse 'fromjson? // error("Bad input") | any(.url == $url)' >> /dev/null 2>&1; then
 +        exec dbus-send --print-reply=literal --dest=$dbus_service $dbus_path $dbus_interface.ShowPage string:"$dcc_module"
 +    fi
 +    return 1
