@@ -362,6 +362,19 @@ void Kimpanel::updateInputPanel(InputContext *inputContext) {
     bus_->flush();
 }
 
+// This is heuristic, but we guranteed that we don't do crazy things with label.
+std::string extractTextForLabel(const std::string &label) {
+    if (label.empty()) {
+        return "";
+    }
+    auto texts = stringutils::split(label, FCITX_WHITESPACE);
+    if (texts.empty()) {
+        return "";
+    }
+
+    return texts[0];
+}
+
 std::string Kimpanel::inputMethodStatus(InputContext *ic) {
     std::string label;
     std::string description = _("Not available");
@@ -381,6 +394,8 @@ std::string Kimpanel::inputMethodStatus(InputContext *ic) {
             description = entry->name();
         }
     }
+
+    label = extractTextForLabel(label);
 
     static const bool preferSymbolic = !isKDE();
     if (preferSymbolic && icon == "input-keyboard") {
@@ -448,6 +463,9 @@ void Kimpanel::msgV1Handler(dbus::Message &msg) {
             if (auto *menu = action->menu()) {
                 std::vector<std::string> menuitems;
                 for (auto *menuAction : menu->actions()) {
+                    if (menuAction->isSeparator()) {
+                        continue;
+                    }
                     menuitems.push_back(actionToStatus(menuAction, ic));
                 }
                 proxy_->execMenu(menuitems);

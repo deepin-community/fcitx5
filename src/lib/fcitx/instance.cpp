@@ -99,7 +99,7 @@ bool shouldSwitchIM(const CapabilityFlags &oldFlags,
 
 } // namespace
 
-void InstanceArgument::printUsage() {
+void InstanceArgument::printUsage() const {
     std::cout
         << "Usage: " << argv0 << " [Option]\n"
         << "  --disable <addon names>\tA comma separated list of addons to "
@@ -993,7 +993,7 @@ Instance::Instance(int argc, char **argv) {
         }));
     d->eventWatchers_.emplace_back(d->watchEvent(
         EventType::InputContextFocusOut, EventWatcherPhase::ReservedFirst,
-        [this, d](Event &event) {
+        [d](Event &event) {
             auto &icEvent = static_cast<InputContextEvent &>(event);
             auto *ic = icEvent.inputContext();
             auto *inputState = ic->propertyFor(&d->inputStateFactory_);
@@ -1007,6 +1007,11 @@ Instance::Instance(int argc, char **argv) {
                     ic->commitString(commit);
                 }
             }
+        }));
+    d->eventWatchers_.emplace_back(d->watchEvent(
+        EventType::InputContextFocusOut, EventWatcherPhase::InputMethod,
+        [this, d](Event &event) {
+            auto &icEvent = static_cast<InputContextEvent &>(event);
             deactivateInputMethod(icEvent);
         }));
     d->eventWatchers_.emplace_back(d->watchEvent(
@@ -1438,9 +1443,8 @@ bool Instance::postEvent(Event &event) const {
                                                           : XKB_KEY_DOWN);
             } while (0);
 #endif
-            if (ic->hasPendingEvents() &&
-                ic->capabilityFlags().test(CapabilityFlag::KeyEventOrderFix) &&
-                !keyEvent.accepted()) {
+            if (ic->capabilityFlags().test(CapabilityFlag::KeyEventOrderFix) &&
+                !keyEvent.accepted() && ic->hasPendingEventsStrictOrder()) {
                 // Re-forward the event to ensure we got delivered later than
                 // commit.
                 keyEvent.filterAndAccept();
@@ -2328,6 +2332,11 @@ void Instance::updateXkbStateMask(const std::string &display,
     FCITX_D();
     d->stateMask_[display] =
         std::make_tuple(depressed_mods, latched_mods, locked_mods);
+}
+
+void Instance::clearXkbStateMask(const std::string &display) {
+    FCITX_D();
+    d->stateMask_.erase(display);
 }
 
 const char *Instance::version() { return FCITX_VERSION_STRING; }
