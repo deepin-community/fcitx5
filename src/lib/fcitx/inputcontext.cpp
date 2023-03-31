@@ -75,6 +75,8 @@ void InputContext::created() {
     d->emplaceEvent<InputContextCreatedEvent>(this);
 }
 
+std::string_view InputContext::frontendName() const { return frontend(); }
+
 void InputContext::destroy() {
     FCITX_D();
     assert(!d->destroyed_);
@@ -327,6 +329,27 @@ bool InputContext::hasPendingEvents() const {
     return !d->blockedEvents_.empty();
 }
 
+bool InputContext::hasPendingEventsStrictOrder() const {
+    FCITX_D();
+    if (d->blockedEvents_.empty()) {
+        return false;
+    }
+
+    // Check we only have update preedit.
+    if (std::any_of(d->blockedEvents_.begin(), d->blockedEvents_.end(),
+                    [](const auto &event) {
+                        return event->type() !=
+                               EventType::InputContextUpdatePreedit;
+                    })) {
+        return true;
+    }
+
+    // Check whether the preedit is non-empty.
+    // If key event may produce anything, it still may trigger the clear
+    // preedit. In that case, preedit order does matter.
+    return !inputPanel().clientPreedit().toString().empty();
+}
+
 void InputContext::commitString(const std::string &text) {
     FCITX_D();
     if (auto *instance = d->manager_.instance()) {
@@ -365,7 +388,17 @@ InputPanel &InputContext::inputPanel() {
     return d->inputPanel_;
 }
 
+const InputPanel &InputContext::inputPanel() const {
+    FCITX_D();
+    return d->inputPanel_;
+}
+
 StatusArea &InputContext::statusArea() {
+    FCITX_D();
+    return d->statusArea_;
+}
+
+const StatusArea &InputContext::statusArea() const {
     FCITX_D();
     return d->statusArea_;
 }
