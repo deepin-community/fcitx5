@@ -76,6 +76,30 @@ public:
      */
     const std::string &customXkbOption() const;
 
+    /**
+     * Allow use input method in password field.
+     *
+     * @return whether allow use input method in password field.
+     * @since 5.1.2
+     */
+    bool allowInputMethodForPassword() const;
+
+    /**
+     * Show preedit when typing in password field.
+     *
+     * @return whether show preedit in password field.
+     * @since 5.1.2
+     */
+    bool showPreeditForPassword() const;
+
+    /**
+     * Number of minutes that fcitx will automatically save user data.
+     *
+     * @return the period of auto save
+     * @since 5.1.2
+     */
+    int autoSavePeriod() const;
+
     const std::vector<std::string> &enabledAddons() const;
     const std::vector<std::string> &disabledAddons() const;
 

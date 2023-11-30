@@ -5,11 +5,15 @@
  *
  */
 #include "waylandinputwindow.h"
+#include <cstddef>
+#include "fcitx/misc_p.h"
+#include "common.h"
 #include "waylandim_public.h"
 #include "waylandui.h"
 #include "waylandwindow.h"
 #include "wl_compositor.h"
 #include "wl_region.h"
+#include "wp_fractional_scale_manager_v1.h"
 #include "zwp_input_panel_v1.h"
 #include "zwp_input_popup_surface_v2.h"
 
@@ -128,17 +132,27 @@ void WaylandInputWindow::updateBlur() {
     }
 }
 
+void WaylandInputWindow::updateScale() { window_->updateScale(); }
+
 void WaylandInputWindow::resetPanel() { panelSurface_.reset(); }
 
 void WaylandInputWindow::update(fcitx::InputContext *ic) {
+    Finally flush([this]() { ui_->display()->flush(); });
     const auto oldVisible = visible();
     auto [width, height] = InputWindow::update(ic);
+    CLASSICUI_DEBUG() << "Wayland Input Window visible:" << visible()
+                      << " for IC program:"
+                      << (ic ? ic->program() : std::string("-")) << " frontend:"
+                      << (ic ? ic->frontendName() : std::string("-"));
     if (!oldVisible && !visible()) {
+        CLASSICUI_DEBUG() << "Wayland Input Window has been hidden.";
         return;
     }
 
     if (!visible()) {
+        CLASSICUI_DEBUG() << "Hide Wayland Input Window.";
         window_->hide();
+        repaintIC_.unwatch();
         panelSurface_.reset();
         panelSurfaceV2_.reset();
         blur_.reset();
@@ -148,20 +162,31 @@ void WaylandInputWindow::update(fcitx::InputContext *ic) {
 
     assert(!visible() || ic != nullptr);
 
+    CLASSICUI_DEBUG()
+        << "Wayland Input Window is visible, ensure surface is created.";
     initPanel();
-    if (ic->frontend() == std::string_view("wayland_v2")) {
+    if (ic->frontendName() == "wayland_v2") {
         if (!panelSurfaceV2_ || ic != v2IC_.get()) {
-            v2IC_ = ic->watch();
-            auto *im = ui_->parent()
-                           ->waylandim()
-                           ->call<IWaylandIMModule::getInputMethodV2>(ic);
-            if (!im) {
+            auto *waylandim = ui_->parent()->waylandim();
+            if (!waylandim) {
+                CLASSICUI_ERROR()
+                    << "Failed to request waylandim addon, this should not "
+                       "happen since we have wayland_v2 input context.";
                 return;
             }
+            auto *im = waylandim->call<IWaylandIMModule::getInputMethodV2>(ic);
+            if (!im) {
+                CLASSICUI_ERROR()
+                    << "Failed to request get zwp_input_method_v2 object, this "
+                       "should not happen since we have wayland_v2 input "
+                       "context.";
+                return;
+            }
+            v2IC_ = ic->watch();
             panelSurfaceV2_.reset();
             panelSurfaceV2_.reset(im->getInputPopupSurface(window_->surface()));
         }
-    } else if (ic->frontend() == std::string_view("wayland")) {
+    } else if (ic->frontendName() == "wayland") {
         auto panel = ui_->display()->getGlobal<wayland::ZwpInputPanelV1>();
         if (!panel) {
             return;
@@ -173,6 +198,7 @@ void WaylandInputWindow::update(fcitx::InputContext *ic) {
         }
     }
     if (!panelSurface_ && !panelSurfaceV2_) {
+        CLASSICUI_DEBUG() << "No Panel surface available, return.";
         return;
     }
 
@@ -183,13 +209,11 @@ void WaylandInputWindow::update(fcitx::InputContext *ic) {
 
     if (auto *surface = window_->prerender()) {
         cairo_t *c = cairo_create(surface);
-        cairo_scale(c, window_->scale(), window_->scale());
-        paint(c, width, height);
+        paint(c, width, height, window_->bufferScale());
         cairo_destroy(c);
         window_->render();
-    } else {
-        repaintIC_ = ic->watch();
     }
+    repaintIC_ = ic->watch();
 }
 
 void WaylandInputWindow::repaint() {
@@ -199,8 +223,7 @@ void WaylandInputWindow::repaint() {
 
     if (auto *surface = window_->prerender()) {
         cairo_t *c = cairo_create(surface);
-        cairo_scale(c, window_->scale(), window_->scale());
-        paint(c, window_->width(), window_->height());
+        paint(c, window_->width(), window_->height(), window_->bufferScale());
         cairo_destroy(c);
         window_->render();
     }

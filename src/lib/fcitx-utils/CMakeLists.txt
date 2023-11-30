@@ -110,6 +110,7 @@ set(FCITX_UTILS_DBUS_HEADERS
     dbus/message_details.h
     dbus/servicewatcher.h
     dbus/matchrule.h
+    dbus/variant.h
     )
 
 ecm_setup_version(PROJECT
@@ -146,7 +147,7 @@ configure_file(Fcitx5Utils.pc.in ${CMAKE_CURRENT_BINARY_DIR}/Fcitx5Utils.pc @ONL
 install(TARGETS Fcitx5Utils EXPORT Fcitx5UtilsTargets LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/Fcitx5Utils.pc
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
-install(FILES ${FCITX_UTILS_HEADERS} DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/Fcitx5/Utils/fcitx-utils")
+install(FILES ${FCITX_UTILS_HEADERS} DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/Fcitx5/Utils/fcitx-utils" COMPONENT header)
 
 if (ENABLE_DBUS)
     install(FILES ${FCITX_UTILS_DBUS_HEADERS} DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/Fcitx5/Utils/fcitx-utils/dbus")

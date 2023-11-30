@@ -10,8 +10,14 @@
 #include <cstdint>
 #include <fcitx-utils/capabilityflags.h>
 #include <fcitx-utils/key.h>
+#include <fcitx-utils/keysym.h>
 #include <fcitx/userinterface.h>
 #include "fcitxcore_export.h"
+
+/// \addtogroup FcitxCore
+/// \{
+/// \file
+/// \brief Input Method event for Fcitx.
 
 namespace fcitx {
 
@@ -47,11 +53,13 @@ enum class InputMethodSwitchedReason {
     Other,
 };
 
+enum class InputMethodMode { PhysicalKeyboard, OnScreenKeyboard };
+
 /**
  * Type of input method events.
  */
 enum class EventType : uint32_t {
-    EventTypeFlag = 0xffff0000,
+    EventTypeFlag = 0xfffff000,
     UserTypeFlag = 0xffff0000,
     // send by frontend, captured by core, input method, or module
     InputContextEventFlag = 0x0001000,
@@ -80,7 +88,7 @@ enum class EventType : uint32_t {
      *
      * So OnClose is called when preedit IS committed (not like
      * CChangeByInactivate,
-     * this behavior cannot be overrided), it give im a chance to choose
+     * this behavior cannot be overridden), it give im a chance to choose
      * remember this
      * word or not.
      *
@@ -126,11 +134,15 @@ enum class EventType : uint32_t {
      */
     InputContextInvokeAction = InputContextEventFlag | 0xE,
 
+    InputContextVirtualKeyboardEvent = InputContextEventFlag | 0xF,
+
     InputContextForwardKey = InputMethodEventFlag | 0x1,
     InputContextCommitString = InputMethodEventFlag | 0x2,
     InputContextDeleteSurroundingText = InputMethodEventFlag | 0x3,
     InputContextUpdatePreedit = InputMethodEventFlag | 0x4,
     InputContextUpdateUI = InputMethodEventFlag | 0x5,
+    InputContextCommitStringWithCursor = InputMethodEventFlag | 0x6,
+    InputContextFlushUI = InputMethodEventFlag | 0x7,
 
     /**
      * This is generated when input method group changed.
@@ -168,6 +180,26 @@ enum class EventType : uint32_t {
      * @see FocusOutEvent
      */
     FocusGroupFocusChanged = InstanceEventFlag | 0x5,
+    /**
+     * Input method mode changed
+     */
+    InputMethodModeChanged = InstanceEventFlag | 0x6,
+    /**
+     * Global config is reloaded
+     *
+     * This only fires after fcitx has entered running state.
+     * The initial load will not trigger this event.
+     * @see GlobalConfig
+     * @since 5.1.0
+     */
+    GlobalConfigReloaded = InstanceEventFlag | 0x7,
+    /**
+     * Virtual keyboard visibility changed
+     *
+     * @see UserInterfaceManager
+     * @since 5.1.0
+     */
+    VirtualKeyboardVisibilityChanged = InstanceEventFlag | 0x8,
 };
 
 /**
@@ -211,7 +243,8 @@ public:
      */
     bool isInputContextEvent() const {
         auto flag = static_cast<uint32_t>(EventType::InputContextEventFlag);
-        return (static_cast<uint32_t>(type_) & flag) == flag;
+        auto mask = static_cast<uint32_t>(EventType::EventTypeFlag);
+        return (static_cast<uint32_t>(type_) & mask) == flag;
     }
 
 protected:
@@ -302,6 +335,14 @@ public:
      */
     bool forward() const { return forward_; }
 
+    /**
+     * Whether this key event is derived from a virtual keyboard
+     *
+     * @return bool
+     * @since 5.1.2
+     */
+    bool isVirtual() const { return origKey_.isVirtual(); }
+
 protected:
     Key key_, origKey_, rawKey_;
     bool isRelease_;
@@ -327,6 +368,38 @@ private:
     bool filtered_ = false;
 };
 
+class VirtualKeyboardEventPrivate;
+
+class FCITXCORE_EXPORT VirtualKeyboardEvent : public InputContextEvent {
+public:
+    VirtualKeyboardEvent(InputContext *context, bool isRelease, int time = 0);
+    ~VirtualKeyboardEvent();
+
+    int time() const;
+
+    void setKey(Key key);
+    const Key &key() const;
+
+    void setPosition(float x, float y);
+    float x() const;
+    float y() const;
+
+    void setLongPress(bool longPress);
+    bool isLongPress() const;
+
+    void setUserAction(uint64_t actionId);
+    uint64_t userAction() const;
+
+    void setText(std::string text);
+    const std::string &text() const;
+
+    std::unique_ptr<KeyEvent> toKeyEvent() const;
+
+protected:
+    FCITX_DECLARE_PRIVATE(VirtualKeyboardEvent);
+    std::unique_ptr<VirtualKeyboardEventPrivate> d_ptr;
+};
+
 class FCITXCORE_EXPORT ForwardKeyEvent : public KeyEventBase {
 public:
     ForwardKeyEvent(InputContext *context, Key rawKey, bool isRelease = false,
@@ -345,6 +418,28 @@ public:
 
 protected:
     std::string text_;
+};
+
+/**
+ * Event for commit string with cursor
+ *
+ * @see InputContext::commitStringWithCursor
+ * @since 5.1.2
+ */
+class FCITXCORE_EXPORT CommitStringWithCursorEvent : public InputContextEvent {
+public:
+    CommitStringWithCursorEvent(std::string text, size_t cursor,
+                                InputContext *context)
+        : InputContextEvent(context,
+                            EventType::InputContextCommitStringWithCursor),
+          text_(std::move(text)), cursor_(cursor) {}
+
+    const std::string &text() const { return text_; }
+    size_t cursor() const { return cursor_; }
+
+protected:
+    std::string text_;
+    size_t cursor_;
 };
 
 class FCITXCORE_EXPORT InvokeActionEvent : public InputContextEvent {
@@ -414,6 +509,30 @@ public:
 protected:
     UserInterfaceComponent component_;
     bool immediate_;
+};
+
+/**
+ * Events triggered that user interface manager that flush the UI update.
+ *
+ * @since 5.1.2
+ */
+class FCITXCORE_EXPORT InputContextFlushUIEvent : public InputContextEvent {
+public:
+    InputContextFlushUIEvent(UserInterfaceComponent component,
+                             InputContext *context)
+        : InputContextEvent(context, EventType::InputContextFlushUI),
+          component_(component) {}
+
+    UserInterfaceComponent component() const { return component_; }
+
+protected:
+    UserInterfaceComponent component_;
+};
+
+class FCITXCORE_EXPORT VirtualKeyboardVisibilityChangedEvent : public Event {
+public:
+    VirtualKeyboardVisibilityChangedEvent()
+        : Event(EventType::VirtualKeyboardVisibilityChanged) {}
 };
 
 class FCITXCORE_EXPORT InputMethodNotificationEvent : public InputContextEvent {
@@ -514,6 +633,28 @@ private:
     InputContext *newFocus_;
 };
 
+/**
+ * Notify the input method mode is changed.
+ *
+ * @see Instance::InputMethodMode
+ * @since 5.1.0
+ */
+class FCITXCORE_EXPORT InputMethodModeChangedEvent : public Event {
+public:
+    InputMethodModeChangedEvent() : Event(EventType::InputMethodModeChanged) {}
+};
+
+/**
+ * Notify the global config is reloaded.
+ *
+ * @see GlobalConfig
+ * @since 5.1.0
+ */
+class FCITXCORE_EXPORT GlobalConfigReloadedEvent : public Event {
+public:
+    GlobalConfigReloadedEvent() : Event(EventType::GlobalConfigReloaded) {}
+};
+
 class FCITXCORE_EXPORT CapabilityEvent : public InputContextEvent {
 public:
     CapabilityEvent(InputContext *ic, EventType type, CapabilityFlags oldFlags,
@@ -544,6 +685,7 @@ public:
         : CapabilityEvent(ic, EventType::InputContextCapabilityAboutToChange,
                           oldFlags, newFlags) {}
 };
+
 } // namespace fcitx
 
 #endif // _FCITX_EVENT_H_

@@ -50,6 +50,7 @@ class FCITXCORE_EXPORT InputContext : public TrackableObject<InputContext> {
     friend class InputContextManagerPrivate;
     friend class FocusGroup;
     friend class UserInterfaceManager;
+    friend class UserInterfaceManagerPrivate;
 
 public:
     InputContext(InputContextManager &manager, const std::string &program = {});
@@ -87,7 +88,7 @@ public:
     double scaleFactor() const;
 
     // Following functions should only be called by Frontend.
-    // Calling following most of folloing functions will generate a
+    // Calling following most of following functions will generate a
     // corresponding InputContextEvent.
 
     /// Called When input context gains the input focus.
@@ -131,7 +132,7 @@ public:
     /// Override the preedit hint from client.
     void setEnablePreedit(bool enable);
 
-    /// Check if preedit is manually disalbed.
+    /// Check if preedit is manually disabled.
     bool isPreeditEnabled() const;
 
     /// Update the current cursor rect of the input context.
@@ -142,6 +143,15 @@ public:
 
     /// Send a key event to current input context.
     bool keyEvent(KeyEvent &event);
+
+    /**
+     * Send a virtual keyboard event to current input context.
+     *
+     * @param event virtual keyboard event
+     * @return whether event is accepted.
+     * @since 5.1.0
+     */
+    bool virtualKeyboardEvent(VirtualKeyboardEvent &event);
 
     /// Returns whether the input context holds the input focus. Input context
     /// need to have focus.
@@ -169,6 +179,16 @@ public:
     // event to the corresponding client.
     /// Commit a string to the client.
     void commitString(const std::string &text);
+
+    /**
+     * Commit a string to application with a cursor location after commit.
+     *
+     * @param text text to commit
+     * @param cursor cursor position after commit, the value should be within
+     * [0, utf8::length(text)].
+     * @see CapabilityFlag::CommitStringWithCursor
+     */
+    void commitStringWithCursor(const std::string &text, size_t cursor);
 
     /// Ask client to delete a range of surrounding text.
     void deleteSurroundingText(int offset, unsigned int size);
@@ -269,7 +289,7 @@ public:
     }
 
     /**
-     * Notifes the change of a given input context property
+     * Notifies the change of a given input context property
      *
      * @param name name of the input context property.
      *
@@ -278,13 +298,27 @@ public:
     void updateProperty(const std::string &name);
 
     /**
-     * Notifes the change of a given input context property by its factory.
+     * Notifies the change of a given input context property by its factory.
      *
      * @param name name of the input context property.
      *
      * @see InputContextProperty::copyTo
      */
     void updateProperty(const InputContextPropertyFactory *factory);
+
+    bool isVirtualKeyboardVisible() const;
+
+    void showVirtualKeyboard() const;
+
+    void hideVirtualKeyboard() const;
+
+    bool clientControlVirtualkeyboardShow() const;
+
+    void setClientControlVirtualkeyboardShow(bool show);
+
+    bool clientControlVirtualkeyboardHide() const;
+
+    void setClientControlVirtualkeyboardHide(bool show);
 
 protected:
     /**
@@ -338,6 +372,18 @@ private:
 
     std::unique_ptr<InputContextPrivate> d_ptr;
     FCITX_DECLARE_PRIVATE(InputContext);
+};
+
+class FCITXCORE_EXPORT InputContextV2 : public InputContext {
+    friend class InputContextPrivate;
+
+public:
+    using InputContext::InputContext;
+    ~InputContextV2() override;
+
+protected:
+    virtual void commitStringWithCursorImpl(const std::string &text,
+                                            size_t cursor) = 0;
 };
 
 /**

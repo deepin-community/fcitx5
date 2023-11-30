@@ -10,12 +10,16 @@
 #include <chrono>
 #include <exception>
 #include <regex>
+#include <stdexcept>
+#include <string>
 #include "fcitx-utils/event.h"
+#include "fcitx-utils/utf8.h"
 #include "focusgroup.h"
 #include "inputcontext_p.h"
 #include "inputcontextmanager.h"
 #include "instance.h"
 #include "misc_p.h"
+#include "userinterfacemanager.h"
 
 namespace fcitx {
 
@@ -144,6 +148,48 @@ void InputContext::updateProperty(const InputContextPropertyFactory *factory) {
         return;
     }
     d->manager_.propagateProperty(*this, factory);
+}
+
+bool InputContext::isVirtualKeyboardVisible() const {
+    FCITX_D();
+    if (auto *instance = d->manager_.instance()) {
+        return instance->userInterfaceManager().isVirtualKeyboardVisible();
+    }
+    return false;
+}
+
+void InputContext::showVirtualKeyboard() const {
+    FCITX_D();
+    if (auto *instance = d->manager_.instance()) {
+        return instance->userInterfaceManager().showVirtualKeyboard();
+    }
+}
+
+void InputContext::hideVirtualKeyboard() const {
+    FCITX_D();
+    if (auto *instance = d->manager_.instance()) {
+        return instance->userInterfaceManager().hideVirtualKeyboard();
+    }
+}
+
+bool InputContext::clientControlVirtualkeyboardShow() const {
+    FCITX_D();
+    return d->clientControlVirtualkeyboardShow_;
+}
+
+void InputContext::setClientControlVirtualkeyboardShow(bool show) {
+    FCITX_D();
+    d->clientControlVirtualkeyboardShow_ = show;
+}
+
+bool InputContext::clientControlVirtualkeyboardHide() const {
+    FCITX_D();
+    return d->clientControlVirtualkeyboardHide_;
+}
+
+void InputContext::setClientControlVirtualkeyboardHide(bool hide) {
+    FCITX_D();
+    d->clientControlVirtualkeyboardHide_ = hide;
 }
 
 CapabilityFlags calculateFlags(CapabilityFlags flag, bool isPreeditEnabled) {
@@ -282,6 +328,23 @@ bool InputContext::keyEvent(KeyEvent &event) {
     return result;
 }
 
+bool InputContext::virtualKeyboardEvent(VirtualKeyboardEvent &event) {
+    FCITX_D();
+    RETURN_IF_HAS_NO_FOCUS(false);
+    decltype(std::chrono::steady_clock::now()) start;
+    // Don't query time if we don't want log.
+    if (::keyTrace().checkLogLevel(LogLevel::Debug)) {
+        start = std::chrono::steady_clock::now();
+    }
+    auto result = d->postEvent(event);
+    FCITX_KEYTRACE() << "VirtualKeyboardEvent handling time: "
+                     << std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::steady_clock::now() - start)
+                            .count()
+                     << "ms result:" << result;
+    return result;
+}
+
 void InputContext::invokeAction(InvokeActionEvent &event) {
     FCITX_D();
     RETURN_IF_HAS_NO_FOCUS();
@@ -360,6 +423,22 @@ void InputContext::commitString(const std::string &text) {
     }
 }
 
+void InputContext::commitStringWithCursor(const std::string &text,
+                                          size_t cursor) {
+    FCITX_D();
+    if (cursor > utf8::length(text)) {
+        throw std::invalid_argument(text);
+    }
+
+    if (auto *instance = d->manager_.instance()) {
+        auto newString = instance->commitFilter(this, text);
+        d->pushEvent<CommitStringWithCursorEvent>(std::move(newString), cursor,
+                                                  this);
+    } else {
+        d->pushEvent<CommitStringWithCursorEvent>(text, cursor, this);
+    }
+}
+
 void InputContext::deleteSurroundingText(int offset, unsigned int size) {
     deleteSurroundingTextImpl(offset, size);
 }
@@ -374,6 +453,12 @@ void InputContext::updatePreedit() {
     if (!capabilityFlags().test(CapabilityFlag::Preedit)) {
         return;
     }
+
+    const bool preeditIsEmpty = inputPanel().clientPreedit().empty();
+    if (preeditIsEmpty && d->lastPreeditUpdateIsEmpty_) {
+        return;
+    }
+    d->lastPreeditUpdateIsEmpty_ = preeditIsEmpty;
     d->pushEvent<UpdatePreeditEvent>(this);
 }
 
@@ -404,6 +489,8 @@ const StatusArea &InputContext::statusArea() const {
 }
 
 void InputContext::updateClientSideUIImpl() {}
+
+InputContextV2::~InputContextV2() = default;
 
 InputContextEventBlocker::InputContextEventBlocker(InputContext *inputContext)
     : inputContext_(inputContext->watch()) {

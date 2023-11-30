@@ -8,6 +8,10 @@
 #include "theme.h"
 #include <fcntl.h>
 #include <cassert>
+#include <optional>
+#include <unordered_map>
+#include <unordered_set>
+#include <cairo.h>
 #include <fmt/format.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <gio/gunixinputstream.h>
@@ -15,11 +19,13 @@
 #include "fcitx-config/iniparser.h"
 #include "fcitx-utils/fs.h"
 #include "fcitx-utils/log.h"
+#include "fcitx-utils/misc.h"
 #include "fcitx-utils/rect.h"
 #include "fcitx-utils/standardpath.h"
 #include "fcitx-utils/utf8.h"
 #include "fcitx/misc_p.h"
 #include "classicui.h"
+#include "colorhelper.h"
 #include "common.h"
 
 namespace fcitx::classicui {
@@ -186,22 +192,52 @@ cairo_surface_t *loadImage(StandardPathFile &file) {
         return surface;
     }
 
-    auto *stream = g_unix_input_stream_new(file.fd(), false);
-    auto *image = gdk_pixbuf_new_from_stream(stream, nullptr, nullptr);
+    GObjectUniquePtr<GInputStream> stream(
+        g_unix_input_stream_new(file.fd(), false));
+    if (!stream) {
+        return nullptr;
+    }
+    GObjectUniquePtr<GdkPixbuf> image(
+        gdk_pixbuf_new_from_stream(stream.get(), nullptr, nullptr));
+    g_input_stream_close(stream.get(), nullptr, nullptr);
     if (!image) {
         return nullptr;
     }
 
-    auto *surface = pixBufToCairoSurface(image);
-
-    g_input_stream_close(stream, nullptr, nullptr);
-    g_object_unref(stream);
-    g_object_unref(image);
-
+    auto *surface = pixBufToCairoSurface(image.get());
     return surface;
 }
 
 } // namespace
+
+const std::vector<std::string> &gdkPixbufSupportedFormats() {
+    const static std::vector<std::string> formats = []() {
+        std::unordered_set<std::string> exts;
+        std::vector<std::string> result;
+        // PNG is supported by cairo.
+        UniqueCPtr<GSList, g_slist_free> list(gdk_pixbuf_get_formats());
+        for (GSList *item = list.get(); item; item = g_slist_next(item)) {
+            gchar **extension = gdk_pixbuf_format_get_extensions(
+                static_cast<GdkPixbufFormat *>(item->data));
+            for (auto *iter = extension; iter && *iter; iter++) {
+                exts.insert(std::string(*iter));
+            }
+            g_strfreev(extension);
+        }
+
+        // Only put the common types and we make a prefered order.
+        for (std::string ext : {"svg", "svgz", "png", "bmp", "xpm"}) {
+            // png is supported by cairo.
+            if (ext == "png" || exts.count(ext)) {
+                result.push_back("." + ext);
+            }
+        }
+        CLASSICUI_DEBUG() << "Supported image extensions: " << result;
+        return result;
+    }();
+
+    return formats;
+}
 
 ThemeImage::ThemeImage(const IconTheme &iconTheme, const std::string &icon,
                        const std::string &label, uint32_t size,
@@ -213,7 +249,8 @@ ThemeImage::ThemeImage(const IconTheme &iconTheme, const std::string &icon,
           hasTwoKeyboardInCurrentGroup(classicui->instance())) ||
          *classicui->config().preferTextIcon);
     if (!preferTextIcon && !icon.empty()) {
-        std::string iconPath = iconTheme.findIcon(icon, size, 1);
+        std::string iconPath =
+            iconTheme.findIcon(icon, size, 1, gdkPixbufSupportedFormats());
         auto fd = open(iconPath.c_str(), O_RDONLY);
         StandardPathFile file(fd, icon);
         image_.reset(loadImage(file));
@@ -230,7 +267,8 @@ ThemeImage::ThemeImage(const IconTheme &iconTheme, const std::string &icon,
 }
 
 ThemeImage::ThemeImage(const std::string &name,
-                       const BackgroundImageConfig &cfg) {
+                       const BackgroundImageConfig &cfg, const Color &color,
+                       const Color &borderColor) {
     if (!cfg.image->empty()) {
         auto imageFile = StandardPath::global().open(
             StandardPath::Type::PkgData,
@@ -271,20 +309,22 @@ ThemeImage::ThemeImage(const std::string &name,
                       *cfg.margin->marginBottom});
 
         CLASSICUI_DEBUG() << "Paint background: height " << height << " width "
-                          << width;
+                          << width << " border=" << borderColor
+                          << " border width=" << *cfg.borderWidth
+                          << " color=" << color;
         image_.reset(
             cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height));
         auto *cr = cairo_create(image_.get());
         cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
         if (borderWidth) {
-            cairoSetSourceColor(cr, *cfg.borderColor);
+            cairoSetSourceColor(cr, borderColor);
             cairo_paint(cr);
         }
 
         cairo_rectangle(cr, borderWidth, borderWidth, width - borderWidth * 2,
                         height - borderWidth * 2);
         cairo_clip(cr);
-        cairoSetSourceColor(cr, *cfg.color);
+        cairoSetSourceColor(cr, color);
         cairo_paint(cr);
         cairo_destroy(cr);
         isImage_ = true;
@@ -360,9 +400,30 @@ const ThemeImage &Theme::loadBackground(const BackgroundImageConfig &cfg) {
         return *image;
     }
 
+    Color color, borderColor;
+    if (&cfg == &*inputPanel->background) {
+        color = inputPanelBackground_;
+        borderColor = inputPanelBorder_;
+    } else if (&cfg == &*inputPanel->highlight) {
+        color = inputPanelHighlightCandidateBackground_;
+        borderColor = inputPanelHighlightCandidateBorder_;
+    } else if (&cfg == &*menu->background) {
+        color = menuBackground_;
+        borderColor = menuBorder_;
+    } else if (&cfg == &*menu->highlight) {
+        color = menuSelectedItemBackground_;
+        borderColor = menuSelectedItemBorder_;
+    } else if (&cfg == &*menu->separator) {
+        color = menuSeparator_;
+        borderColor = *cfg.borderColor;
+    } else {
+        color = *cfg.color;
+        borderColor = *cfg.borderColor;
+    }
+
     auto result = backgroundImageTable_.emplace(
         std::piecewise_construct, std::forward_as_tuple(&cfg),
-        std::forward_as_tuple(name_, cfg));
+        std::forward_as_tuple(name_, cfg, color, borderColor));
     assert(result.second);
     return result.first->second;
 }
@@ -398,13 +459,10 @@ const ThemeImage &Theme::loadImage(const std::string &icon,
     return result.first->second;
 }
 
-void Theme::paint(cairo_t *c, const BackgroundImageConfig &cfg, int width,
-                  int height, double alpha) {
-    const ThemeImage &image = loadBackground(cfg);
-    auto marginTop = *cfg.margin->marginTop;
-    auto marginBottom = *cfg.margin->marginBottom;
-    auto marginLeft = *cfg.margin->marginLeft;
-    auto marginRight = *cfg.margin->marginRight;
+void paintTile(cairo_t *c, int width, int height, double alpha,
+               cairo_surface_t *image, int marginLeft, int marginTop,
+               int marginRight, int marginBottom) {
+
     int resizeHeight =
         cairo_image_surface_get_height(image) - marginTop - marginBottom;
     int resizeWidth =
@@ -425,15 +483,11 @@ void Theme::paint(cairo_t *c, const BackgroundImageConfig &cfg, int width,
     if (width < 0) {
         width = resizeWidth;
     }
-
     const auto targetResizeWidth = width - marginLeft - marginRight;
     const auto targetResizeHeight = height - marginTop - marginBottom;
     const double scaleX = static_cast<double>(targetResizeWidth) / resizeWidth;
     const double scaleY =
         static_cast<double>(targetResizeHeight) / resizeHeight;
-
-    cairo_save(c);
-
     /*
      * 7 8 9
      * 4 5 6
@@ -546,7 +600,36 @@ void Theme::paint(cairo_t *c, const BackgroundImageConfig &cfg, int width,
         cairo_paint_with_alpha(c, alpha);
         cairo_restore(c);
     }
-    cairo_restore(c);
+}
+
+void Theme::paint(cairo_t *c, const BackgroundImageConfig &cfg, int width,
+                  int height, double alpha, double scale) {
+    const ThemeImage &image = loadBackground(cfg);
+    auto marginTop = *cfg.margin->marginTop;
+    auto marginBottom = *cfg.margin->marginBottom;
+    auto marginLeft = *cfg.margin->marginLeft;
+    auto marginRight = *cfg.margin->marginRight;
+
+    if (scale != 1.0) {
+        UniqueCPtr<cairo_surface_t, cairo_surface_destroy> background(
+            cairo_surface_create_similar_image(
+                cairo_get_target(c), CAIRO_FORMAT_ARGB32, width, height));
+        {
+            UniqueCPtr<cairo_t, cairo_destroy> backgroundC(
+                cairo_create(background.get()));
+            paintTile(backgroundC.get(), width, height, 1.0, image, marginLeft,
+                      marginTop, marginRight, marginBottom);
+        }
+        cairo_save(c);
+        cairo_rectangle(c, 0, 0, width, height);
+        cairo_set_source_surface(c, background.get(), 0, 0);
+        cairo_clip(c);
+        cairo_paint_with_alpha(c, alpha);
+        cairo_restore(c);
+    } else {
+        paintTile(c, width, height, alpha, image, marginLeft, marginTop,
+                  marginRight, marginBottom);
+    }
 
     if (!image.overlay()) {
         return;
@@ -641,8 +724,12 @@ void Theme::reset() {
     actionImageTable_.clear();
 }
 
-void Theme::load(const std::string &name) {
+void Theme::load(std::string_view name) {
     reset();
+    ThemeConfig config;
+    copyHelper(config);
+    // Reset the default value to state.
+    syncDefaultValueToCurrent();
     if (auto themeConfigFile = StandardPath::global().openSystem(
             StandardPath::Type::PkgData,
             stringutils::joinPath("themes", name, "theme.conf"), O_RDONLY);
@@ -669,9 +756,11 @@ void Theme::load(const std::string &name) {
     maskConfig_ = *inputPanel->background;
     maskConfig_.overlay.setValue("");
     maskConfig_.image.setValue(*inputPanel->blurMask);
+    accentColorFields_ = std::unordered_set<ColorField>(
+        accentColor.value().begin(), accentColor.value().end());
 }
 
-void Theme::load(const std::string &name, const RawConfig &rawConfig) {
+void Theme::load(std::string_view name, const RawConfig &rawConfig) {
     reset();
     Configuration::load(rawConfig, true);
     name_ = name;
@@ -692,7 +781,7 @@ std::vector<Rect> Theme::mask(const BackgroundImageConfig &cfg, int width,
         cairo_image_surface_create(CAIRO_FORMAT_A1, width, height));
     auto c = cairo_create(mask.get());
     cairo_set_operator(c, CAIRO_OPERATOR_SOURCE);
-    paint(c, cfg, width, height, 1);
+    paint(c, cfg, width, height, 1, 1);
     cairo_destroy(c);
 
     UniqueCPtr<cairo_region_t, cairo_region_destroy> region(
@@ -770,6 +859,68 @@ std::vector<Rect> Theme::mask(const BackgroundImageConfig &cfg, int width,
                              .setSize(rect.width, rect.height));
     }
     return result;
+}
+
+void Theme::populateColor(std::optional<Color> accent) {
+    inputPanelBackground_ = *inputPanel->background->color;
+    inputPanelBorder_ = *inputPanel->background->borderColor;
+    inputPanelHighlightCandidateBackground_ = *inputPanel->highlight->color;
+    inputPanelHighlightCandidateBorder_ = *inputPanel->background->borderColor;
+    inputPanelHighlight_ = *inputPanel->highlightBackgroundColor;
+    inputPanelText_ = *inputPanel->normalColor;
+    inputPanelHighlightText_ = *inputPanel->highlightColor;
+    inputPanelHighlightCandidateText_ = *inputPanel->highlightCandidateColor;
+
+    menuBackground_ = *menu->background->color;
+    menuBorder_ = *menu->background->borderColor;
+    menuSelectedItemBackground_ = *menu->highlight->color;
+    menuSelectedItemBorder_ = *menu->background->borderColor;
+    menuSeparator_ = *menu->separator->color;
+    menuText_ = *menu->normalColor;
+    menuSelectedItemText_ = *menu->highlightTextColor;
+
+    if (accent) {
+        auto foreground = accentForeground(*accent);
+        for (auto field : accentColorFields_) {
+            switch (field) {
+            case ColorField::InputPanel_Background:
+                inputPanelBackground_ = *accent;
+                inputPanelText_ = foreground;
+                break;
+            case ColorField::InputPanel_Border:
+                inputPanelBorder_ = *accent;
+                break;
+            case ColorField::InputPanel_HighlightCandidateBackground:
+                inputPanelHighlightCandidateBackground_ = *accent;
+                inputPanelHighlightCandidateText_ = foreground;
+                break;
+            case ColorField::InputPanel_HighlightCandidateBorder:
+                inputPanelHighlightCandidateBorder_ = *accent;
+                break;
+            case ColorField::InputPanel_Highlight:
+                inputPanelHighlight_ = *accent;
+                inputPanelHighlightText_ = foreground;
+                break;
+            case ColorField::Menu_Background:
+                menuBackground_ = *accent;
+                menuText_ = foreground;
+                break;
+            case ColorField::Menu_Border:
+                menuBorder_ = *accent;
+                break;
+            case ColorField::Menu_SelectedItemBackground:
+                menuSelectedItemBackground_ = *accent;
+                menuSelectedItemText_ = foreground;
+                break;
+            case ColorField::Menu_SelectedItemBorder:
+                menuSelectedItemBorder_ = *accent;
+                break;
+            case ColorField::Menu_Separator:
+                menuSeparator_ = *accent;
+                break;
+            }
+        }
+    }
 }
 
 } // namespace fcitx::classicui

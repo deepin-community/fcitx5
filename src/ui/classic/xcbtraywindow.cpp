@@ -99,7 +99,8 @@ bool XCBTrayWindow::filterEvent(xcb_generic_event_t *event) {
                 XCBMenu *menu = menuPool_.requestMenu(ui_, &menu_, nullptr);
                 menu->show(Rect()
                                .setPosition(press->root_x, press->root_y)
-                               .setSize(1, 1));
+                               .setSize(1, 1),
+                           ConstrainAdjustment::Flip);
             } else if (press->detail == XCB_BUTTON_INDEX_1) {
                 ui_->parent()->instance()->toggle();
             }
@@ -166,8 +167,8 @@ void XCBTrayWindow::initTray() {
     sprintf(trayAtomNameBuf, "_NET_SYSTEM_TRAY_S%d", ui_->defaultScreen());
     size_t i = 0;
     for (const auto *name : atom_names) {
-        atoms_[i] = ui_->parent()->xcb()->call<IXCBModule::atom>(ui_->name(),
-                                                                 name, false);
+        atoms_[i] = ui_->parent()->xcb()->call<IXCBModule::atom>(
+            ui_->displayName(), name, false);
         i++;
     }
 }
@@ -416,7 +417,7 @@ void XCBTrayWindow::resume() {
     addEventMaskToWindow(ui_->connection(), screen->root,
                          XCB_EVENT_MASK_STRUCTURE_NOTIFY);
     dockCallback_ = ui_->parent()->xcb()->call<IXCBModule::addSelection>(
-        ui_->name(), trayAtomNameBuf,
+        ui_->displayName(), trayAtomNameBuf,
         [this](xcb_atom_t) { refreshDockWindow(); });
     refreshDockWindow();
 }
@@ -504,8 +505,9 @@ void XCBTrayWindow::updateInputMethodMenu() {
         auto &inputMethodAction = inputMethodActions_.back();
         inputMethodAction.setShortText(entry->name());
         inputMethodAction.connect<SimpleAction::Activated>(
-            [this, imName](InputContext *) {
-                ui_->parent()->instance()->setCurrentInputMethod(imName);
+            [this, imName](InputContext *ic) {
+                ui_->parent()->instance()->setCurrentInputMethod(ic, imName,
+                                                                 false);
             });
         inputMethodAction.setCheckable(true);
         inputMethodAction.setChecked(

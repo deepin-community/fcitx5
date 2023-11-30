@@ -17,6 +17,8 @@ public:
     Text clientPreedit_;
     std::shared_ptr<CandidateList> candidate_;
     InputContext *ic_;
+    CustomInputPanelCallback customCallback_ = nullptr;
+    CustomInputPanelCallback customVirtualKeyboardCallback_ = nullptr;
 };
 
 InputPanel::InputPanel(InputContext *ic)
@@ -44,7 +46,12 @@ void InputPanel::setCandidateList(std::unique_ptr<CandidateList> candidate) {
 
 void InputPanel::setClientPreedit(const Text &clientPreedit) {
     FCITX_D();
-    d->clientPreedit_ = clientPreedit;
+    d->clientPreedit_ = clientPreedit.normalize();
+    // If it is empty preedit, always set cursor to 0.
+    // An empty preedit with hidden cursor would only cause issues.
+    if (d->clientPreedit_.empty()) {
+        d->clientPreedit_.setCursor(0);
+    }
 }
 
 void InputPanel::setPreedit(const Text &text) {
@@ -72,6 +79,29 @@ const Text &InputPanel::preedit() const {
     return d->preedit_;
 }
 
+const CustomInputPanelCallback &InputPanel::customInputPanelCallback() const {
+    FCITX_D();
+    return d->customCallback_;
+}
+
+void InputPanel::setCustomInputPanelCallback(
+    CustomInputPanelCallback callback) {
+    FCITX_D();
+    d->customCallback_ = std::move(callback);
+}
+
+const CustomInputPanelCallback &
+InputPanel::customVirtualKeyboardCallback() const {
+    FCITX_D();
+    return d->customVirtualKeyboardCallback_;
+}
+
+void InputPanel::setCustomVirtualKeyboardCallback(
+    CustomInputPanelCallback callback) {
+    FCITX_D();
+    d->customVirtualKeyboardCallback_ = std::move(callback);
+}
+
 void InputPanel::reset() {
     FCITX_D();
     d->preedit_.clear();
@@ -80,6 +110,8 @@ void InputPanel::reset() {
     d->candidate_.reset();
     d->auxUp_.clear();
     d->auxDown_.clear();
+    d->customCallback_ = nullptr;
+    d->customVirtualKeyboardCallback_ = nullptr;
 }
 
 bool InputPanel::empty() const {

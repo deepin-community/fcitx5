@@ -144,15 +144,19 @@ public:
 
     bool canDeactivate(InputContext *ic);
 
-    void navigateGroup(InputContext *ic, bool forward);
+    void navigateGroup(InputContext *ic, const Key &key, bool forward);
 
-    void acceptGroupChange(InputContext *ic);
+    void acceptGroupChange(const Key &key, InputContext *ic);
 
     InstanceArgument arg_;
 
     int signalPipe_ = -1;
     bool exit_ = false;
     bool running_ = false;
+    InputMethodMode inputMethodMode_ = isAndroid()
+                                           ? InputMethodMode::OnScreenKeyboard
+                                           : InputMethodMode::PhysicalKeyboard;
+
     EventLoop eventLoop_;
     std::unique_ptr<EventSourceIO> signalPipeEvent_;
     std::unique_ptr<EventSourceTime> preloadInputMethodEvent_;
@@ -209,7 +213,12 @@ public:
 
     std::string lastGroup_;
 
-    const bool inFlatpak_ = fs::isreg("/.flatpak-info");
+    bool virtualKeyboardAutoShow_ = true;
+
+    bool virtualKeyboardAutoHide_ = true;
+
+    VirtualKeyboardFunctionMode virtualKeyboardFunctionMode_ =
+        VirtualKeyboardFunctionMode::Full;
 };
 
 } // namespace fcitx

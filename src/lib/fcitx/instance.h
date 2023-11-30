@@ -36,6 +36,11 @@ class FocusGroup;
 typedef std::function<void(Event &event)> EventHandler;
 
 /**
+ * The function mode of virtual keyboard.
+ */
+enum class VirtualKeyboardFunctionMode : uint32_t { Full = 1, Limited = 2 };
+
+/**
  * The event handling phase of event pipeline.
  */
 enum class EventWatcherPhase {
@@ -262,7 +267,7 @@ public:
     /// Reset the compose state.
     void resetCompose(InputContext *inputContext);
 
-    /// Check whether input contex is composing or not.
+    /// Check whether input context is composing or not.
     bool isComposing(InputContext *inputContext);
 
     /**
@@ -379,7 +384,13 @@ public:
     void setCurrentInputMethod(InputContext *ic, const std::string &imName,
                                bool local);
 
-    /// Enumerate input method group
+    /*
+     * Enumerate input method group
+     *
+     * This function has different behavior comparing to
+     * InputMethodManager::enumerateGroup Do not use this..
+     */
+    FCITXCORE_DEPRECATED
     bool enumerateGroup(bool forward);
 
     /// Enumerate input method with in current group
@@ -471,10 +482,39 @@ public:
     bool isRunning() const;
 
     /**
+     * The current global input method mode.
+     *
+     * It may affect the user interface and behavior of certain key binding.
+     * @since 5.1.0
+     */
+    InputMethodMode inputMethodMode() const;
+
+    /**
+     * Set the current global input method mode.
+     *
+     * @see InputMethodMode
+     * @see InputMethodModeChanged
+     * @since 5.1.0
+     */
+    void setInputMethodMode(InputMethodMode mode);
+
+    /**
      * Whether restart is requested.
      * @since 5.0.18
      */
     bool isRestartRequested() const;
+
+    bool virtualKeyboardAutoShow() const;
+
+    void setVirtualKeyboardAutoShow(bool autoShow);
+
+    bool virtualKeyboardAutoHide() const;
+
+    void setVirtualKeyboardAutoHide(bool autoHide);
+
+    VirtualKeyboardFunctionMode virtualKeyboardFunctionMode() const;
+
+    void setVirtualKeyboardFunctionMode(VirtualKeyboardFunctionMode mode);
 
 protected:
     // For testing purpose

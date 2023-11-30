@@ -15,12 +15,15 @@
 #include <fmt/format.h>
 #include <getopt.h>
 #include "fcitx-config/iniparser.h"
+#include "fcitx-utils/capabilityflags.h"
 #include "fcitx-utils/event.h"
 #include "fcitx-utils/i18n.h"
 #include "fcitx-utils/log.h"
+#include "fcitx-utils/misc.h"
 #include "fcitx-utils/standardpath.h"
 #include "fcitx-utils/stringutils.h"
 #include "fcitx-utils/utf8.h"
+#include "fcitx/event.h"
 #include "../../modules/notifications/notifications_public.h"
 #include "addonmanager.h"
 #include "focusgroup.h"
@@ -50,8 +53,8 @@ namespace fcitx {
 
 namespace {
 
-constexpr uint64_t AutoSavePeriod = 1800ull * 1000000ull; // 30 minutes
-constexpr uint64_t AutoSaveIdleTime = 60ull * 1000000ull; // 1 minutes
+constexpr uint64_t AutoSaveMinInUsecs = 60ull * 1000000ull; // 30 minutes
+constexpr uint64_t AutoSaveIdleTime = 60ull * 1000000ull;   // 1 minutes
 
 FCITX_CONFIGURATION(DefaultInputMethod,
                     Option<std::vector<std::string>> defaultInputMethods{
@@ -429,7 +432,8 @@ bool InstancePrivate::canDeactivate(InputContext *ic) {
     return inputState->isActive();
 }
 
-void InstancePrivate::navigateGroup(InputContext *ic, bool forward) {
+void InstancePrivate::navigateGroup(InputContext *ic, const Key &key,
+                                    bool forward) {
     auto *inputState = ic->propertyFor(&inputStateFactory_);
     inputState->pendingGroupIndex_ =
         (inputState->pendingGroupIndex_ +
@@ -437,7 +441,7 @@ void InstancePrivate::navigateGroup(InputContext *ic, bool forward) {
         imManager_.groupCount();
     FCITX_DEBUG() << "Switch to group " << inputState->pendingGroupIndex_;
 
-    if (notifications_) {
+    if (notifications_ && !isSingleKey(key)) {
         notifications_->call<INotifications::showTip>(
             "enumerate-group", _("Input Method"), "input-keyboard",
             _("Switch group"),
@@ -447,13 +451,21 @@ void InstancePrivate::navigateGroup(InputContext *ic, bool forward) {
     }
 }
 
-void InstancePrivate::acceptGroupChange(InputContext *ic) {
-    FCITX_DEBUG() << "Accept group change";
+void InstancePrivate::acceptGroupChange(const Key &key, InputContext *ic) {
+    FCITX_DEBUG() << "Accept group change, isSingleKey: " << key;
 
     auto *inputState = ic->propertyFor(&inputStateFactory_);
     auto groups = imManager_.groups();
     if (groups.size() > inputState->pendingGroupIndex_) {
-        imManager_.setCurrentGroup(groups[inputState->pendingGroupIndex_]);
+        if (isSingleKey(key)) {
+            FCITX_DEBUG() << "EnumerateGroupTo: "
+                          << inputState->pendingGroupIndex_ << " " << key;
+            imManager_.enumerateGroupTo(groups[inputState->pendingGroupIndex_]);
+        } else {
+            FCITX_DEBUG() << "SetCurrentGroup: "
+                          << inputState->pendingGroupIndex_ << " " << key;
+            imManager_.setCurrentGroup(groups[inputState->pendingGroupIndex_]);
+        }
     }
     inputState->pendingGroupIndex_ = 0;
 }
@@ -709,6 +721,7 @@ Instance::Instance(int argc, char **argv) {
             auto &keyEvent = static_cast<KeyEvent &>(event);
             auto *ic = keyEvent.inputContext();
             CheckInputMethodChanged imChangedRAII(ic, d);
+            auto origKey = keyEvent.origKey().normalize();
 
             struct {
                 const KeyList &list;
@@ -737,27 +750,24 @@ Instance::Instance(int argc, char **argv) {
                  [this, ic](bool) { return enumerate(ic, false); }},
                 {d->globalConfig_.enumerateGroupForwardKeys(),
                  [this]() { return canChangeGroup(); },
-                 [ic, d](bool) { return d->navigateGroup(ic, true); }},
+                 [ic, d, origKey](bool) {
+                     return d->navigateGroup(ic, origKey, true);
+                 }},
                 {d->globalConfig_.enumerateGroupBackwardKeys(),
                  [this]() { return canChangeGroup(); },
-                 [ic, d](bool) { return d->navigateGroup(ic, false); }},
+                 [ic, d, origKey](bool) {
+                     return d->navigateGroup(ic, origKey, false);
+                 }},
             };
 
             auto *inputState = ic->propertyFor(&d->inputStateFactory_);
             int keyReleased = inputState->keyReleased_;
             Key lastKeyPressed = inputState->lastKeyPressed_;
-            // Keep these two values, and reset them in the state
+            // Keep this value, and reset them in the state
             inputState->keyReleased_ = -1;
-            inputState->lastKeyPressed_ = Key();
-            auto origKey = keyEvent.origKey().normalize();
             const bool isModifier = origKey.isModifier();
             if (keyEvent.isRelease()) {
                 int idx = 0;
-                if (origKey.isModifier() &&
-                    (Key::keySymToStates(origKey.sym()) == origKey.states() ||
-                     origKey.states() == 0)) {
-                    inputState->totallyReleased_ = true;
-                }
                 for (auto &keyHandler : keyHandlers) {
                     if (keyReleased == idx &&
                         origKey.isReleaseOfModifier(lastKeyPressed) &&
@@ -768,9 +778,13 @@ Instance::Instance(int argc, char **argv) {
                                 inputState->totallyReleased_ = false;
                             }
                         }
-                        return keyEvent.filter();
+                        keyEvent.filter();
+                        break;
                     }
                     idx++;
+                }
+                if (isSingleModifier(origKey)) {
+                    inputState->totallyReleased_ = true;
                 }
             }
 
@@ -780,7 +794,8 @@ Instance::Instance(int argc, char **argv) {
                 if (inputState->imChanged_) {
                     inputState->imChanged_->ignore();
                 }
-                d->acceptGroupChange(ic);
+                d->acceptGroupChange(lastKeyPressed, ic);
+                inputState->lastKeyPressed_ = Key();
             }
 
             if (!keyEvent.filtered() && !keyEvent.isRelease()) {
@@ -910,6 +925,18 @@ Instance::Instance(int argc, char **argv) {
                        engine->keyEvent(*entry, keyEvent);
                    }));
     d->eventWatchers_.emplace_back(watchEvent(
+        EventType::InputContextVirtualKeyboardEvent,
+        EventWatcherPhase::InputMethod, [this](Event &event) {
+            auto &keyEvent = static_cast<VirtualKeyboardEvent &>(event);
+            auto *ic = keyEvent.inputContext();
+            auto *engine = inputMethodEngine(ic);
+            const auto *entry = inputMethodEntry(ic);
+            if (!engine || !entry) {
+                return;
+            }
+            engine->virtualKeyboardEvent(*entry, keyEvent);
+        }));
+    d->eventWatchers_.emplace_back(watchEvent(
         EventType::InputContextInvokeAction, EventWatcherPhase::InputMethod,
         [this](Event &event) {
             auto &invokeActionEvent = static_cast<InvokeActionEvent &>(event);
@@ -973,6 +1000,14 @@ Instance::Instance(int argc, char **argv) {
         [this, d](Event &event) {
             auto &icEvent = static_cast<InputContextEvent &>(event);
             activateInputMethod(icEvent);
+
+            if (virtualKeyboardAutoShow()) {
+                auto *inputContext = icEvent.inputContext();
+                if (!inputContext->clientControlVirtualkeyboardShow()) {
+                    inputContext->showVirtualKeyboard();
+                }
+            }
+
             if (!d->globalConfig_.showInputMethodInformationWhenFocusIn() ||
                 icEvent.inputContext()->capabilityFlags().test(
                     CapabilityFlag::Disable)) {
@@ -1010,9 +1045,15 @@ Instance::Instance(int argc, char **argv) {
         }));
     d->eventWatchers_.emplace_back(d->watchEvent(
         EventType::InputContextFocusOut, EventWatcherPhase::InputMethod,
-        [this, d](Event &event) {
+        [this](Event &event) {
             auto &icEvent = static_cast<InputContextEvent &>(event);
             deactivateInputMethod(icEvent);
+            if (virtualKeyboardAutoHide()) {
+                auto *inputContext = icEvent.inputContext();
+                if (!inputContext->clientControlVirtualkeyboardHide()) {
+                    inputContext->hideVirtualKeyboard();
+                }
+            }
         }));
     d->eventWatchers_.emplace_back(d->watchEvent(
         EventType::InputContextReset, EventWatcherPhase::ReservedFirst,
@@ -1111,13 +1152,16 @@ Instance::Instance(int argc, char **argv) {
             auto &icEvent = static_cast<InputContextEvent &>(event);
             d->uiManager_.expire(icEvent.inputContext());
         }));
+    d->eventWatchers_.emplace_back(d->watchEvent(
+        EventType::InputMethodModeChanged, EventWatcherPhase::ReservedFirst,
+        [d](Event &) { d->uiManager_.updateAvailability(); }));
     d->uiUpdateEvent_ = d->eventLoop_.addDeferEvent([d](EventSource *) {
         d->uiManager_.flush();
         return true;
     });
     d->uiUpdateEvent_->setEnabled(false);
     d->periodicalSave_ = d->eventLoop_.addTimeEvent(
-        CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + AutoSavePeriod, 0,
+        CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 1000000, AutoSaveIdleTime,
         [this, d](EventSourceTime *time, uint64_t) {
             if (exiting()) {
                 return true;
@@ -1136,10 +1180,14 @@ Instance::Instance(int argc, char **argv) {
             FCITX_INFO() << "Running autosave...";
             save();
             FCITX_INFO() << "End autosave";
-            time->setNextInterval(AutoSavePeriod);
-            time->setOneShot();
+            if (d->globalConfig_.autoSavePeriod() > 0) {
+                time->setNextInterval(d->globalConfig_.autoSavePeriod() *
+                                      AutoSaveMinInUsecs);
+                time->setOneShot();
+            }
             return true;
         });
+    d->periodicalSave_->setEnabled(false);
 }
 
 Instance::~Instance() {
@@ -1344,9 +1392,54 @@ bool Instance::isRunning() const {
     return d->running_;
 }
 
+InputMethodMode Instance::inputMethodMode() const {
+    FCITX_D();
+    return d->inputMethodMode_;
+}
+
+void Instance::setInputMethodMode(InputMethodMode mode) {
+    FCITX_D();
+    if (d->inputMethodMode_ == mode) {
+        return;
+    }
+    d->inputMethodMode_ = mode;
+    postEvent(InputMethodModeChangedEvent());
+}
+
 bool Instance::isRestartRequested() const {
     FCITX_D();
     return d->restart_;
+}
+
+bool Instance::virtualKeyboardAutoShow() const {
+    FCITX_D();
+    return d->virtualKeyboardAutoShow_;
+}
+
+void Instance::setVirtualKeyboardAutoShow(bool autoShow) {
+    FCITX_D();
+    d->virtualKeyboardAutoShow_ = autoShow;
+}
+
+bool Instance::virtualKeyboardAutoHide() const {
+    FCITX_D();
+    return d->virtualKeyboardAutoHide_;
+}
+
+void Instance::setVirtualKeyboardAutoHide(bool autoHide) {
+    FCITX_D();
+    d->virtualKeyboardAutoHide_ = autoHide;
+}
+
+VirtualKeyboardFunctionMode Instance::virtualKeyboardFunctionMode() const {
+    FCITX_D();
+    return d->virtualKeyboardFunctionMode_;
+}
+
+void Instance::setVirtualKeyboardFunctionMode(
+    VirtualKeyboardFunctionMode mode) {
+    FCITX_D();
+    d->virtualKeyboardFunctionMode_ = mode;
 }
 
 InstancePrivate *Instance::privateData() {
@@ -1487,8 +1580,9 @@ std::string Instance::inputMethod(InputContext *ic) {
     }
 
     auto &group = d->imManager_.currentGroup();
-    if (ic->capabilityFlags().testAny(CapabilityFlags{
-            CapabilityFlag::Password, CapabilityFlag::Disable})) {
+    if (ic->capabilityFlags().test(CapabilityFlag::Disable) ||
+        (ic->capabilityFlags().test(CapabilityFlag::Password) &&
+         !d->globalConfig_.allowInputMethodForPassword())) {
         auto defaultLayout = group.defaultLayout();
         auto defaultLayoutIM = fmt::format("keyboard-{}", defaultLayout);
         const auto *entry = d->imManager_.entry(defaultLayoutIM);
@@ -1811,6 +1905,17 @@ void Instance::reloadConfig() {
         });
     }
 #endif
+    if (d->running_) {
+        postEvent(GlobalConfigReloadedEvent());
+    }
+
+    if (d->globalConfig_.autoSavePeriod() <= 0) {
+        d->periodicalSave_->setEnabled(false);
+    } else {
+        d->periodicalSave_->setNextInterval(AutoSaveMinInUsecs *
+                                            d->globalConfig_.autoSavePeriod());
+        d->periodicalSave_->setOneShot();
+    }
 }
 
 void Instance::resetInputMethodList() {
@@ -2102,6 +2207,7 @@ Text Instance::outputFilter(InputContext *inputContext, const Text &orig) {
     emit<Instance::OutputFilter>(inputContext, result);
     if ((&orig == &inputContext->inputPanel().clientPreedit() ||
          &orig == &inputContext->inputPanel().preedit()) &&
+        !globalConfig().showPreeditForPassword() &&
         inputContext->capabilityFlags().test(CapabilityFlag::Password)) {
         Text newText;
         for (int i = 0, e = result.size(); i < e; i++) {
@@ -2283,7 +2389,7 @@ void Instance::showInputMethodInformation(InputContext *ic) {
 
 bool Instance::checkUpdate() const {
     FCITX_D();
-    return (d->inFlatpak_ && fs::isreg("/app/.updated")) ||
+    return (isInFlatpak() && fs::isreg("/app/.updated")) ||
            d->addonManager_.checkUpdate() || d->imManager_.checkUpdate() ||
            postEvent(CheckUpdateEvent());
 }

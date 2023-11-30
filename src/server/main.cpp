@@ -7,11 +7,13 @@
 
 #include <fcntl.h>
 #include <locale.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <exception>
 #include <iostream>
 #include <libintl.h>
 #include "fcitx-utils/fs.h"
+#include "fcitx-utils/misc.h"
 #include "fcitx-utils/misc_p.h"
 #include "fcitx-utils/standardpath.h"
 #include "fcitx/addonfactory.h"
@@ -38,6 +40,8 @@ StaticAddonRegistry staticAddon = {
 };
 
 int main(int argc, char *argv[]) {
+    umask(077);
+    StandardPath::global().syncUmask();
     if (safePipe(selfpipe) < 0) {
         fprintf(stderr, "Could not create self-pipe.\n");
         return 1;
@@ -65,6 +69,7 @@ int main(int argc, char *argv[]) {
     int ret = 0;
     bool restart = false;
     try {
+        FCITX_LOG_IF(Info, isInFlatpak()) << "Running inside flatpak.";
         Instance instance(argc, argv);
         instance.setSignalPipe(selfpipe[0]);
         instance.addonManager().registerDefaultLoader(&staticAddon);
@@ -79,7 +84,7 @@ int main(int argc, char *argv[]) {
 
     if (restart) {
         auto fcitxBinary = StandardPath::fcitxPath("bindir", "fcitx5");
-        if (fs::isreg("/.flatpak-info")) {
+        if (isInFlatpak()) {
             startProcess({"flatpak-spawn", fcitxBinary, "-rd"});
         } else {
             startProcess({fcitxBinary, "-r"});

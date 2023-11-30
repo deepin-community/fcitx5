@@ -7,7 +7,7 @@ Uploaders:
 Build-Depends:
  appstream,
  cmake (>= 3.6.0),
- dbus <!nocheck>,
+ dbus-daemon <!nocheck>,
  debhelper-compat (= 13),
  extra-cmake-modules,
  gettext,
@@ -20,7 +20,7 @@ Build-Depends:
  libevent-dev [!linux-any],
  libexpat1-dev,
  libfmt-dev,
- libgdk-pixbuf2.0-dev,
+ libgdk-pixbuf-2.0-dev,
  libjson-c-dev,
  libkvm-dev [kfreebsd-any],
  libpango1.0-dev,
@@ -30,7 +30,7 @@ Build-Depends:
  libwayland-egl-backend-dev [linux-any],
  libxcb-ewmh-dev,
  libxcb-icccm4-dev,
- libxcb-imdkit-dev (>= 1.0.1~),
+ libxcb-imdkit-dev (>= 1.0.5~),
  libxcb-randr0-dev,
  libxcb-shape0-dev,
  libxcb-xfixes0-dev,
@@ -43,7 +43,7 @@ Build-Depends:
  unicode-cldr-core,
  uuid-dev,
  wayland-protocols [linux-any],
-Standards-Version: 4.6.0
+Standards-Version: 4.6.2
 Rules-Requires-Root: no
 Homepage: https://github.com/fcitx/fcitx5
 Vcs-Git: https://salsa.debian.org/input-method-team/fcitx5.git
@@ -57,24 +57,19 @@ Depends:
  libfcitx5config6 (= ${binary:Version}),
  libfcitx5core7 (= ${binary:Version}),
  libfcitx5utils2 (= ${binary:Version}),
- jq,
  ${misc:Depends},
  ${shlibs:Depends},
 Recommends:
  fcitx5-config-qt,
- fcitx5-frontend-gtk3,
- fcitx5-frontend-gtk4,
- fcitx5-frontend-qt5,
- fcitx5-frontend-qt6,
+ fcitx5-frontend-all,
  im-config (>= 0.44),
 Suggests:
  fcitx5-chinese-addons,
- fcitx5-frontend-gtk2,
  kde-config-fcitx5,
 Conflicts:
  fcitx (<< 1:5),
- fcitx-data (<< 1:5),
  fcitx-bin (<< 1:5),
+ fcitx-data (<< 1:5),
 Description: Next generation of Fcitx Input Method Framework
  Fcitx5 is the next generation of fcitx input method framework. It
  provides pleasant and modern input experience with intuitive graphical
@@ -108,18 +103,21 @@ Description: Fcitx Input Method Framework v5 (common data files)
  .
  This package provides architecture-independent data files.
 
-Package: fcitx5-module-emoji
-Architecture: any
-Multi-Arch: same
+Package: fcitx5-frontend-all
+Architecture: all
+Multi-Arch: foreign
+Section: metapackages
 Depends:
- unicode-cldr-core,
+ fcitx5-frontend-gtk3,
+ fcitx5-frontend-gtk4,
+ fcitx5-frontend-qt5,
+ fcitx5-frontend-qt6,
  ${misc:Depends},
- ${shlibs:Depends},
-Breaks:
- fcitx5-modules (<< 0.0~git20200312),
-Replaces:
- fcitx5-modules (<< 0.0~git20200312),
-Description: Fcitx Input Method Framework v5 (emoji module)
+Suggests:
+ fcitx5-frontend-fbterm,
+ fcitx5-frontend-gtk2,
+ fcitx5-frontend-tmux,
+Description: Fcitx Input Method Framework v5 (IM Module Metapackage)
  Fcitx5 is the next generation of fcitx input method framework. It
  provides pleasant and modern input experience with intuitive graphical
  configuration tools. The framework is highly extensible with support
@@ -131,67 +129,9 @@ Description: Fcitx Input Method Framework v5 (emoji module)
  provide better compatibility across different Linux distributions
  and desktop environments.
  .
- This package provides emoji module for fcitx5.
-
-Package: fcitx5-module-quickphrase
-Architecture: any
-Multi-Arch: same
-Depends:
- ${misc:Depends},
- ${shlibs:Depends},
-Description: Fcitx Input Method Framework v5 (quickphrase module)
- Fcitx5 is the next generation of fcitx input method framework. It
- provides pleasant and modern input experience with intuitive graphical
- configuration tools. The framework is highly extensible with support
- for GTK+ and Qt toolkits, D-Bus interfaces, a large variety of desktop
- environments and a developer-friendly API.
- .
- Some of its new features include support of both Wayland and Xorg
- and the ability to mimic IBus Input Method Framework in order to
- provide better compatibility across different Linux distributions
- and desktop environments.
- .
- This package provides quickphrase module for fcitx5.
-
-Package: fcitx5-module-wayland
-Architecture: linux-any
-Multi-Arch: same
-Depends:
- ${misc:Depends},
- ${shlibs:Depends},
-Description: Fcitx Input Method Framework v5 (wayland modules)
- Fcitx5 is the next generation of fcitx input method framework. It
- provides pleasant and modern input experience with intuitive graphical
- configuration tools. The framework is highly extensible with support
- for GTK+ and Qt toolkits, D-Bus interfaces, a large variety of desktop
- environments and a developer-friendly API.
- .
- Some of its new features include support of both Wayland and Xorg
- and the ability to mimic IBus Input Method Framework in order to
- provide better compatibility across different Linux distributions
- and desktop environments.
- .
- This package provides wayland-related modules for fcitx5.
-
-Package: fcitx5-module-xorg
-Architecture: any
-Multi-Arch: same
-Depends:
- ${misc:Depends},
- ${shlibs:Depends},
-Description: Fcitx Input Method Framework v5 (xorg modules)
- Fcitx5 is the next generation of fcitx input method framework. It
- provides pleasant and modern input experience with intuitive graphical
- configuration tools. The framework is highly extensible with support
- for GTK+ and Qt toolkits, D-Bus interfaces, a large variety of desktop
- environments and a developer-friendly API.
- .
- Some of its new features include support of both Wayland and Xorg
- and the ability to mimic IBus Input Method Framework in order to
- provide better compatibility across different Linux distributions
- and desktop environments.
- .
- This package provides xorg-related modules for fcitx5.
+ This package depends on Input Method Modules (IM Modules) utilized
+ by popular GUI libraries for better GUI input integration, currently
+ include GTK3, GTK4, Qt5 and Qt6.
 
 Package: fcitx5-modules
 Architecture: any
@@ -200,25 +140,32 @@ Depends:
  fcitx5-data (= ${source:Version}),
  ${misc:Depends},
  ${shlibs:Depends},
-Recommends:
+Breaks:
+ fcitx5-module-dbus (<< 5.0.4-2),
+ fcitx5-module-emoji (<< 5.0.23+),
+ fcitx5-module-fcitx4 (<< 5.0.4-2),
+ fcitx5-module-ibus (<< 5.0.4-2),
+ fcitx5-module-kimpanel (<< 5.0.4-2),
+ fcitx5-module-quickphrase (<< 5.0.23+),
+ fcitx5-module-wayland (<< 5.0.23+),
+ fcitx5-module-xorg (<< 5.0.23+),
+Replaces:
+ fcitx5-module-dbus (<< 5.0.4-2),
+ fcitx5-module-emoji (<< 5.0.23+),
+ fcitx5-module-fcitx4 (<< 5.0.4-2),
+ fcitx5-module-ibus (<< 5.0.4-2),
+ fcitx5-module-kimpanel (<< 5.0.4-2),
+ fcitx5-module-quickphrase (<< 5.0.23+),
+ fcitx5-module-wayland (<< 5.0.23+),
+ fcitx5-module-xorg (<< 5.0.23+),
+Provides:
+ fcitx5-module-dbus,
  fcitx5-module-emoji,
+ fcitx5-module-ibus,
+ fcitx5-module-kimpanel,
  fcitx5-module-quickphrase,
  fcitx5-module-wayland,
  fcitx5-module-xorg,
-Breaks:
- fcitx5-module-dbus (<< 5.0.4-2),
- fcitx5-module-fcitx4 (<< 5.0.4-2),
- fcitx5-module-ibus (<< 5.0.4-2),
- fcitx5-module-kimpanel (<< 5.0.4-2),
-Replaces:
- fcitx5-module-dbus (<< 5.0.4-2),
- fcitx5-module-fcitx4 (<< 5.0.4-2),
- fcitx5-module-ibus (<< 5.0.4-2),
- fcitx5-module-kimpanel (<< 5.0.4-2),
-Provides:
- fcitx5-module-dbus,
- fcitx5-module-ibus,
- fcitx5-module-kimpanel,
 Description: Fcitx Input Method Framework v5 (core modules)
  Fcitx5 is the next generation of fcitx input method framework. It
  provides pleasant and modern input experience with intuitive graphical
@@ -239,10 +186,6 @@ Architecture: any
 Multi-Arch: same
 Section: libdevel
 Depends:
- fcitx5-module-emoji (= ${binary:Version}),
- fcitx5-module-quickphrase (= ${binary:Version}),
- fcitx5-module-wayland (= ${binary:Version}),
- fcitx5-module-xorg (= ${binary:Version}),
  fcitx5-modules (= ${binary:Version}),
  libfcitx5core-dev (= ${binary:Version}),
  libfcitx5utils-dev (= ${binary:Version}),

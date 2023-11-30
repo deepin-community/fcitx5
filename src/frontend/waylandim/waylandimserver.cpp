@@ -8,10 +8,9 @@
 #include <sys/mman.h>
 #include <memory>
 #include <fcitx-utils/utf8.h>
-#include "fcitx/misc_p.h"
 #include "appmonitor.h"
-#include "plasmaappmonitor.h"
 #include "virtualinputcontext.h"
+#include "wayland-text-input-unstable-v1-client-protocol.h"
 #include "waylandim.h"
 
 #ifdef __linux__
@@ -48,9 +47,8 @@ static inline unsigned int waylandFormat(TextFormatFlags flags) {
 WaylandIMServer::WaylandIMServer(wl_display *display, FocusGroup *group,
                                  const std::string &name,
                                  WaylandIMModule *waylandim)
-    : group_(group), name_(name), parent_(waylandim), inputMethodV1_(nullptr),
-      display_(
-          static_cast<wayland::Display *>(wl_display_get_user_data(display))) {
+    : WaylandIMServerBase(display, group, name, waylandim),
+      inputMethodV1_(nullptr) {
     display_->requestGlobals<wayland::ZwpInputMethodV1>();
     globalConn_ = display_->globalCreated().connect(
         [this](const std::string &interface, const std::shared_ptr<void> &) {
@@ -90,7 +88,7 @@ void WaylandIMServer::init() {
                 WAYLANDIM_DEBUG() << "DEACTIVATE " << ic;
                 deactivate(ic);
             });
-        display_->flush();
+        deferredFlush();
     }
 }
 
@@ -166,7 +164,6 @@ void WaylandIMInputContextV1::activate(wayland::ZwpInputMethodContextV1 *ic) {
         repeatInfoCallback(rate, delay);
     });
     repeatInfoCallback(repeatRate_, repeatDelay_);
-    server_->display_->sync();
     wl_array array;
     wl_array_init(&array);
     constexpr char data[] = "Shift\0Control\0Mod1\0Mod4";
@@ -179,6 +176,7 @@ void WaylandIMInputContextV1::activate(wayland::ZwpInputMethodContextV1 *ic) {
     } else {
         focusIn();
     }
+    server_->deferredFlush();
 }
 
 void WaylandIMInputContextV1::deactivate(wayland::ZwpInputMethodContextV1 *ic) {
@@ -191,7 +189,7 @@ void WaylandIMInputContextV1::deactivate(wayland::ZwpInputMethodContextV1 *ic) {
         server_->instance()->clearXkbStateMask(server_->group()->display());
 
         timeEvent_->setEnabled(false);
-        server_->display_->sync();
+        server_->deferredFlush();
         focusOutWrapper();
     } else {
         // This should not happen, but just in case.
@@ -220,7 +218,6 @@ void WaylandIMInputContextV1::repeat() {
     uint64_t interval = 1000000 / repeatRate_;
     timeEvent_->setTime(timeEvent_->time() + interval);
     timeEvent_->setOneShot();
-    server_->display_->flush();
 }
 
 void WaylandIMInputContextV1::surroundingTextCallback(const char *text,
@@ -471,7 +468,20 @@ void WaylandIMInputContextV1::keyCallback(uint32_t serial, uint32_t time,
     if (!ic->keyEvent(event)) {
         ic_->key(serial, time, key, state);
     }
-    server_->display_->flush();
+
+    // This means our engine is being too slow, this is usually transient (e.g.
+    // cold start up due to data loading, high CPU usage etc).
+    // To avoid an undesired repetition, reset the delay the next interval so we
+    // can handle the release first.
+    if (timeEvent_->time() < now(timeEvent_->clock()) &&
+        timeEvent_->isOneShot()) {
+        WAYLANDIM_DEBUG() << "Engine handling speed can not keep up with key "
+                             "repetition rate.";
+        timeEvent_->setNextInterval(
+            std::min(1000, repeatDelay_ * 1000 - repeatHackDelay));
+    }
+
+    server_->deferredFlush();
 }
 void WaylandIMInputContextV1::modifiersCallback(uint32_t serial,
                                                 uint32_t mods_depressed,
@@ -540,6 +550,7 @@ void WaylandIMInputContextV1::sendKey(uint32_t time, uint32_t sym,
     }
     auto modifiers = toModifiers(states);
     ic_->keysym(serial_, time, sym, state, modifiers);
+    server_->deferredFlush();
 }
 
 void WaylandIMInputContextV1::sendKeyToVK(uint32_t time, uint32_t key,
@@ -548,7 +559,7 @@ void WaylandIMInputContextV1::sendKeyToVK(uint32_t time, uint32_t key,
         return;
     }
     ic_->key(serial_, time, key, state);
-    server_->display_->flush();
+    server_->deferredFlush();
 }
 
 void WaylandIMInputContextV1::updatePreeditDelegate(InputContext *ic) const {
@@ -568,12 +579,15 @@ void WaylandIMInputContextV1::updatePreeditDelegate(InputContext *ic) const {
     ic_->preeditCursor(preedit.cursor());
     unsigned int index = 0;
     for (int i = 0, e = preedit.size(); i < e; i++) {
-        ic_->preeditStyling(index, preedit.stringAt(i).size(),
-                            waylandFormat(preedit.formatAt(i)));
-        index += preedit.stringAt(i).size();
+        if (!preedit.stringAt(i).empty()) {
+            ic_->preeditStyling(index, preedit.stringAt(i).size(),
+                                waylandFormat(preedit.formatAt(i)));
+            index += preedit.stringAt(i).size();
+        }
     }
     ic_->preeditString(serial_, preedit.toString().c_str(),
                        preedit.toStringForCommit().c_str());
+    server_->deferredFlush();
 }
 
 void WaylandIMInputContextV1::deleteSurroundingTextDelegate(
@@ -601,5 +615,6 @@ void WaylandIMInputContextV1::deleteSurroundingTextDelegate(
     auto sizeBytes = utf8::ncharByteLength(text.begin() + startBytes, size);
     ic_->deleteSurroundingText(startBytes - cursorBytes, sizeBytes);
     ic_->commitString(serial_, "");
+    server_->deferredFlush();
 }
 } // namespace fcitx
