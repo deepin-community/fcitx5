@@ -23,9 +23,8 @@ constexpr CapabilityFlags baseFlags{CapabilityFlag::Preedit,
 WaylandIMServerV2::WaylandIMServerV2(wl_display *display, FocusGroup *group,
                                      const std::string &name,
                                      WaylandIMModule *waylandim)
-    : group_(group), name_(name), parent_(waylandim),
-      inputMethodManagerV2_(nullptr), display_(static_cast<wayland::Display *>(
-                                          wl_display_get_user_data(display))) {
+    : WaylandIMServerBase(display, group, name, waylandim),
+      inputMethodManagerV2_(nullptr) {
     display_->requestGlobals<wayland::ZwpInputMethodManagerV2>();
     display_->requestGlobals<wayland::ZwpVirtualKeyboardManagerV1>();
     display_->requestGlobals<wayland::WlSeat>();
@@ -154,7 +153,7 @@ WaylandIMInputContextV2::WaylandIMInputContextV2(
                                     WL_KEYBOARD_KEY_STATE_RELEASED);
                     }
                     vk_->modifiers(0, 0, 0, 0);
-                    server_->display_->sync();
+                    server_->deferredFlush();
                 }
                 focusOutWrapper();
             }
@@ -192,7 +191,7 @@ WaylandIMInputContextV2::WaylandIMInputContextV2(
                     });
                 repeatInfoCallback(repeatRate_, repeatDelay_);
                 focusInWrapper();
-                server_->display_->sync();
+                server_->deferredFlush();
             }
         }
     });
@@ -471,7 +470,20 @@ void WaylandIMInputContextV2::keyCallback(uint32_t, uint32_t time, uint32_t key,
                     event.isRelease() ? WL_KEYBOARD_KEY_STATE_RELEASED
                                       : WL_KEYBOARD_KEY_STATE_PRESSED);
     }
-    server_->display_->flush();
+
+    // This means our engine is being too slow, this is usually transient (e.g.
+    // cold start up due to data loading, high CPU usage etc).
+    // To avoid an undesired repetition, reset the delay the next interval so we
+    // can handle the release first.
+    if (timeEvent_->time() < now(timeEvent_->clock()) &&
+        timeEvent_->isOneShot()) {
+        WAYLANDIM_DEBUG() << "Engine handling speed can not keep up with key "
+                             "repetition rate.";
+        timeEvent_->setNextInterval(
+            std::min(1000, repeatDelay_ * 1000 - repeatHackDelay));
+    }
+
+    server_->deferredFlush();
 }
 void WaylandIMInputContextV2::modifiersCallback(uint32_t,
                                                 uint32_t mods_depressed,
@@ -548,7 +560,7 @@ void WaylandIMInputContextV2::sendKeyToVK(uint32_t time, uint32_t key,
         pressedVKKey_[key] = time;
     }
     vk_->key(time, key, state);
-    server_->display_->flush();
+    server_->deferredFlush();
 }
 
 void WaylandIMInputContextV2::forwardKeyDelegate(
@@ -617,6 +629,7 @@ void WaylandIMInputContextV2::updatePreeditDelegate(InputContext *ic) const {
                               cursorEnd);
     }
     ic_->commit(serial_);
+    server_->deferredFlush();
 }
 
 void WaylandIMInputContextV2::deleteSurroundingTextDelegate(
@@ -651,5 +664,6 @@ void WaylandIMInputContextV2::deleteSurroundingTextDelegate(
     ic_->deleteSurroundingText(cursorBytes - startBytes,
                                startBytes + sizeBytes - cursorBytes);
     ic_->commit(serial_);
+    server_->deferredFlush();
 }
 } // namespace fcitx

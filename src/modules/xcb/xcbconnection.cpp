@@ -124,6 +124,15 @@ XCBConnection::XCBConnection(XCBModule *xcb, const std::string &name)
             setDoGrab(imManager.groupCount() > 1);
         }));
 
+    eventHandlers_.emplace_back(parent_->instance()->watchEvent(
+        EventType::GlobalConfigReloaded, EventWatcherPhase::Default,
+        [this](Event &) {
+            // Ungrab first, in order to grab new config.
+            setDoGrab(false);
+            auto &imManager = parent_->instance()->inputMethodManager();
+            setDoGrab(imManager.groupCount() > 1);
+        }));
+
     connections_.emplace_back(
         parent_->instance()
             ->inputMethodManager()
@@ -173,10 +182,12 @@ XCBConnection::XCBConnection(XCBModule *xcb, const std::string &name)
         }
     }
 
+    FCITX_XCB_INFO() << "Connecting to X11 display, display name:" << name_
+                     << ".";
     if (extensionCheckXWayland(conn_.get()) ||
         xrandrCheckXWayland(conn_.get(), screen)) {
         isXWayland_ = true;
-        FCITX_XCB_DEBUG() << "X11 display: " << name_ << " is xwayland.";
+        FCITX_XCB_INFO() << "X11 display: " << name_ << " is xwayland.";
     }
 
     syms_.reset(xcb_key_symbols_alloc(conn_.get()));
@@ -210,44 +221,62 @@ void XCBConnection::setDoGrab(bool doGrab) {
     }
 }
 
-void XCBConnection::grabKey(const Key &key) {
-    xcb_keysym_t sym = static_cast<xcb_keysym_t>(key.sym());
+std::tuple<xcb_keycode_t, uint32_t> XCBConnection::getKeyCode(const Key &key) {
+    xcb_keycode_t keycode = 0;
     uint32_t modifiers = key.states();
-    UniqueCPtr<xcb_keycode_t> keycode(
-        xcb_key_symbols_get_keycode(syms_.get(), sym));
-    if (!keycode) {
-        FCITX_XCB_WARN() << "Can not convert keyval=" << sym << " to keycode!";
+    if (key.code()) {
+        keycode = key.code();
     } else {
-        FCITX_XCB_DEBUG() << "grab keycode " << static_cast<int>(*keycode)
-                          << " modifiers " << modifiers;
-        auto cookie =
-            xcb_grab_key_checked(conn_.get(), true, root_, modifiers, *keycode,
-                                 XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
-        UniqueCPtr<xcb_generic_error_t> error(
-            xcb_request_check(conn_.get(), cookie));
-        if (error) {
-            FCITX_XCB_DEBUG()
-                << "grab key error " << static_cast<int>(error->error_code)
-                << " " << root_;
+        xcb_keysym_t sym = static_cast<xcb_keysym_t>(key.sym());
+        UniqueCPtr<xcb_keycode_t> xcbKeycode(
+            xcb_key_symbols_get_keycode(syms_.get(), sym));
+        if (key.isModifier()) {
+            modifiers &= ~Key::keySymToStates(key.sym());
         }
+        if (!xcbKeycode) {
+            FCITX_XCB_WARN()
+                << "Can not convert keyval=" << sym << " to keycode!";
+        } else {
+            keycode = *xcbKeycode;
+        }
+    }
+
+    return {keycode, modifiers};
+}
+
+void XCBConnection::grabKey(const Key &key) {
+    auto [keycode, modifiers] = getKeyCode(key);
+
+    if (!keycode) {
+        return;
+    }
+
+    FCITX_XCB_DEBUG() << "grab keycode " << static_cast<int>(keycode)
+                      << " modifiers " << modifiers;
+    auto cookie =
+        xcb_grab_key_checked(conn_.get(), true, root_, modifiers, keycode,
+                             XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+    UniqueCPtr<xcb_generic_error_t> error(
+        xcb_request_check(conn_.get(), cookie));
+    if (error) {
+        FCITX_XCB_DEBUG() << "grab key error "
+                          << static_cast<int>(error->error_code) << " "
+                          << root_;
     }
 }
 
 void XCBConnection::ungrabKey(const Key &key) {
-    xcb_keysym_t sym = static_cast<xcb_keysym_t>(key.sym());
-    uint32_t modifiers = key.states();
-    UniqueCPtr<xcb_keycode_t> keycode(
-        xcb_key_symbols_get_keycode(syms_.get(), sym));
+    auto [keycode, modifiers] = getKeyCode(key);
     if (!keycode) {
-        FCITX_WARN() << "Can not convert keyval=" << sym << " to keycode!";
-    } else {
-        xcb_ungrab_key(conn_.get(), *keycode, root_, modifiers);
+        return;
     }
+
+    xcb_ungrab_key(conn_.get(), keycode, root_, modifiers);
     xcb_flush(conn_.get());
 }
 
 void XCBConnection::grabKey() {
-    FCITX_DEBUG() << "Grab key for X11 display: " << name_;
+    FCITX_XCB_DEBUG() << "Grab key for X11 display: " << name_;
     auto &globalConfig = parent_->instance()->globalConfig();
     forwardGroup_ = globalConfig.enumerateGroupForwardKeys();
     backwardGroup_ = globalConfig.enumerateGroupBackwardKeys();
@@ -275,7 +304,7 @@ bool XCBConnection::grabXKeyboard() {
     if (keyboardGrabbed_) {
         return false;
     }
-    FCITX_DEBUG() << "Grab keyboard for display: " << name_;
+    FCITX_XCB_DEBUG() << "Grab keyboard for display: " << name_;
     auto cookie = xcb_grab_keyboard(conn_.get(), false, root_, XCB_CURRENT_TIME,
                                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
     auto reply =
@@ -291,9 +320,10 @@ void XCBConnection::ungrabXKeyboard() {
     if (!keyboardGrabbed_) {
         // grabXKeyboard() may fail sometimes, so don't fail, but at least warn
         // anyway
-        FCITX_DEBUG() << "ungrabXKeyboard() called but keyboard not grabbed!";
+        FCITX_XCB_DEBUG()
+            << "ungrabXKeyboard() called but keyboard not grabbed!";
     }
-    FCITX_DEBUG() << "Ungrab keyboard for display: " << name_;
+    FCITX_XCB_DEBUG() << "Ungrab keyboard for display: " << name_;
     keyboardGrabbed_ = false;
     xcb_ungrab_keyboard(conn_.get(), XCB_CURRENT_TIME);
     xcb_flush(conn_.get());
@@ -379,7 +409,7 @@ bool XCBConnection::filterEvent(xcb_connection_t *,
 
         auto *keypress = reinterpret_cast<xcb_key_press_event_t *>(event);
         if (keypress->event == root_) {
-            FCITX_DEBUG() << "Received key event from root";
+            FCITX_XCB_DEBUG() << "Received key event from root";
             auto sym = xcb_key_press_lookup_keysym(syms_.get(), keypress, 0);
             auto state = keypress->state;
             bool forward;
@@ -389,13 +419,16 @@ bool XCBConnection::filterEvent(xcb_connection_t *,
             if ((forward = key.checkKeyList(forwardGroup_)) ||
                 key.checkKeyList(backwardGroup_)) {
                 if (keyboardGrabbed_) {
-                    navigateGroup(forward);
+                    navigateGroup(key, forward);
                 } else {
                     if (grabXKeyboard()) {
                         groupIndex_ = 0;
-                        navigateGroup(forward);
+                        currentKey_ = key;
+                        navigateGroup(key, forward);
                     } else {
-                        parent_->instance()->enumerateGroup(forward);
+                        parent_->instance()
+                            ->inputMethodManager()
+                            .enumerateGroup(forward);
                     }
                 }
             }
@@ -421,6 +454,7 @@ void XCBConnection::keyRelease(const xcb_key_release_event_t *event) {
     // released
     // key is this modifier - if yes, release the grab
     int mod_index = -1;
+    // Find and check if mk has only one mask left.
     for (int i = XCB_MAP_INDEX_SHIFT; i <= XCB_MAP_INDEX_5; ++i) {
         if ((mk & (1 << i)) != 0) {
             if (mod_index >= 0) {
@@ -455,7 +489,7 @@ void XCBConnection::keyRelease(const xcb_key_release_event_t *event) {
 }
 
 void XCBConnection::acceptGroupChange() {
-    FCITX_DEBUG() << "Accept group change";
+    FCITX_XCB_DEBUG() << "Accept group change";
     if (keyboardGrabbed_) {
         ungrabXKeyboard();
     }
@@ -463,21 +497,26 @@ void XCBConnection::acceptGroupChange() {
     auto &imManager = parent_->instance()->inputMethodManager();
     auto groups = imManager.groups();
     if (groups.size() > groupIndex_) {
-        imManager.setCurrentGroup(groups[groupIndex_]);
+        if (isSingleKey(currentKey_)) {
+            imManager.enumerateGroupTo(groups[groupIndex_]);
+        } else {
+            imManager.setCurrentGroup(groups[groupIndex_]);
+        }
     }
     groupIndex_ = 0;
+    currentKey_ = Key();
 }
 
-void XCBConnection::navigateGroup(bool forward) {
+void XCBConnection::navigateGroup(const Key &key, bool forward) {
     auto &imManager = parent_->instance()->inputMethodManager();
     if (imManager.groupCount() < 2) {
         return;
     }
     groupIndex_ = (groupIndex_ + (forward ? 1 : imManager.groupCount() - 1)) %
                   imManager.groupCount();
-    FCITX_DEBUG() << "Switch to group " << groupIndex_;
+    FCITX_XCB_DEBUG() << "Switch to group " << groupIndex_;
 
-    if (parent_->notifications()) {
+    if (parent_->notifications() && !isSingleKey(key)) {
         parent_->notifications()->call<INotifications::showTip>(
             "enumerate-group", _("Input Method"), "input-keyboard",
             _("Switch group"),
@@ -574,6 +613,17 @@ struct xkb_state *XCBConnection::xkbState() { return keyboard_->xkbState(); }
 
 XkbRulesNames XCBConnection::xkbRulesNames() {
     return keyboard_->xkbRulesNames();
+}
+
+void XCBConnection::modifierUpdate(KeyStates states) {
+    if (!keyboardGrabbed_) {
+        return;
+    }
+    states = states & USED_MASK;
+    if (states == 0 &&
+        (currentKey_.hasModifier() || currentKey_.isModifier())) {
+        acceptGroupChange();
+    }
 }
 
 } // namespace fcitx

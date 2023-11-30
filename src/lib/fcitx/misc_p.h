@@ -9,6 +9,7 @@
 
 #include <cstdlib>
 #include <fstream>
+#include <functional>
 #include <string>
 #include <type_traits>
 #include "fcitx-utils/charutils.h"
@@ -42,14 +43,18 @@ parseLayout(const std::string &layout) {
     return {layout.substr(0, pos), layout.substr(pos + 1)};
 }
 
-static inline const CandidateWord *
-nthCandidateIgnorePlaceholder(const CandidateList &candidateList, int idx) {
+using GetCandidateListSizeCallback = std::function<int()>;
+using GetCandidateWordCallback = std::function<const CandidateWord &(int idx)>;
+static inline const CandidateWord *nthCandidateIgnorePlaceholder(
+    GetCandidateListSizeCallback getCandidateListSizeCallback,
+    GetCandidateWordCallback getCandidateWordCallback, int idx) {
     int total = 0;
-    if (idx < 0 || idx >= candidateList.size()) {
+    const int size = getCandidateListSizeCallback();
+    if (idx < 0 || idx >= size) {
         return nullptr;
     }
-    for (int i = 0, e = candidateList.size(); i < e; i++) {
-        const auto &candidate = candidateList.candidate(i);
+    for (int i = 0; i < size; i++) {
+        const auto &candidate = getCandidateWordCallback(i);
         if (candidate.isPlaceHolder()) {
             continue;
         }
@@ -59,6 +64,16 @@ nthCandidateIgnorePlaceholder(const CandidateList &candidateList, int idx) {
         ++total;
     }
     return nullptr;
+}
+
+static inline const CandidateWord *
+nthCandidateIgnorePlaceholder(const CandidateList &candidateList, int idx) {
+    return nthCandidateIgnorePlaceholder(
+        [&candidateList]() { return candidateList.size(); },
+        [&candidateList](int idx) -> const CandidateWord & {
+            return candidateList.candidate(idx);
+        },
+        idx);
 }
 
 static inline std::string readFileContent(const std::string &file) {
@@ -104,14 +119,24 @@ enum class DesktopType {
     LXDE,
     XFCE,
     DEEPIN,
+    UKUI,
+    Sway,
     Unknown
 };
 
 static inline DesktopType getDesktopType() {
     std::string desktop;
+    // new standard
     auto *desktopEnv = getenv("XDG_CURRENT_DESKTOP");
     if (desktopEnv) {
         desktop = desktopEnv;
+    }
+    if (desktop.empty()) {
+        // old standard, guaranteed by display manager.
+        desktopEnv = getenv("DESKTOP_SESSION");
+        if (desktopEnv) {
+            desktop = desktopEnv;
+        }
     }
 
     for (auto &c : desktop) {
@@ -145,6 +170,10 @@ static inline DesktopType getDesktopType() {
             return DesktopType::XFCE;
         } else if (desktop == "deepin") {
             return DesktopType::DEEPIN;
+        } else if (desktop == "ukui") {
+            return DesktopType::UKUI;
+        } else if (desktop == "sway") {
+            return DesktopType::Sway;
         }
     }
     return DesktopType::Unknown;
@@ -200,6 +229,18 @@ static inline std::string stripLanguage(const std::string &lc) {
         return "C";
     }
     return lang;
+}
+
+static inline bool isSingleModifier(const Key &key) {
+    return key.isModifier() && (key.states() == 0 ||
+                                key.states() == Key::keySymToStates(key.sym()));
+}
+static inline bool isSingleKey(const Key &key) {
+    return isSingleModifier(key) || !key.hasModifier();
+}
+
+inline void hash_combine(std::size_t &seed, std::size_t value) noexcept {
+    seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
 
 } // namespace fcitx

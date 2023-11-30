@@ -69,6 +69,10 @@ int main() {
         FCITX_ASSERT(replace_result2 == largeReplaceCorrect2);
     }
 
+    FCITX_ASSERT(stringutils::replaceAll("ababba", "a", "cc") == "ccbccbbcc");
+    FCITX_ASSERT(stringutils::replaceAll("\"a\nb\"", "\"", "\\\"") ==
+                 "\\\"a\nb\\\"");
+
     FCITX_ASSERT(stringutils::backwardSearch("abcabc", "bc", 0) ==
                  std::string::npos);
     FCITX_ASSERT(stringutils::backwardSearch("abcabc", "bc", 1) == 1);
@@ -113,9 +117,17 @@ int main() {
         (std::vector<std::string>{""}));
 
     FCITX_ASSERT(stringutils::escapeForValue("\"") == R"("\"")");
+    FCITX_ASSERT(stringutils::escapeForValue("\"\"\n") == R"("\"\"\n")");
     FCITX_ASSERT(stringutils::escapeForValue("abc") == R"(abc)");
     FCITX_ASSERT(stringutils::escapeForValue("ab\"c") == R"("ab\"c")");
     FCITX_ASSERT(stringutils::escapeForValue("a c") == R"("a c")");
 
+    for (int i = 0; i < 16; i++) {
+        if (i < 10) {
+            FCITX_ASSERT(charutils::toHex(i) == i + '0');
+        } else {
+            FCITX_ASSERT(charutils::toHex(i) == i - 10 + 'a');
+        }
+    }
     return 0;
 }

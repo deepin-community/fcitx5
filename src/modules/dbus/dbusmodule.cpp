@@ -182,6 +182,46 @@ public:
         return {"", {}};
     }
 
+    std::tuple<
+        std::string, std::string, std::string, DBusVariantMap,
+        std::vector<DBusStruct<std::string, std::string, std::string,
+                               std::string, std::string, std::string,
+                               std::string, bool, std::string, DBusVariantMap>>>
+    fullInputMethodGroupInfo(const std::string &inputMethodGroupName) {
+        std::vector<DBusStruct<std::string, std::string, std::string,
+                               std::string, std::string, std::string,
+                               std::string, bool, std::string, DBusVariantMap>>
+            inputMethodEntries;
+
+        const auto &inputMethodManager = instance_->inputMethodManager();
+        const auto &groupName = !inputMethodGroupName.empty()
+                                    ? inputMethodGroupName
+                                    : inputMethodManager.currentGroup().name();
+        const auto *group = inputMethodManager.group(groupName);
+        if (group == nullptr) {
+            return {"", "", "", {}, {}};
+        }
+
+        for (const auto &item : group->inputMethodList()) {
+            const auto *entry = inputMethodManager.entry(item.name());
+            if (entry == nullptr) {
+                continue;
+            }
+
+            inputMethodEntries.emplace_back(std::forward_as_tuple(
+                entry->uniqueName(), entry->name(), entry->nativeName(),
+                entry->icon(), entry->label(), entry->languageCode(),
+                entry->addon(), entry->isConfigurable(), item.layout(),
+                DBusVariantMap()));
+        }
+
+        return {groupName,
+                group->defaultInputMethod(),
+                group->defaultLayout(),
+                {},
+                inputMethodEntries};
+    }
+
     std::vector<DBusStruct<std::string, std::string, std::string, std::string,
                            std::string, std::string, bool>>
     availableInputMethods() {
@@ -570,8 +610,9 @@ public:
                     ss << fmt::format("{:02x}", static_cast<int>(v));
                 }
                 ss << "] program:" << ic->program()
-                   << " frontend:" << ic->frontend()
-                   << " cap:" << fmt::format("{:x}", ic->capabilityFlags())
+                   << " frontend:" << ic->frontendName() << " cap:"
+                   << fmt::format("{:x}",
+                                  static_cast<uint64_t>(ic->capabilityFlags()))
                    << " focus:" << ic->hasFocus() << std::endl;
                 return true;
             });
@@ -582,7 +623,7 @@ public:
             if (ic->focusGroup()) {
                 return true;
             }
-            if (std::string_view(ic->frontend()) == "dummy") {
+            if (ic->frontendName() == "dummy") {
                 return true;
             }
             ss << "  IC [";
@@ -590,8 +631,8 @@ public:
                 ss << fmt::format("{:02x}", static_cast<int>(v));
             }
             ss << "] program:" << ic->program()
-               << " frontend:" << ic->frontend() << " focus:" << ic->hasFocus()
-               << std::endl;
+               << " frontend:" << ic->frontendName()
+               << " focus:" << ic->hasFocus() << std::endl;
             return true;
         });
         return ss.str();
@@ -607,6 +648,8 @@ public:
     }
 
     bool checkUpdate() { return instance_->checkUpdate(); }
+
+    void save() { return instance_->save(); }
 
 private:
     DBusModule *module_;
@@ -630,6 +673,9 @@ private:
                                "s", "");
     FCITX_OBJECT_VTABLE_METHOD(currentInputMethodGroup,
                                "CurrentInputMethodGroup", "", "s");
+    FCITX_OBJECT_VTABLE_METHOD(fullInputMethodGroupInfo,
+                               "FullInputMethodGroupInfo", "s",
+                               "sssa{sv}a(sssssssbsa{sv})");
     FCITX_OBJECT_VTABLE_METHOD(availableInputMethods, "AvailableInputMethods",
                                "", "a(ssssssb)");
     FCITX_OBJECT_VTABLE_METHOD(inputMethodGroupInfo, "InputMethodGroupInfo",
@@ -669,6 +715,7 @@ private:
     FCITX_OBJECT_VTABLE_METHOD(debugInfo, "DebugInfo", "", "s");
     FCITX_OBJECT_VTABLE_METHOD(refresh, "Refresh", "", "");
     FCITX_OBJECT_VTABLE_METHOD(checkUpdate, "CheckUpdate", "", "b");
+    FCITX_OBJECT_VTABLE_METHOD(save, "Save", "", "");
 };
 
 DBusModule::DBusModule(Instance *instance)

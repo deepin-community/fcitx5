@@ -8,6 +8,7 @@
 #include "globalconfig.h"
 #include "fcitx-config/configuration.h"
 #include "fcitx-config/iniparser.h"
+#include "fcitx-config/option.h"
 #include "fcitx-utils/i18n.h"
 #include "config.h"
 #include "inputcontextmanager.h"
@@ -48,14 +49,14 @@ FCITX_CONFIGURATION(
         this,
         "EnumerateForwardKeys",
         _("Enumerate Input Method Forward"),
-        {Key("Control+Shift_L")},
+        {},
         KeyListConstrain({KeyConstrainFlag::AllowModifierLess,
                           KeyConstrainFlag::AllowModifierOnly})};
     KeyListOption enumerateBackwardKeys{
         this,
         "EnumerateBackwardKeys",
         _("Enumerate Input Method Backward"),
-        {Key("Control+Shift_R")},
+        {},
         KeyListConstrain({KeyConstrainFlag::AllowModifierLess,
                           KeyConstrainFlag::AllowModifierOnly})};
     Option<bool> enumerateSkipFirst{
@@ -178,7 +179,22 @@ FCITX_CONFIGURATION(
         this, "DisabledAddons", "Force Disabled Addons"};
     HiddenOption<bool> preloadInputMethod{
         this, "PreloadInputMethod",
-        "Preload input method to be used by default", true};);
+        "Preload input method to be used by default", true};
+    Option<bool> allowInputMethodForPassword{
+        this, "AllowInputMethodForPassword",
+        _("Allow input method in the password field"), false};
+    Option<bool> showPreeditForPassword{
+        this, "ShowPreeditForPassword",
+        _("Show preedit text when typing password"), false};
+    Option<int, IntConstrain, DefaultMarshaller<int>, ToolTipAnnotation>
+        autoSavePeriod{this,
+                       "AutoSavePeriod",
+                       _("Interval of saving user data in minutes"),
+                       30,
+                       IntConstrain(0, 1440),
+                       {},
+                       {_("If value is 0, the user data may only be saved when "
+                          "fcitx quits (e.g. logout).")}};);
 
 FCITX_CONFIGURATION(GlobalConfig,
                     Option<HotkeyConfig> hotkey{this, "Hotkey", _("Hotkey")};
@@ -355,6 +371,21 @@ void GlobalConfig::setDisabledAddons(const std::vector<std::string> &addons) {
 bool GlobalConfig::preloadInputMethod() const {
     FCITX_D();
     return *d->behavior->preloadInputMethod;
+}
+
+bool GlobalConfig::allowInputMethodForPassword() const {
+    FCITX_D();
+    return *d->behavior->allowInputMethodForPassword;
+}
+
+bool GlobalConfig::showPreeditForPassword() const {
+    FCITX_D();
+    return *d->behavior->showPreeditForPassword;
+}
+
+int GlobalConfig::autoSavePeriod() const {
+    FCITX_D();
+    return *d->behavior->autoSavePeriod;
 }
 
 const Configuration &GlobalConfig::config() const {

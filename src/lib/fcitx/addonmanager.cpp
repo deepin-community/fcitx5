@@ -12,6 +12,7 @@
 #include <unordered_set>
 #include "fcitx-config/iniparser.h"
 #include "fcitx-utils/log.h"
+#include "addoninstance_p.h"
 #include "addonloader.h"
 #include "addonloader_p.h"
 #include "instance.h"
@@ -188,6 +189,7 @@ public:
             FCITX_INFO() << "Could not load addon "
                          << addon.info().uniqueName();
         } else {
+            addon.instance_->d_func()->addonInfo_ = &(addon.info());
             FCITX_INFO() << "Loaded addon " << addon.info().uniqueName();
         }
     }

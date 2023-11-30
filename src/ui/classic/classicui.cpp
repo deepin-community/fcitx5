@@ -7,28 +7,60 @@
 
 #include "classicui.h"
 #include <fcntl.h>
+#include <optional>
+#include <string>
+#include <string_view>
 #include "fcitx-config/iniparser.h"
+#include "fcitx-utils/dbus/message_details.h"
 #include "fcitx-utils/misc_p.h"
 #include "fcitx-utils/standardpath.h"
 #include "fcitx-utils/utf8.h"
+#include "fcitx/event.h"
 #include "fcitx/inputcontext.h"
 #include "fcitx/inputcontextmanager.h"
 #include "fcitx/instance.h"
 #include "fcitx/userinterfacemanager.h"
 #include "common.h"
 #include "notificationitem_public.h"
+#include "plasmathemewatchdog.h"
 #ifdef ENABLE_X11
 #include "xcbui.h"
 #endif
 #ifdef WAYLAND_FOUND
 #include "waylandui.h"
 #endif
+#ifdef ENABLE_DBUS
+#include "fcitx-utils/dbus/variant.h"
+#include "dbus_public.h"
+#include "portalsettingmonitor.h"
+#endif
 
 namespace fcitx::classicui {
 
 FCITX_DEFINE_LOG_CATEGORY(classicui_logcategory, "classicui");
 
+using AccentColorDBusType = FCITX_STRING_TO_DBUS_TYPE("(ddd)");
+
+namespace {
+constexpr const char XDG_PORTAL_DESKTOP_SERVICE[] =
+    "org.freedesktop.portal.Desktop";
+constexpr const char XDG_PORTAL_DESKTOP_PATH[] =
+    "/org/freedesktop/portal/desktop";
+constexpr const char XDG_PORTAL_DESKTOP_SETTINGS_INTERFACE[] =
+    "org.freedesktop.portal.Settings";
+} // namespace
+
 ClassicUI::ClassicUI(Instance *instance) : instance_(instance) {
+
+#ifdef ENABLE_DBUS
+    if (auto dbusAddon = dbus()) {
+        dbus::VariantTypeRegistry::defaultRegistry()
+            .registerType<AccentColorDBusType>();
+        settingMonitor_ = std::make_unique<PortalSettingMonitor>(
+            *dbusAddon->call<IDBusModule::bus>());
+    }
+#endif
+
     reloadConfig();
 
 #ifdef ENABLE_X11
@@ -37,8 +69,11 @@ ClassicUI::ClassicUI(Instance *instance) : instance_(instance) {
             xcbAddon->call<IXCBModule::addConnectionCreatedCallback>(
                 [this](const std::string &name, xcb_connection_t *conn,
                        int screen, FocusGroup *) {
-                    uis_["x11:" + name].reset(
-                        new XCBUI(this, name, conn, screen));
+                    auto xcbui =
+                        std::make_unique<XCBUI>(this, name, conn, screen);
+                    uis_[xcbui->name()] = std::move(xcbui);
+                    CLASSICUI_INFO()
+                        << "Created classicui for x11 display:" << name;
                 });
         xcbClosedCallback_ =
             xcbAddon->call<IXCBModule::addConnectionClosedCallback>(
@@ -55,8 +90,11 @@ ClassicUI::ClassicUI(Instance *instance) : instance_(instance) {
                 [this](const std::string &name, wl_display *display,
                        FocusGroup *) {
                     try {
-                        uis_["wayland:" + name].reset(
-                            new WaylandUI(this, name, display));
+                        auto waylandui =
+                            std::make_unique<WaylandUI>(this, name, display);
+                        uis_[waylandui->name()] = std::move(waylandui);
+                        CLASSICUI_INFO()
+                            << "Created classicui for wayland display:" << name;
                     } catch (const std::runtime_error &) {
                     }
                 });
@@ -67,6 +105,33 @@ ClassicUI::ClassicUI(Instance *instance) : instance_(instance) {
                 });
     }
 #endif
+    deferedReloadTheme_ =
+        instance_->eventLoop().addDeferEvent([this](EventSource *) {
+            reloadTheme();
+            return true;
+        });
+    deferedReloadTheme_->setEnabled(false);
+
+    // Since kimpanel may call classicui
+    persistentEventHandlers_.emplace_back(instance_->watchEvent(
+        EventType::FocusGroupFocusChanged, EventWatcherPhase::Default,
+        [this](Event &event) {
+            auto &focusEvent =
+                static_cast<FocusGroupFocusChangedEvent &>(event);
+            if (!focusEvent.newFocus()) {
+                if (auto ui = uiForDisplay(focusEvent.group()->display())) {
+                    ui->update(UserInterfaceComponent::InputPanel, nullptr);
+                }
+            }
+        }));
+    persistentEventHandlers_.emplace_back(instance_->watchEvent(
+        EventType::UIChanged, EventWatcherPhase::Default, [this](Event &) {
+            if (instance_->currentUI() == "kimpanel") {
+                deferedReloadTheme_->setOneShot();
+            } else if (instance_->currentUI() == "classicui") {
+                deferedReloadTheme_->setOneShot();
+            }
+        }));
 }
 
 ClassicUI::~ClassicUI() {}
@@ -77,8 +142,40 @@ void ClassicUI::reloadConfig() {
 }
 
 void ClassicUI::reloadTheme() {
-    if (*config_.theme == "plasma") {
-        if (!plasmaThemeWatchdog_) {
+#ifdef ENABLE_DBUS
+    auto parseMessage = [this](const dbus::Variant &variant) {
+        if (variant.signature() == "u") {
+            auto color = variant.dataAs<uint32_t>();
+            auto oldIsDark = isDark_;
+            isDark_ = (color == 1);
+            if (oldIsDark != isDark_) {
+                CLASSICUI_DEBUG() << "XDG Portal AppearanceChanged "
+                                     "isDark"
+                                  << isDark_;
+                deferedReloadTheme_->setOneShot();
+            }
+        }
+    };
+
+    if (dbus()) {
+        if (*config_.useDarkTheme) {
+            if (!darkModeEntry_ && settingMonitor_) {
+                darkModeEntry_ = settingMonitor_->watch(
+                    "org.freedesktop.appearance", "color-scheme", parseMessage);
+            }
+        } else {
+            darkModeEntry_.reset();
+        }
+    }
+#endif
+
+    bool hasPlasmaTheme =
+        instance_->currentUI() == "kimpanel" ||
+        (*config_.theme == PlasmaThemeName) ||
+        (*config_.useDarkTheme && *config_.themeDark == PlasmaThemeName);
+
+    if (hasPlasmaTheme) {
+        if (!plasmaThemeWatchdog_ && PlasmaThemeWatchdog::isAvailable()) {
             try {
                 plasmaThemeWatchdog_ = std::make_unique<PlasmaThemeWatchdog>(
                     &instance_->eventLoop(), [this]() {
@@ -92,7 +189,52 @@ void ClassicUI::reloadTheme() {
         plasmaThemeWatchdog_.reset();
     }
 
-    theme_.load(*config_.theme);
+    std::string_view themeName = (*config_.useDarkTheme && isDark_)
+                                     ? *config_.themeDark
+                                     : *config_.theme;
+
+    if (instance_->currentUI() == "kimpanel") {
+        if (plasmaThemeWatchdog_) {
+            themeName = "plasma";
+        }
+    }
+
+    theme_.load(themeName);
+
+#ifdef ENABLE_DBUS
+    auto parseAccentColor = [this](const dbus::Variant &variant) {
+        if (variant.signature() == "(ddd)") {
+            auto dbuscolor = variant.dataAs<AccentColorDBusType>();
+            Color color;
+            color.setAlphaF(1);
+            color.setRedF(std::get<0>(dbuscolor));
+            color.setGreenF(std::get<1>(dbuscolor));
+            color.setBlueF(std::get<2>(dbuscolor));
+            if (!accentColor_ || *accentColor_ != color) {
+                accentColor_ = color;
+                CLASSICUI_DEBUG() << "XDG Portal AccentColor changed "
+                                     "color: "
+                                  << accentColor_;
+                deferedReloadTheme_->setOneShot();
+            }
+        }
+    };
+
+    if (dbus()) {
+        if (*config_.useAccentColor) {
+            if (!accentColorEntry_ && settingMonitor_) {
+                accentColorEntry_ =
+                    settingMonitor_->watch("org.freedesktop.appearance",
+                                           "accent-color", parseAccentColor);
+            }
+        } else {
+            accentColorEntry_.reset();
+            accentColor_ = std::nullopt;
+        }
+    }
+#endif
+
+    theme_.populateColor(accentColor_);
 }
 
 void ClassicUI::suspend() {
@@ -117,7 +259,7 @@ const Configuration *ClassicUI::getConfig() const {
             }
             return true;
         });
-    std::map<std::string, std::string> themes;
+    std::map<std::string, std::string, std::less<>> themes;
     for (const auto &themeName : themeDirs) {
         auto file = StandardPath::global().open(
             StandardPath::Type::PkgData,
@@ -140,14 +282,18 @@ const Configuration *ClassicUI::getConfig() const {
     }
 
     bool plasmaTheme = false;
-    if (StandardPath::hasExecutable(PLASMA_THEME_GENERATOR)) {
-        themes.erase("plasma");
-        themes["plasma"] = _("KDE Plasma (Experimental)");
+    if (PlasmaThemeWatchdog::isAvailable()) {
+        if (auto iter = themes.find(PlasmaThemeName); iter != themes.end()) {
+            themes.erase(iter);
+        }
+        themes.emplace(PlasmaThemeName, _("KDE Plasma (Experimental)"));
         plasmaTheme = true;
     }
 
     config_.theme.annotation().setThemes({themes.begin(), themes.end()},
                                          plasmaTheme);
+    config_.themeDark.annotation().setThemes({themes.begin(), themes.end()},
+                                             plasmaTheme);
     return &config_;
 }
 
@@ -183,6 +329,7 @@ UIInterface *ClassicUI::uiForDisplay(const std::string &display) {
 }
 
 void ClassicUI::resume() {
+    CLASSICUI_DEBUG() << "Resume ClassicUI";
     suspended_ = false;
     for (auto &p : uis_) {
         p.second->resume();
@@ -275,7 +422,7 @@ void ClassicUI::update(UserInterfaceComponent component,
                        InputContext *inputContext) {
     UIInterface *ui = nullptr;
     if (stringutils::startsWith(inputContext->display(), "wayland:") &&
-        !stringutils::startsWith(inputContext->frontend(), "wayland")) {
+        !stringutils::startsWith(inputContext->frontendName(), "wayland")) {
         // If display is wayland, but frontend is not, then we can only do X11
         // for now, though position is wrong. We don't know which is xwayland
         // unfortunately, hopefully main display is X wayland.
@@ -295,6 +442,11 @@ void ClassicUI::update(UserInterfaceComponent component,
             ui = uiPtr->get();
         }
     }
+    CLASSICUI_DEBUG() << "Update component: " << static_cast<int>(component)
+                      << " for IC program:" << inputContext->program()
+                      << " frontend:" << inputContext->frontendName()
+                      << " display:" << inputContext->display()
+                      << " ui:" << (ui ? ui->name() : "(not available)");
 
     if (ui) {
         ui->update(component, inputContext);
@@ -322,10 +474,6 @@ ClassicUI::getSubConfig(const std::string &path) const {
         return nullptr;
     }
 
-    if (name == *config_.theme) {
-        return &theme_;
-    }
-
     subconfigTheme_.load(name);
     return &subconfigTheme_;
 }
@@ -340,7 +488,7 @@ void ClassicUI::setSubConfig(const std::string &path,
         return;
     }
 
-    auto &theme = name == *config_.theme ? theme_ : subconfigTheme_;
+    auto &theme = name == theme_.name() ? theme_ : subconfigTheme_;
     if (&theme == &subconfigTheme_) {
         // Fill the system value.
         getSubConfig(path);

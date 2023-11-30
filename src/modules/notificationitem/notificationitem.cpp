@@ -37,9 +37,7 @@ namespace fcitx {
 
 class StatusNotifierItem : public dbus::ObjectVTable<StatusNotifierItem> {
 public:
-    StatusNotifierItem(NotificationItem *parent) : parent_(parent) {
-        FCITX_LOG_IF(Info, inFlatpak_) << "Running inside flatpak.";
-    }
+    StatusNotifierItem(NotificationItem *parent) : parent_(parent) {}
 
     void scroll(int delta, const std::string &_orientation) {
         std::string orientation = _orientation;
@@ -68,13 +66,13 @@ public:
         } else {
             icon = "input-keyboard";
         }
-        if (auto *ic = parent_->instance()->mostRecentInputContext()) {
+        if (auto *ic = parent_->menu()->lastRelevantIc()) {
             icon = parent_->instance()->inputMethodIcon(ic);
         }
         if (icon == "input-keyboard" && preferSymbolic) {
             return "input-keyboard-symbolic";
         }
-        return IconTheme::iconName(icon, inFlatpak_);
+        return IconTheme::iconName(icon);
     }
 
     std::string label() { return ""; }
@@ -102,6 +100,10 @@ public:
         auto label = labelText();
         if (icon != lastIconName_ || label != lastLabel_) {
             newIcon();
+            // https://github.com/ubuntu/gnome-shell-extension-appindicator/issues/468
+            if (getDesktopType() == DesktopType::GNOME) {
+                newOverlayIcon();
+            }
         }
         lastIconName_ = icon;
         lastLabel_ = label;
@@ -115,7 +117,7 @@ public:
 
     std::string labelText() const {
         std::string label, icon;
-        if (auto *ic = parent_->instance()->mostRecentInputContext()) {
+        if (auto *ic = parent_->menu()->lastRelevantIc()) {
             label = parent_->instance()->inputMethodLabel(ic);
             icon = parent_->instance()->inputMethodIcon(ic);
         }
@@ -130,6 +132,7 @@ public:
     FCITX_OBJECT_VTABLE_METHOD(secondaryActivate, "SecondaryActivate", "ii",
                                "");
     FCITX_OBJECT_VTABLE_SIGNAL(newIcon, "NewIcon", "");
+    FCITX_OBJECT_VTABLE_SIGNAL(newOverlayIcon, "NewOverlayIcon", "");
     FCITX_OBJECT_VTABLE_SIGNAL(newToolTip, "NewToolTip", "");
     FCITX_OBJECT_VTABLE_SIGNAL(newIconThemePath, "NewIconThemePath", "s");
     FCITX_OBJECT_VTABLE_SIGNAL(newAttentionIcon, "NewAttentionIcon", "");
@@ -148,7 +151,7 @@ public:
     FCITX_OBJECT_VTABLE_PROPERTY(
         iconName, "IconName", "s", ([this]() {
             std::string label, icon;
-            if (auto *ic = parent_->instance()->mostRecentInputContext()) {
+            if (auto *ic = parent_->menu()->lastRelevantIc()) {
                 label = parent_->instance()->inputMethodLabel(ic);
                 icon = parent_->instance()->inputMethodIcon(ic);
             }
@@ -160,6 +163,9 @@ public:
                 result;
 
             auto classicui = parent_->classicui();
+            if (!classicui) {
+                return result;
+            }
             const auto label = labelText();
             if (!label.empty()) {
                 if (cachedLabel_ == label) {
@@ -190,8 +196,16 @@ public:
                                  ([]() { return ""; }));
     FCITX_OBJECT_VTABLE_PROPERTY(
         overlayIconPixmap, "OverlayIconPixmap", "a(iiay)", ([]() {
-            return std::vector<
-                dbus::DBusStruct<int, int, std::vector<uint8_t>>>{};
+            std::vector<dbus::DBusStruct<int, int, std::vector<uint8_t>>>
+                result;
+            // workaround to
+            // https://github.com/ubuntu/gnome-shell-extension-appindicator/issues/468
+            // enforce the icon to have a invisible overlay icon to bypass an
+            // optimization for pixmap in SNI extension.
+            if (getDesktopType() == DesktopType::GNOME) {
+                result.emplace_back(1, 1, std::vector<uint8_t>{0, 0, 0, 0});
+            }
+            return result;
         }));
     FCITX_OBJECT_VTABLE_PROPERTY(attentionIconName, "AttentionIconName", "s",
                                  []() { return ""; });
@@ -223,7 +237,6 @@ public:
 private:
     NotificationItem *parent_;
     int deltaAcc_ = 0;
-    const bool inFlatpak_ = fs::isreg("/.flatpak-info");
     std::string lastLabel_;
     std::string lastIconName_;
     // Quick cache for the icon.
@@ -272,8 +285,12 @@ void NotificationItem::setRegistered(bool registered) {
     registered_ = registered;
 
     if (registered_) {
-        auto updateIcon = [this](Event &) {
-            menu_->updateMenu();
+        auto updateIcon = [this](Event &e) {
+            InputContext *ic = nullptr;
+            if (e.isInputContextEvent()) {
+                ic = dynamic_cast<InputContextEvent &>(e).inputContext();
+            }
+            menu_->updateMenu(ic);
             newIcon();
         };
         for (auto type : {EventType::InputContextFocusIn,
@@ -283,12 +300,11 @@ void NotificationItem::setRegistered(bool registered) {
                 type, EventWatcherPhase::Default, updateIcon));
         }
         eventHandlers_.emplace_back(instance_->watchEvent(
-            EventType::InputContextUpdateUI, EventWatcherPhase::Default,
-            [this](Event &event) {
-                if (static_cast<InputContextUpdateUIEvent &>(event)
+            EventType::InputContextFlushUI, EventWatcherPhase::Default,
+            [updateIcon](Event &event) {
+                if (static_cast<InputContextFlushUIEvent &>(event)
                         .component() == UserInterfaceComponent::StatusArea) {
-                    newIcon();
-                    menu_->updateMenu();
+                    updateIcon(event);
                 }
             }));
     }
@@ -376,7 +392,7 @@ void NotificationItem::disable() {
 void NotificationItem::cleanUp() {
     pendingRegisterCall_.reset();
     sni_->reset();
-    menu_->releaseSlot();
+    menu_->reset();
     privateBus_.reset();
 
     eventHandlers_.clear();

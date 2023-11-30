@@ -7,7 +7,9 @@
 #ifndef _FCITX_UI_CLASSIC_XCBUI_H_
 #define _FCITX_UI_CLASSIC_XCBUI_H_
 
+#include <cairo.h>
 #include <pango/pangocairo.h>
+#include "fcitx-utils/misc.h"
 #include "fcitx-utils/rect.h"
 #include "classicui.h"
 
@@ -22,6 +24,8 @@ enum class MultiScreenExtension { Randr, Xinerama, EXTNone };
 enum class XCBHintStyle { Default, NoHint, Medium, Slight, Full };
 
 enum class XCBRGBA { Default, NoRGBA, RGB, BGR, VRGB, VBGR };
+
+class XCBWindow;
 
 struct XCBFontOption {
     int dpi = -1;
@@ -39,7 +43,7 @@ public:
     ~XCBUI();
 
     ClassicUI *parent() const { return parent_; }
-    const std::string &name() const { return name_; }
+    const std::string &displayName() const { return displayName_; }
     xcb_connection_t *connection() const { return conn_; }
     xcb_ewmh_connection_t *ewmh() const { return ewmh_; }
     xcb_window_t root() const { return root_; }
@@ -53,11 +57,16 @@ public:
     void suspend() override;
     void resume() override;
     void setEnableTray(bool) override;
+    void setCairoDevice(cairo_device_t *device);
 
     const auto &screenRects() { return rects_; }
     int dpiByPosition(int x, int y);
     int scaledDPI(int dpi);
     const XCBFontOption &fontOption() const { return fontOption_; }
+
+    bool grabPointer(XCBWindow *window);
+    void ungrabPointer();
+    XCBWindow *pointerGrabber() const { return pointerGrabber_; }
 
 private:
     void refreshCompositeManager();
@@ -67,9 +76,13 @@ private:
     void updateTray();
     void scheduleUpdateScreen();
 
+    static void destroyCairoDevice(cairo_device_t *device);
+
     ClassicUI *parent_;
-    std::string name_;
+    UniqueCPtr<cairo_device_t, destroyCairoDevice> device_;
+    std::string displayName_;
     xcb_connection_t *conn_;
+    XCBWindow *pointerGrabber_;
     xcb_window_t root_ = XCB_WINDOW_NONE;
     xcb_ewmh_connection_t *ewmh_;
     int defaultScreen_;

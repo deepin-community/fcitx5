@@ -250,6 +250,16 @@ print_process_info() {
     echo "$1 ${cmdline}"
 }
 
+run_im_module_probing(){
+    local program=$1
+    if command -v $program >/dev/null 2>&1; then
+        write_eval "$(_ 'Using ${1} to check the actual im module to be used under current environment:')" $program
+        write_quote_str "$($program 2> /dev/null)"
+    else
+        write_error "$(print_not_found $program)"
+    fi
+}
+
 # Detect DE
 
 _detectDE_XDG_CURRENT() {
@@ -277,6 +287,10 @@ _detectDE_XDG_CURRENT() {
             ;;
             X-Cinnamon)
             DE=cinnamon
+            return
+            ;;
+            UKUI)
+            DE=ukui
             return
             ;;
         esac
@@ -323,6 +337,9 @@ _detectDE_SESSION() {
             ;;
         cinnamon)
             DE=cinnamon
+            ;;
+        UKUI)
+            DE=ukui
             ;;
         *)
             return 1
@@ -1220,7 +1237,11 @@ find_qt_modules() {
 check_qt() {
     write_title 2 "Qt:"
     _check_toolkit_env qt4 QT4_IM_MODULE QT_IM_MODULE
+    run_im_module_probing fcitx5-qt4-immodule-probing
     _check_toolkit_env qt5 QT_IM_MODULE
+    run_im_module_probing fcitx5-qt5-immodule-probing
+    _check_toolkit_env qt6 QT_IM_MODULE
+    run_im_module_probing fcitx5-qt6-immodule-probing
     find_qt_modules
     qt4_module_found=''
     qt5_module_found=''
@@ -1510,50 +1531,12 @@ find_gtk_immodules_cache_gio() {
         "${__gtk_immodule_cache[@]}"
 }
 
-check_gtk_immodule_cache_gio() {
-    local version="$1"
-    local IFS=$'\n'
-    local cache_found=0
-    local module_found=0
-    write_order_list "gtk ${version}:"
-    local gtk_immodules_cache
-    find_gtk_immodules_cache_gio "${version}" gtk_immodules_cache
-
-    for cache in "${gtk_immodules_cache[@]}"; do
-        cache_found=1
-        write_eval \
-            "$(_ 'Found immodules cache for gtk ${1} at ${2}.')" \
-            "$(code_inline ${version})" \
-            "$(code_inline "${cache}")"
-        cache_content=$(cat "${cache}")
-        if fcitx_gtk=$(grep fcitx5 <<< "${cache_content}"); then
-            module_found=1
-            __need_blank_line=0
-            write_eval "$(_ 'Found ${1} im modules for gtk ${2}.')" \
-                       fcitx5 "$(code_inline ${version})"
-            write_quote_str "${fcitx_gtk}"
-            reg_gtk_query_output_gio "${version}" "${fcitx_gtk}" "${cache%/*}"
-        else
-            write_error_eval \
-                "$(_ 'Failed to find ${1} in immodule cache at ${2}')" \
-                fcitx5 "$(code_inline "${cache}")"
-        fi
-    done
-    ((cache_found)) || {
-        write_error_eval \
-            "$(_ 'Cannot find immodules cache for gtk ${1}')" \
-            "${version}"
-    }
-    ((module_found)) || {
-        write_error_eval \
-            "$(_ 'Cannot find ${1} im module for gtk ${2} in cache.')" \
-            fcitx5 "${version}"
-    }
-}
-
 check_gtk() {
     write_title 2 "Gtk:"
     _check_toolkit_env gtk GTK_IM_MODULE
+    run_im_module_probing fcitx5-gtk2-immodule-probing
+    run_im_module_probing fcitx5-gtk3-immodule-probing
+    run_im_module_probing fcitx5-gtk4-immodule-probing
     write_order_list "$(code_inline gtk-query-immodules):"
     increase_cur_level 1
     check_gtk_query_immodule 2
@@ -1563,7 +1546,6 @@ check_gtk() {
     increase_cur_level 1
     check_gtk_immodule_cache 2
     check_gtk_immodule_cache 3
-    check_gtk_immodule_cache_gio 4
     increase_cur_level -1
     write_order_list "$(_ 'Gtk IM module files:')"
     increase_cur_level 1
@@ -1801,6 +1783,7 @@ check_config_ui
 
 ((_check_frontend)) && {
     write_title 1 "$(_ 'Frontends setup:')"
+    write_paragraph "$(_ 'The environment variable checked by this script only shows the environment under current shell. It is still possible that you did not set the environment to the whole graphic desktop session. You may inspect the actual environment variable of a certain process by using `xargs -0 -L1 /proc/$PID/environ` for a certain process that you find not working.')"
     check_xim
     check_qt
     check_gtk

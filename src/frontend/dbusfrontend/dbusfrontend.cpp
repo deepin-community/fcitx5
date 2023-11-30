@@ -57,6 +57,15 @@ buildFormattedTextVector(const Text &text) {
     return vector;
 }
 
+std::string
+getArgument(const std::unordered_map<std::string, std::string> &args,
+            const std::string &name, const std::string &defaultValue = "") {
+    if (auto *value = findValue(args, name)) {
+        return *value;
+    }
+    return defaultValue;
+}
+
 } // namespace
 
 class InputMethod1 : public dbus::ObjectVTable<InputMethod1> {
@@ -91,8 +100,9 @@ class DBusInputContext1 : public InputContext,
                           public dbus::ObjectVTable<DBusInputContext1> {
 public:
     DBusInputContext1(int id, InputContextManager &icManager, InputMethod1 *im,
-                      const std::string &sender, const std::string &program)
-        : InputContext(icManager, program),
+                      const std::string &sender,
+                      const std::unordered_map<std::string, std::string> &args)
+        : InputContext(icManager, getArgument(args, "program")),
           path_("/org/freedesktop/portal/inputcontext/" + std::to_string(id)),
           im_(im), handler_(im_->serviceWatcher().watchService(
                        sender,
@@ -111,7 +121,26 @@ public:
                 }
                 return method(std::move(message));
             });
+
+        setClientControlVirtualkeyboardShow(
+            getArgument(args, "clientControlVirtualkeyboardShow", "false") ==
+            "true");
+        setClientControlVirtualkeyboardHide(
+            getArgument(args, "clientControlVirtualkeyboardHide", "false") ==
+            "true");
         created();
+
+        setFocusGroup(
+            im->instance()->defaultFocusGroup(getArgument(args, "display")));
+
+        vkVisibilityChanged_ = im_->instance()->watchEvent(
+            EventType::VirtualKeyboardVisibilityChanged,
+            EventWatcherPhase::PreInputMethod, [this](Event &) {
+                virtualKeyboardVisibilityChangedTo(
+                    name_, im_->instance()
+                               ->userInterfaceManager()
+                               .isVirtualKeyboardVisible());
+            });
     }
 
     ~DBusInputContext1() { InputContext::destroy(); }
@@ -358,6 +387,28 @@ public:
         invokeAction(event);
     }
 
+    bool isVirtualKeyboardVisibleDBus() const {
+        CHECK_SENDER_OR_RETURN false;
+
+        return isVirtualKeyboardVisible();
+    }
+
+    void showVirtualKeyboardDBus() {
+        CHECK_SENDER_OR_RETURN;
+
+        if (!hasFocus()) {
+            focusIn();
+        }
+
+        showVirtualKeyboard();
+    }
+
+    void hideVirtualKeyboardDBus() const {
+        CHECK_SENDER_OR_RETURN;
+
+        hideVirtualKeyboard();
+    }
+
     void setBlocked() {
         assert(!blocked_);
         blocked_ = true;
@@ -396,6 +447,13 @@ private:
     FCITX_OBJECT_VTABLE_METHOD(selectCandidate, "SelectCandidate", "i", "");
     FCITX_OBJECT_VTABLE_METHOD(invokeActionDBus, "InvokeAction", "ui", "");
 
+    FCITX_OBJECT_VTABLE_METHOD(isVirtualKeyboardVisibleDBus,
+                               "IsVirtualKeyboardVisible", "", "b");
+    FCITX_OBJECT_VTABLE_METHOD(showVirtualKeyboardDBus, "ShowVirtualKeyboard",
+                               "", "");
+    FCITX_OBJECT_VTABLE_METHOD(hideVirtualKeyboardDBus, "HideVirtualKeyboard",
+                               "", "");
+
     FCITX_OBJECT_VTABLE_SIGNAL(commitStringDBus, "CommitString", "s");
     FCITX_OBJECT_VTABLE_SIGNAL(currentIM, "CurrentIM", "sss");
     FCITX_OBJECT_VTABLE_SIGNAL(updateFormattedPreedit, "UpdateFormattedPreedit",
@@ -415,6 +473,9 @@ private:
     FCITX_OBJECT_VTABLE_SIGNAL(forwardKeyDBus, "ForwardKey", "uub");
     FCITX_OBJECT_VTABLE_SIGNAL(notifyFocusOut, "NotifyFocusOut", "");
 
+    FCITX_OBJECT_VTABLE_SIGNAL(virtualKeyboardVisibilityChanged,
+                               "VirtualKeyboardVisibilityChanged", "b");
+
     dbus::ObjectPath path_;
     InputMethod1 *im_;
     std::unique_ptr<HandlerTableEntry<dbus::ServiceWatcherCallback>> handler_;
@@ -423,6 +484,7 @@ private:
     std::optional<uint64_t> supportedCapability_;
     bool blocked_ = false;
     std::vector<DBusBlockedEvent> blockedEvents_;
+    std::unique_ptr<HandlerTableEntry<EventHandler>> vkVisibilityChanged_;
 };
 
 std::tuple<dbus::ObjectPath, std::vector<uint8_t>>
@@ -433,19 +495,11 @@ InputMethod1::createInputContext(
         const auto &[key, value] = p.data();
         strMap[key] = value;
     }
-    std::string program;
-    auto iter = strMap.find("program");
-    if (iter != strMap.end()) {
-        program = iter->second;
-    }
-
-    std::string *display = findValue(strMap, "display");
 
     auto sender = currentMessage()->sender();
     auto *ic = new DBusInputContext1(module_->nextIcIdx(),
                                      instance_->inputContextManager(), this,
-                                     sender, program);
-    ic->setFocusGroup(instance_->defaultFocusGroup(display ? *display : ""));
+                                     sender, strMap);
 
     bus_->addObjectVTable(ic->path().path(), FCITX_INPUTCONTEXT_DBUS_INTERFACE,
                           *ic);

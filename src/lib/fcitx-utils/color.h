@@ -8,6 +8,7 @@
 #ifndef _FCITX_UTILS_COLOR_H_
 #define _FCITX_UTILS_COLOR_H_
 
+#include <ostream>
 #include <string>
 #include <type_traits>
 #include <fcitx-utils/macros.h>
@@ -37,6 +38,7 @@ public:
     std::string toString() const;
 
     bool operator==(const Color &other) const;
+    bool operator!=(const Color &other) { return !operator==(other); }
 
     void setFromString(const char *s);
     inline void setFromString(const std::string &s) {
@@ -69,6 +71,9 @@ private:
     unsigned short blue_;
     unsigned short alpha_;
 };
+
+FCITXUTILS_EXPORT std::ostream &operator<<(std::ostream &os, const Color &c);
+
 } // namespace fcitx
 
 #endif // _FCITX_UTILS_COLOR_H_

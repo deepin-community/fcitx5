@@ -17,6 +17,7 @@
 #include "fcitx/focusgroup.h"
 #include "fcitx/inputcontext.h"
 #include "fcitx/instance.h"
+#include "fcitx/userinterface.h"
 
 FCITX_DEFINE_LOG_CATEGORY(xim, "xim")
 FCITX_DEFINE_LOG_CATEGORY(xim_key, "xim_key")
@@ -444,7 +445,7 @@ protected:
             }
             feedbackBuffer_.clear();
 
-            for (size_t i = 0, offset = 0; i < text.size(); i++) {
+            for (size_t i = 0; i < text.size(); i++) {
                 auto format = text.formatAt(i);
                 const auto &str = text.stringAt(i);
                 uint32_t feedback = 0;
@@ -457,7 +458,6 @@ protected:
                 unsigned int strLen = utf8::length(str);
                 for (size_t j = 0; j < strLen; j++) {
                     feedbackBuffer_.push_back(feedback);
-                    offset++;
                 }
             }
             feedbackBuffer_.push_back(0);
@@ -625,11 +625,12 @@ XIMModule::XIMModule(Instance *instance) : instance_(instance) {
         });
 
     updateRootStyleCallback_ = instance_->watchEvent(
-        EventType::InputContextUpdateUI, EventWatcherPhase::PreInputMethod,
+        EventType::InputContextFlushUI, EventWatcherPhase::PreInputMethod,
         [](Event &event) {
-            auto &uiEvent = static_cast<InputContextUpdateUIEvent &>(event);
+            auto &uiEvent = static_cast<InputContextFlushUIEvent &>(event);
             auto ic = uiEvent.inputContext();
-            if (ic->frontend() == std::string_view("xim")) {
+            if (uiEvent.component() == UserInterfaceComponent::InputPanel &&
+                ic->frontendName() == "xim") {
                 auto xic = static_cast<XIMInputContext *>(ic);
                 xic->maybeUpdateCursorLocationForRootStyle();
             }

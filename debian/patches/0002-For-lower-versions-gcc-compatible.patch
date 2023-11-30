@@ -1,18 +1,19 @@
+From 9e3cd7c967e8180e447603c2ac4102b36d9b3959 Mon Sep 17 00:00:00 2001
 From: chenshijie <chenshijie@uniontech.com>
-Date: Fri, 11 Mar 2022 10:36:33 +0800
-Subject: [PATCH] For lower versions gcc compatible
+Date: Thu, 30 Nov 2023 14:05:06 +0800
+Subject: [PATCH] 0002-For-lower-versions-gcc-compatible
 
-Change-Id: Idac70d8966c3321567866d829c69fd2e1e417b22
+update by xiangzelong <xiangzelong@deepin.org>
 ---
  src/frontend/ibusfrontend/ibusfrontend.cpp | 8 ++++++++
  test/testdbus.cpp                          | 4 ++++
  2 files changed, 12 insertions(+)
 
 diff --git a/src/frontend/ibusfrontend/ibusfrontend.cpp b/src/frontend/ibusfrontend/ibusfrontend.cpp
-index 27082d71..bb096db1 100644
+index b1a5dc0..902c89e 100644
 --- a/src/frontend/ibusfrontend/ibusfrontend.cpp
 +++ b/src/frontend/ibusfrontend/ibusfrontend.cpp
-@@ -581,14 +581,22 @@ private:
+@@ -571,14 +571,22 @@ private:
          ([]() -> dbus::DBusStruct<uint32_t, uint32_t> {
              return {0, 0};
          }),
@@ -36,7 +37,7 @@ index 27082d71..bb096db1 100644
          }),
          dbus::PropertyOption::Hidden);
 diff --git a/test/testdbus.cpp b/test/testdbus.cpp
-index 75441ff8..e30776ab 100644
+index c8eb05a..bb3fbbb 100644
 --- a/test/testdbus.cpp
 +++ b/test/testdbus.cpp
 @@ -67,7 +67,11 @@ private:
@@ -52,4 +53,4 @@ index 75441ff8..e30776ab 100644
  
  #define TEST_SERVICE "org.fcitx.Fcitx.TestDBus"
 -- 
-2.20.1
+2.33.1

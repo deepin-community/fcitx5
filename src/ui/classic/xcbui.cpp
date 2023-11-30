@@ -6,13 +6,17 @@
  */
 
 #include "xcbui.h"
+#include <cairo.h>
 #include <xcb/randr.h>
 #include <xcb/xcb_aux.h>
 #include <xcb/xinerama.h>
+#include <xcb/xproto.h>
 #include "fcitx-utils/endian_p.h"
+#include "fcitx-utils/misc.h"
 #include "fcitx-utils/stringutils.h"
 #include "xcbinputwindow.h"
 #include "xcbtraywindow.h"
+#include "xcbwindow.h"
 
 namespace fcitx::classicui {
 
@@ -100,13 +104,13 @@ XCBFontOption forcedDpi(xcb_connection_t *conn, xcb_screen_t *screen) {
     parse(resources, "Xft.rgba:\t", [&option](const std::string &value) {
         if (value == "none") {
             option.rgba = XCBRGBA::NoRGBA;
-        } else if (value == "hintnone") {
+        } else if (value == "rgb") {
             option.rgba = XCBRGBA::RGB;
-        } else if (value == "hintmedium") {
+        } else if (value == "bgr") {
             option.rgba = XCBRGBA::BGR;
-        } else if (value == "hintslight") {
+        } else if (value == "vrgb") {
             option.rgba = XCBRGBA::VRGB;
-        } else if (value == "hintslight") {
+        } else if (value == "vbgr") {
             option.rgba = XCBRGBA::VBGR;
         }
         // default
@@ -177,23 +181,24 @@ void XCBFontOption::setupPangoContext(PangoContext *context) const {
 
 XCBUI::XCBUI(ClassicUI *parent, const std::string &name, xcb_connection_t *conn,
              int defaultScreen)
-    : parent_(parent), name_(name), conn_(conn), defaultScreen_(defaultScreen) {
-    ewmh_ = parent_->xcb()->call<IXCBModule::ewmh>(name_);
+    : UIInterface("x11:" + name), parent_(parent), displayName_(name),
+      conn_(conn), defaultScreen_(defaultScreen) {
+    ewmh_ = parent_->xcb()->call<IXCBModule::ewmh>(displayName_);
     inputWindow_ = std::make_unique<XCBInputWindow>(this);
     trayWindow_ = std::make_unique<XCBTrayWindow>(this);
 
     compMgrAtomString_ = "_NET_WM_CM_S" + std::to_string(defaultScreen_);
     compMgrAtom_ = parent_->xcb()->call<IXCBModule::atom>(
-        name_, compMgrAtomString_, false);
+        displayName_, compMgrAtomString_, false);
 
     auto xsettingsSelectionString =
         "_XSETTINGS_S" + std::to_string(defaultScreen_);
     managerAtom_ =
-        parent_->xcb()->call<IXCBModule::atom>(name_, "MANAGER", false);
+        parent_->xcb()->call<IXCBModule::atom>(displayName_, "MANAGER", false);
     xsettingsSelectionAtom_ = parent_->xcb()->call<IXCBModule::atom>(
-        name_, xsettingsSelectionString, false);
+        displayName_, xsettingsSelectionString, false);
     xsettingsAtom_ = parent_->xcb()->call<IXCBModule::atom>(
-        name_, "_XSETTINGS_SETTINGS", false);
+        displayName_, "_XSETTINGS_SETTINGS", false);
 
     initScreenEvent_ = parent_->instance()->eventLoop().addTimeEvent(
         CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 10000, 0,
@@ -290,7 +295,11 @@ XCBUI::XCBUI(ClassicUI *parent, const std::string &name, xcb_connection_t *conn,
     refreshManager();
 }
 
-XCBUI::~XCBUI() {}
+XCBUI::~XCBUI() {
+    inputWindow_.reset();
+    trayWindow_.reset();
+    device_.reset();
+}
 
 void XCBUI::initScreen() {
     auto *screen = xcb_aux_get_screen(conn_, defaultScreen_);
@@ -701,7 +710,8 @@ int XCBUI::dpiByPosition(int x, int y) {
 }
 
 int XCBUI::scaledDPI(int dpi) {
-    if (!*parent_->config().perScreenDPI) {
+    if (!*parent_->config().perScreenDPI ||
+        parent_->xcb()->call<IXCBModule::isXWayland>(displayName_)) {
         // CLASSICUI_DEBUG() << "Use font option dpi: " << fontOption_.dpi;
         if (fontOption_.dpi > 0) {
             return fontOption_.dpi;
@@ -755,4 +765,56 @@ void XCBUI::scheduleUpdateScreen() {
     initScreenEvent_->setNextInterval(100000);
     initScreenEvent_->setOneShot();
 }
+
+bool XCBUI::grabPointer(XCBWindow *window) {
+    auto cookie = xcb_grab_pointer(
+        conn_, false, window->wid(),
+        (XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE |
+         XCB_EVENT_MASK_BUTTON_MOTION | XCB_EVENT_MASK_ENTER_WINDOW |
+         XCB_EVENT_MASK_LEAVE_WINDOW | XCB_EVENT_MASK_POINTER_MOTION),
+        XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC, XCB_WINDOW_NONE,
+        XCB_CURSOR_NONE, XCB_TIME_CURRENT_TIME);
+
+    auto reply = makeUniqueCPtr(xcb_grab_pointer_reply(conn_, cookie, nullptr));
+    if (reply && reply->status == XCB_GRAB_STATUS_SUCCESS) {
+        pointerGrabber_ = window;
+        return true;
+    }
+    return false;
+}
+
+void XCBUI::ungrabPointer() {
+    if (pointerGrabber_) {
+        xcb_ungrab_pointer(conn_, XCB_TIME_CURRENT_TIME);
+        pointerGrabber_ = nullptr;
+    }
+}
+
+void XCBUI::destroyCairoDevice(cairo_device_t *device) {
+    if (!device) {
+        return;
+    }
+    // Here's how cairo-xcb works.
+    // When a new xcb connection is seen, a internal shared xcb device is
+    // created and referenced by cairo itself. When device_finish is called,
+    // this internal shared reference is decreased, and will be destroyed when
+    // ref is 0. So while it looks like we reference and dereference which
+    // should does nothing, the cairo_device_finish will to the actual work to
+    // clean up the internal reference. See also:
+    // https://lists.cairographics.org/archives/cairo/2018-November/028791.html
+    // Such design is to allow xcb shared connection data to be kept even if
+    // there is no xcb surface. Though this API design really sucks, since there
+    // is no API to create a xcb device and pass it to cairo_xcb_surface_create.
+    // Instead, we have to get the device pointer from a xcb surface.
+    cairo_device_finish(device);
+    cairo_device_destroy(device);
+}
+
+void XCBUI::setCairoDevice(cairo_device_t *device) {
+    if (device_.get() != device) {
+        device_.reset();
+        device_.reset(cairo_device_reference(device));
+    }
+}
+
 } // namespace fcitx::classicui
