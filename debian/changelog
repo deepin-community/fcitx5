@@ -1,3 +1,9 @@
+fcitx5 (5.1.5-1deepin3) unstable; urgency=medium
+
+  * fix #7815
+
+ -- Mike Chen <chenke@deepin.org>  Fri, 12 Apr 2024 10:17:51 +0800
+
 fcitx5 (5.1.5-1deepin2) unstable; urgency=medium
 
   * Add deepin patchs.

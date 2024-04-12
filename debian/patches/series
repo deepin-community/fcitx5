@@ -1,3 +1,4 @@
 0001-fix-kde-config-fcitx5-package-name-in-fcitx5-configt.patch
 0002-For-lower-versions-gcc-compatible.patch
 0005-configtool-opens-dde-control-center-when-using-DDE.patch
+0006-Revert-disable-ctrl-shift-enumerate-key-by-default.patch
