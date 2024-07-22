@@ -1,3 +1,9 @@
+fcitx5 (5.1.5-1deepin4) unstable; urgency=medium
+
+  * Adjust the default input method list acquisition logic.
+
+ -- LiChengGang <lichenggang@uniontech.com>  Mon, 22 Jul 2024 08:21:43 +0800
+
 fcitx5 (5.1.5-1deepin3) unstable; urgency=medium
 
   * fix #7815

@@ -2,3 +2,4 @@
 0002-For-lower-versions-gcc-compatible.patch
 0005-configtool-opens-dde-control-center-when-using-DDE.patch
 0006-Revert-disable-ctrl-shift-enumerate-key-by-default.patch
+0001-feat-Adjust-the-default-input-method-list-acquisitio.patch
