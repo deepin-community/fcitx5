@@ -1,3 +1,10 @@
+fcitx5 (5.1.10-1deepin4) unstable; urgency=medium
+
+  * Use gcc 12.
+  * Set Sogo to the default zh_CN input method list.
+
+ -- xiangzelong <xiangzelong@deepin.org>  Thu, 15 Aug 2024 15:19:29 +0800
+
 fcitx5 (5.1.10-1) unstable; urgency=medium
 
   * New upstream release.
