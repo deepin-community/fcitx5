@@ -5,14 +5,12 @@
  *
  */
 #include "xcbmenu.h"
+#include <optional>
 #include <pango/pangocairo.h>
 #include <xcb/xcb.h>
 #include <xcb/xcb_aux.h>
-#include <xcb/xcb_keysyms.h>
-
-#include <optional>
-#include <utility>
 #include <xcb/xcb_icccm.h>
+#include <xcb/xcb_keysyms.h>
 #include "fcitx-utils/log.h"
 #include "fcitx/inputcontext.h"
 #include "fcitx/userinterfacemanager.h"
@@ -69,7 +67,6 @@ bool XCBMenu::filterEvent(xcb_generic_event_t *event) {
                 hideChilds();
                 hide();
                 hideParents();
-                xcb_flush(ui_->connection());
             }
             return true;
         }
@@ -164,13 +161,12 @@ void XCBMenu::handleButtonPress(int eventX, int eventY) {
         }
 
         auto id = actions[i]->id();
-        auto icRef = ic->watch();
         // Why we need to delay the event, because we
         // want to make ic has focus.
         activateTimer_ = ui_->parent()->instance()->eventLoop().addTimeEvent(
             CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 30000, 0,
-            [this, that = this->watch(), icRef, id](EventSourceTime *,
-                                                    uint64_t) {
+            [this, that = this->watch(), icRef = ic->watch(),
+             id](EventSourceTime *, uint64_t) {
                 if (!that.isValid()) {
                     return true;
                 }
@@ -236,7 +232,6 @@ void XCBMenu::hideAll() {
     hideParents();
     hide();
     hideChilds();
-    xcb_flush(ui_->connection());
 }
 
 bool XCBMenu::childHasMouse() const {
@@ -284,8 +279,6 @@ void XCBMenu::hideTillMenuHasMouseOrTopLevel() {
 void XCBMenu::hideTillMenuHasMouseOrTopLevelHelper() {
     if (parent_.isNull() || hasMouse_) {
         update();
-        setFocus();
-        xcb_flush(ui_->connection());
         return;
     }
     auto *parent = parent_.get();
@@ -320,7 +313,6 @@ void XCBMenu::setHoveredIndex(int idx) {
                     }
 
                     if (hoveredIndex_ >= 0) {
-                        setFocus();
                         // FCITX_INFO() << this << " in timer branch 1";
                         // The current subMenu anyway is not the hovered one.
                         hideChilds();
@@ -349,7 +341,6 @@ void XCBMenu::setHoveredIndex(int idx) {
                         hideTillMenuHasMouseOrTopLevel();
                     }
                     update();
-                    xcb_flush(ui_->connection());
                 } while (0);
                 pool_->setPopupMenuTimer(nullptr);
                 return true;
@@ -639,11 +630,6 @@ InputContext *XCBMenu::lastRelevantIc() {
     return ui_->parent()->instance()->mostRecentInputContext();
 }
 
-void XCBMenu::setFocus() {
-    xcb_set_input_focus(ui_->connection(), XCB_INPUT_FOCUS_PARENT, wid_,
-                        XCB_CURRENT_TIME);
-}
-
 void XCBMenu::show(Rect rect, ConstrainAdjustment adjustY) {
     // FCITX_INFO() << this << " show() " << hoveredIndex_;
     if (visible_) {
@@ -702,11 +688,9 @@ void XCBMenu::show(Rect rect, ConstrainAdjustment adjustY) {
                              &wc);
 
     xcb_map_window(ui_->connection(), wid_);
-    setFocus();
     if (parent_.isNull()) {
         ui_->grabPointer(this);
     }
-    xcb_flush(ui_->connection());
     x_ = x;
     y_ = y;
 }

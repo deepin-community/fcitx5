@@ -14,12 +14,10 @@
 #include "fcitx-utils/dbus/message_details.h"
 #include "fcitx-utils/misc_p.h"
 #include "fcitx-utils/standardpath.h"
-#include "fcitx-utils/utf8.h"
 #include "fcitx/event.h"
 #include "fcitx/inputcontext.h"
 #include "fcitx/inputcontextmanager.h"
 #include "fcitx/instance.h"
-#include "fcitx/userinterfacemanager.h"
 #include "common.h"
 #include "notificationitem_public.h"
 #include "plasmathemewatchdog.h"
@@ -40,15 +38,6 @@ namespace fcitx::classicui {
 FCITX_DEFINE_LOG_CATEGORY(classicui_logcategory, "classicui");
 
 using AccentColorDBusType = FCITX_STRING_TO_DBUS_TYPE("(ddd)");
-
-namespace {
-constexpr const char XDG_PORTAL_DESKTOP_SERVICE[] =
-    "org.freedesktop.portal.Desktop";
-constexpr const char XDG_PORTAL_DESKTOP_PATH[] =
-    "/org/freedesktop/portal/desktop";
-constexpr const char XDG_PORTAL_DESKTOP_SETTINGS_INTERFACE[] =
-    "org.freedesktop.portal.Settings";
-} // namespace
 
 ClassicUI::ClassicUI(Instance *instance) : instance_(instance) {
 
@@ -501,7 +490,7 @@ void ClassicUI::setSubConfig(const std::string &path,
 std::vector<unsigned char> ClassicUI::labelIcon(const std::string &label,
                                                 unsigned int size) {
     std::vector<unsigned char> data;
-    auto stride = cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, size);
+    size_t stride = cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, size);
     data.resize(stride * size);
     UniqueCPtr<cairo_surface_t, cairo_surface_destroy> image;
     image.reset(cairo_image_surface_create_for_data(

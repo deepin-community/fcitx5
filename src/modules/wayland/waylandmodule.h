@@ -8,14 +8,15 @@
 #define _FCITX_MODULES_WAYLAND_WAYLANDMODULE_H_
 
 #include <cstdint>
+#include <memory>
+#include <string>
+#include <wayland-client-protocol.h>
 #include "fcitx-config/iniparser.h"
 #include "fcitx-utils/event.h"
 #include "fcitx-utils/i18n.h"
 #include "fcitx-utils/log.h"
-#include "fcitx/addonfactory.h"
 #include "fcitx/addoninstance.h"
 #include "fcitx/addonmanager.h"
-#include "fcitx/focusgroup.h"
 #include "fcitx/instance.h"
 #include "display.h"
 #include "wayland_public.h"
@@ -48,28 +49,45 @@ public:
 
     auto &updateKeymap() { return updateKeymap_; }
 
+    const std::optional<std::tuple<int32_t, int32_t>> &repeatInfo() const {
+        return repeatInfo_;
+    }
+
 private:
     void init() {
         keyboard_->keymap().connect([this](uint32_t, int32_t fd, uint32_t) {
             close(fd);
             updateKeymap_();
         });
+        keyboard_->repeatInfo().connect([this](int32_t rate, int32_t delay) {
+            repeatInfo_ = std::make_tuple(rate, delay);
+        });
     }
     ScopedConnection capConn_;
     std::unique_ptr<wayland::WlKeyboard> keyboard_;
     Signal<void()> updateKeymap_;
+    std::optional<std::tuple<int32_t, int32_t>> repeatInfo_;
 };
 
 class WaylandConnection {
 public:
     WaylandConnection(WaylandModule *wayland, std::string name);
-    WaylandConnection(WaylandModule *wayland, std::string name, int fd);
+    WaylandConnection(WaylandModule *wayland, std::string name, int fd,
+                      std::string realName);
     ~WaylandConnection();
 
     const std::string &name() const { return name_; }
+    const std::string &realName() const {
+        return name_.empty() ? realName_ : name_;
+    }
     wayland::Display *display() const { return display_.get(); }
     FocusGroup *focusGroup() const { return group_.get(); }
     auto *parent() const { return parent_; }
+
+    bool isWaylandSocket() const { return isWaylandSocket_; }
+
+    std::optional<std::tuple<int32_t, int32_t>>
+    repeatInfo(wayland::WlSeat *seat) const;
 
 private:
     void init(wl_display *display);
@@ -78,14 +96,15 @@ private:
 
     WaylandModule *parent_;
     std::string name_;
+    std::string realName_;
     // order matters, callback in ioEvent_ uses display_.
     std::unique_ptr<wayland::Display> display_;
     std::unique_ptr<WaylandEventReader> eventReader_;
     std::unique_ptr<FocusGroup> group_;
-    int error_ = 0;
     ScopedConnection panelConn_, panelRemovedConn_;
     std::unordered_map<wayland::WlSeat *, std::unique_ptr<WaylandKeyboard>>
         keyboards_;
+    bool isWaylandSocket_ = false;
 };
 
 class WaylandModule : public AddonInstance {
@@ -95,6 +114,9 @@ public:
 
     bool openConnection(const std::string &name);
     bool openConnectionSocket(int fd);
+    bool openConnectionSocketWithName(int fd, const std::string &name,
+                                      const std::string &realName);
+    bool reopenConnectionSocket(const std::string &name, int fd);
     void removeConnection(const std::string &name);
 
     std::unique_ptr<HandlerTableEntry<WaylandConnectionCreated>>
@@ -112,9 +134,13 @@ public:
 
     void selfDiagnose();
 
+    std::optional<std::tuple<int32_t, int32_t>>
+    repeatInfo(const std::string &name, wl_seat *seat) const;
+
 private:
     void onConnectionCreated(WaylandConnection &conn);
     void onConnectionClosed(WaylandConnection &conn);
+    void refreshCanRestart();
     void reloadXkbOptionReal();
     void setLayoutToGNOME();
     void setLayoutToKDE5();
@@ -126,7 +152,7 @@ private:
     Instance *instance_;
     WaylandConfig config_;
     bool isWaylandSession_ = false;
-    std::unordered_map<std::string, WaylandConnection> conns_;
+    std::unordered_map<std::string, std::unique_ptr<WaylandConnection>> conns_;
     HandlerTable<WaylandConnectionCreated> createdCallbacks_;
     HandlerTable<WaylandConnectionClosed> closedCallbacks_;
     FCITX_ADDON_EXPORT_FUNCTION(WaylandModule, addConnectionCreatedCallback);
@@ -134,6 +160,8 @@ private:
     FCITX_ADDON_EXPORT_FUNCTION(WaylandModule, reloadXkbOption);
     FCITX_ADDON_EXPORT_FUNCTION(WaylandModule, openConnection);
     FCITX_ADDON_EXPORT_FUNCTION(WaylandModule, openConnectionSocket);
+    FCITX_ADDON_EXPORT_FUNCTION(WaylandModule, reopenConnectionSocket);
+    FCITX_ADDON_EXPORT_FUNCTION(WaylandModule, repeatInfo);
 
     std::vector<std::unique_ptr<HandlerTableEntry<EventHandler>>>
         eventHandlers_;
@@ -142,6 +170,10 @@ private:
 };
 
 FCITX_DECLARE_LOG_CATEGORY(wayland_log);
+
+#define FCITX_WAYLAND_INFO() FCITX_LOGC(::fcitx::wayland_log, Info)
+#define FCITX_WAYLAND_ERROR() FCITX_LOGC(::fcitx::wayland_log, Error)
+#define FCITX_WAYLAND_DEBUG() FCITX_LOGC(::fcitx::wayland_log, Debug)
 
 } // namespace fcitx
 

@@ -8,13 +8,11 @@
 #define _FCITX5_FRONTEND_WAYLANDIM_WAYLANDIMSERVER_H_
 
 #include <memory>
-#include <wayland-client.h>
-#include <xkbcommon/xkbcommon.h>
 #include "fcitx-utils/event.h"
-#include "fcitx/focusgroup.h"
-#include "fcitx/inputcontext.h"
-#include "fcitx/inputcontextmanager.h"
-#include "fcitx/instance.h"
+#include "fcitx-utils/key.h"
+#include "fcitx-utils/keysymgen.h"
+#include "fcitx-utils/macros.h"
+#include "fcitx-utils/signals.h"
 #include "virtualinputcontext.h"
 #include "waylandimserverbase.h"
 #include "wl_keyboard.h"
@@ -23,7 +21,6 @@
 
 namespace fcitx {
 class WaylandIMModule;
-class WaylandIMInputContextV1;
 
 class WaylandIMServer : public WaylandIMServerBase {
     friend class WaylandIMInputContextV1;
@@ -32,7 +29,7 @@ public:
     WaylandIMServer(wl_display *display, FocusGroup *group,
                     const std::string &name, WaylandIMModule *waylandim);
 
-    ~WaylandIMServer();
+    ~WaylandIMServer() override;
 
     InputContextManager &inputContextManager();
 
@@ -41,6 +38,7 @@ public:
     void deactivate(wayland::ZwpInputMethodContextV1 *id);
     Instance *instance();
     FocusGroup *group() { return group_; }
+    bool hasKeyboardGrab() const;
 
 private:
     std::shared_ptr<wayland::ZwpInputMethodV1> inputMethodV1_;
@@ -68,38 +66,49 @@ class WaylandIMInputContextV1 : public VirtualInputContextGlue {
 public:
     WaylandIMInputContextV1(InputContextManager &inputContextManager,
                             WaylandIMServer *server);
-    ~WaylandIMInputContextV1();
+    ~WaylandIMInputContextV1() override;
 
     const char *frontend() const override { return "wayland"; }
 
-    void activate(wayland::ZwpInputMethodContextV1 *id);
-    void deactivate(wayland::ZwpInputMethodContextV1 *id);
+    void activate(wayland::ZwpInputMethodContextV1 *ic);
+    void deactivate(wayland::ZwpInputMethodContextV1 *ic);
+    bool hasKeyboardGrab() const { return keyboard_.get(); }
 
 protected:
-    void commitStringDelegate(InputContext *,
+    void commitStringDelegate(const InputContext *ic,
                               const std::string &text) const override {
+        FCITX_UNUSED(ic);
         if (!ic_) {
             return;
         }
         ic_->commitString(serial_, text.c_str());
-        server_->deferredFlush();
     }
     void deleteSurroundingTextDelegate(InputContext *ic, int offset,
                                        unsigned int size) const override;
-    void forwardKeyDelegate(InputContext *,
+    void forwardKeyDelegate(InputContext *ic,
                             const ForwardKeyEvent &key) const override {
+        FCITX_UNUSED(ic);
         if (!ic_) {
             return;
         }
-        sendKey(time_, key.rawKey().sym(),
-                key.isRelease() ? WL_KEYBOARD_KEY_STATE_RELEASED
-                                : WL_KEYBOARD_KEY_STATE_PRESSED,
-                key.rawKey().states());
-        if (!key.isRelease()) {
-            sendKey(time_, key.rawKey().sym(), WL_KEYBOARD_KEY_STATE_RELEASED,
+        if (key.rawKey().code() && key.rawKey().states() == KeyState::NoState) {
+            sendKeyToVK(time_, key.rawKey(),
+                        key.isRelease() ? WL_KEYBOARD_KEY_STATE_RELEASED
+                                        : WL_KEYBOARD_KEY_STATE_PRESSED);
+            if (!key.isRelease()) {
+                sendKeyToVK(time_, key.rawKey(),
+                            WL_KEYBOARD_KEY_STATE_RELEASED);
+            }
+        } else {
+            sendKey(time_, key.rawKey().sym(),
+                    key.isRelease() ? WL_KEYBOARD_KEY_STATE_RELEASED
+                                    : WL_KEYBOARD_KEY_STATE_PRESSED,
                     key.rawKey().states());
+            if (!key.isRelease()) {
+                sendKey(time_, key.rawKey().sym(),
+                        WL_KEYBOARD_KEY_STATE_RELEASED, key.rawKey().states());
+            }
         }
-        server_->deferredFlush();
     }
 
     void updatePreeditDelegate(InputContext *ic) const override;
@@ -124,7 +133,7 @@ private:
 
     void sendKey(uint32_t time, uint32_t sym, uint32_t state,
                  KeyStates states) const;
-    void sendKeyToVK(uint32_t time, uint32_t key, uint32_t state);
+    void sendKeyToVK(uint32_t time, const Key &key, uint32_t state) const;
 
     static uint32_t toModifiers(KeyStates states) {
         uint32_t modifiers = 0;
@@ -144,6 +153,9 @@ private:
         return modifiers;
     }
 
+    int32_t repeatRate() const;
+    int32_t repeatDelay() const;
+
     WaylandIMServer *server_;
     std::unique_ptr<wayland::ZwpInputMethodContextV1> ic_;
     std::unique_ptr<wayland::WlKeyboard> keyboard_;
@@ -156,7 +168,7 @@ private:
     uint32_t repeatTime_ = 0;
     KeySym repeatSym_ = FcitxKey_None;
 
-    int32_t repeatRate_ = 40, repeatDelay_ = 400;
+    std::optional<std::tuple<int32_t, int32_t>> repeatInfo_;
 };
 
 } // namespace fcitx

@@ -6,7 +6,6 @@
  */
 
 #include "xcbinputwindow.h"
-#include <pango/pangocairo.h>
 #include <xcb/xcb_aux.h>
 #include <xcb/xcb_icccm.h>
 #include "fcitx-utils/rect.h"
@@ -76,7 +75,7 @@ void XCBInputWindow::updatePosition(InputContext *inputContext) {
     }
 
     if (closestScreen) {
-        int newX, newY;
+        int newX;
 
         if (x < closestScreen->left()) {
             newX = closestScreen->left();
@@ -84,23 +83,32 @@ void XCBInputWindow::updatePosition(InputContext *inputContext) {
             newX = x;
         }
 
+        if ((newX + static_cast<int>(actualWidth)) > closestScreen->right()) {
+            newX = closestScreen->right() - actualWidth;
+        }
+
+        int newY;
         if (y < closestScreen->top()) {
             newY = closestScreen->top();
         } else {
             newY = y + (h ? h : (10 * ((dpi_ < 0 ? 96.0 : dpi_) / 96.0)));
         }
 
-        if ((newX + static_cast<int>(actualWidth)) > closestScreen->right()) {
-            newX = closestScreen->right() - actualWidth;
-        }
-
+        // Try flip y.
         if ((newY + static_cast<int>(actualHeight)) > closestScreen->bottom()) {
             if (newY > closestScreen->bottom()) {
                 newY = closestScreen->bottom() - actualHeight - 40;
             } else { /* better position the window */
                 newY = newY - actualHeight - ((h == 0) ? 40 : h);
             }
+
+            // If after flip, top is out of the screen, we still prefer the top
+            // edge to be always with in screen.
+            if (newY < closestScreen->top()) {
+                newY = closestScreen->top();
+            }
         }
+
         x = newX;
         y = newY;
     }
@@ -117,7 +125,6 @@ void XCBInputWindow::updatePosition(InputContext *inputContext) {
                              XCB_CONFIG_WINDOW_STACK_MODE |
                                  XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y,
                              &wc);
-    xcb_flush(ui_->connection());
 }
 
 void XCBInputWindow::updateDPI(InputContext *inputContext) {
@@ -139,7 +146,6 @@ void XCBInputWindow::update(InputContext *inputContext) {
     if (!visible()) {
         if (oldVisible) {
             xcb_unmap_window(ui_->connection(), wid_);
-            xcb_flush(ui_->connection());
         }
         return;
     }
@@ -185,7 +191,6 @@ void XCBInputWindow::update(InputContext *inputContext) {
     updatePosition(inputContext);
     if (!oldVisible) {
         xcb_map_window(ui_->connection(), wid_);
-        xcb_flush(ui_->connection());
     }
     paint(c, width, height, /*scale=*/1.0);
     cairo_destroy(c);

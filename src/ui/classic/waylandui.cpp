@@ -7,24 +7,17 @@
 
 #include "waylandui.h"
 #include <algorithm>
-#include "fcitx-utils/charutils.h"
-#include "fcitx-utils/stringutils.h"
-#include "config.h"
 #include "display.h"
-#include "org_kde_kwin_blur.h"
 #include "org_kde_kwin_blur_manager.h"
+#include "waylandcursortheme.h"
 #include "waylandinputwindow.h"
 #include "waylandshmwindow.h"
 #include "wl_compositor.h"
 #include "wl_seat.h"
-#include "wl_shell.h"
 #include "wl_shm.h"
 #include "wp_fractional_scale_manager_v1.h"
-#include "wp_fractional_scale_v1.h"
-#include "wp_viewport.h"
 #include "wp_viewporter.h"
 #include "zwp_input_panel_v1.h"
-#include "zwp_input_popup_surface_v2.h"
 
 namespace fcitx::classicui {
 
@@ -52,7 +45,8 @@ WaylandUI::WaylandUI(ClassicUI *parent, const std::string &name,
             } else if (name == wayland::WlSeat::interface) {
                 auto seat = display_->getGlobal<wayland::WlSeat>();
                 if (seat) {
-                    pointer_ = std::make_unique<WaylandPointer>(seat.get());
+                    pointer_ =
+                        std::make_unique<WaylandPointer>(this, seat.get());
                 }
             } else if (name == wayland::OrgKdeKwinBlurManager::interface) {
                 if (inputWindow_) {
@@ -85,9 +79,8 @@ WaylandUI::WaylandUI(ClassicUI *parent, const std::string &name,
         });
     auto seat = display_->getGlobal<wayland::WlSeat>();
     if (seat) {
-        pointer_ = std::make_unique<WaylandPointer>(seat.get());
+        pointer_ = std::make_unique<WaylandPointer>(this, seat.get());
     }
-    display_->flush();
     setupInputWindow();
 }
 
@@ -127,6 +120,8 @@ void WaylandUI::setupInputWindow() {
     if (!display_->getGlobal<wayland::WlCompositor>()) {
         return;
     }
+
+    cursorTheme_ = std::make_unique<WaylandCursorTheme>(this);
     inputWindow_ = std::make_unique<WaylandInputWindow>(this);
     inputWindow_->initPanel();
     inputWindow_->setBlurManager(

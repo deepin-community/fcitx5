@@ -7,6 +7,7 @@
 #ifndef _FCITX_UTILS_ENDIAN_P_H_
 #define _FCITX_UTILS_ENDIAN_P_H_
 
+#include <cstdint>
 #if defined(__linux__) || defined(__GLIBC__)
 #include <endian.h>
 #elif defined(__APPLE__)
@@ -33,7 +34,7 @@
 #endif
 
 enum { BYTE_ORDER_MSB_FIRST = 1, BYTE_ORDER_LSB_FIRST = 0 };
-inline uint8_t hostByteOrder() {
+inline char hostByteOrder() {
     const uint16_t endian = 1;
     uint8_t byteOrder = 0;
     if (*reinterpret_cast<const char *>(&endian)) {

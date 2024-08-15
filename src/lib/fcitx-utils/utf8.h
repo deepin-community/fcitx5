@@ -12,14 +12,15 @@
 /// \file
 /// \brief C++ Utility functions for handling utf8 strings.
 
+#include <iterator>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <fcitx-utils/cutf8.h>
 #include <fcitx-utils/misc.h>
 #include "fcitxutils_export.h"
 
-namespace fcitx {
-namespace utf8 {
+namespace fcitx::utf8 {
 
 /// \brief Return the number UTF-8 characters in the string iterator range.
 /// \see lengthValidated()
@@ -119,10 +120,9 @@ inline Iter getNextChar(Iter iter, Iter end, uint32_t *chr) {
 /// This function has no error check on invalid string or end of string. Check
 /// the string before use it.
 template <typename Iter>
-inline int ncharByteLength(Iter iter, size_t n) {
+inline ssize_t ncharByteLength(Iter iter, size_t n) {
     const char *c = &(*iter);
-    int diff = fcitx_utf8_get_nth_char(c, n) - c;
-    return diff;
+    return fcitx_utf8_get_nth_char(c, n) - c;
 }
 
 /// \brief Move iter over next n character.
@@ -159,11 +159,11 @@ uint32_t getLastChar(const T &str) {
 template <typename Iter>
 class UTF8CharIterator {
 public:
-    typedef std::input_iterator_tag iterator_category;
-    typedef uint32_t value_type;
-    typedef std::ptrdiff_t difference_type;
-    typedef const value_type &reference;
-    typedef const value_type *pointer;
+    using iterator_category = std::input_iterator_tag;
+    using value_type = uint32_t;
+    using difference_type = std::ptrdiff_t;
+    using reference = const value_type &;
+    using pointer = const value_type *;
 
     UTF8CharIterator(Iter iter, Iter end) : iter_(iter), end_(end) { update(); }
     FCITX_INLINE_DEFINE_DEFAULT_DTOR_AND_COPY(UTF8CharIterator)
@@ -223,7 +223,76 @@ auto MakeUTF8CharRange(const T &str) {
     return MakeIterRange(MakeUTF8CharIterator(std::begin(str), std::end(str)),
                          MakeUTF8CharIterator(std::end(str), std::end(str)));
 }
-} // namespace utf8
-} // namespace fcitx
+
+template <typename Iter>
+class UTF8StringViewIter {
+public:
+    using iterator_category = std::input_iterator_tag;
+    using value_type = std::string_view;
+    using difference_type = std::ptrdiff_t;
+    using reference = const value_type &;
+    using pointer = const value_type *;
+
+    UTF8StringViewIter(Iter iter, Iter end) : iter_(iter), end_(end) {
+        update();
+    }
+    FCITX_INLINE_DEFINE_DEFAULT_DTOR_AND_COPY(UTF8StringViewIter)
+
+    reference operator*() const { return currentView_; }
+
+    pointer operator->() const { return &currentView_; }
+
+    size_t charLength() const { return currentView_.size(); }
+
+    uint32_t chr() const { return currentChar_; }
+
+    UTF8StringViewIter &operator++() {
+        iter_ = next_;
+        update();
+        return *this;
+    }
+
+    UTF8StringViewIter operator++(int) {
+        auto old = *this;
+        ++(*this);
+        return old;
+    }
+
+    bool operator==(const UTF8StringViewIter &other) {
+        return iter_ == other.iter_;
+    }
+    bool operator!=(const UTF8StringViewIter &other) {
+        return !operator==(other);
+    }
+
+private:
+    void update() {
+        next_ = getNextChar(iter_, end_, &currentChar_);
+        if (iter_ != end_ && iter_ == next_) {
+            throw std::runtime_error("Invalid UTF8 character.");
+        }
+        currentView_ = std::string_view(&*iter_, std::distance(iter_, next_));
+    }
+
+    std::string_view currentView_;
+    uint32_t currentChar_ = 0;
+    Iter iter_;
+    Iter next_;
+    Iter end_;
+};
+
+template <typename Iter>
+auto MakeUTF8StringViewIterator(Iter iter, Iter end) {
+    return UTF8StringViewIter<Iter>(iter, end);
+}
+
+template <typename T>
+auto MakeUTF8StringViewRange(const T &str) {
+    return MakeIterRange(
+        MakeUTF8StringViewIterator(std::begin(str), std::end(str)),
+        MakeUTF8StringViewIterator(std::end(str), std::end(str)));
+}
+
+} // namespace fcitx::utf8
 
 #endif // _FCITX_UTILS_UTF8_H_

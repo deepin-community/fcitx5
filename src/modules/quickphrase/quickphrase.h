@@ -7,16 +7,12 @@
 #ifndef _FCITX_MODULES_QUICKPHRASE_QUICKPHRASE_H_
 #define _FCITX_MODULES_QUICKPHRASE_QUICKPHRASE_H_
 
-#include <map>
 #include "fcitx-config/configuration.h"
 #include "fcitx-config/enum.h"
 #include "fcitx-config/iniparser.h"
 #include "fcitx-utils/i18n.h"
 #include "fcitx-utils/key.h"
-#include "fcitx-utils/standardpath.h"
-#include "fcitx/addonfactory.h"
 #include "fcitx/addoninstance.h"
-#include "fcitx/addonmanager.h"
 #include "fcitx/inputcontextproperty.h"
 #include "fcitx/instance.h"
 #include "quickphrase_public.h"
@@ -62,7 +58,7 @@ public:
         safeSaveAsIni(config_, "conf/quickphrase.conf");
     }
     void setSubConfig(const std::string &path,
-                      const fcitx::RawConfig &) override {
+                      const fcitx::RawConfig & /*unused*/) override {
         if (path == "editor") {
             reloadConfig();
         }

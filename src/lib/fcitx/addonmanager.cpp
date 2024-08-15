@@ -7,16 +7,29 @@
 
 #include "addonmanager.h"
 #include <fcntl.h>
-#include <unistd.h>
+#include <cstdint>
+#include <memory>
+#include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
+#include <vector>
 #include "fcitx-config/iniparser.h"
+#include "fcitx-config/rawconfig.h"
 #include "fcitx-utils/log.h"
+#include "fcitx-utils/macros.h"
+#include "fcitx-utils/misc_p.h"
+#include "fcitx-utils/semver.h"
+#include "fcitx-utils/standardpath.h"
+#include "fcitx-utils/unixfd.h"
+#include "addoninfo.h"
+#include "addoninstance.h"
 #include "addoninstance_p.h"
 #include "addonloader.h"
 #include "addonloader_p.h"
+#include "config.h"
 #include "instance.h"
-#include "misc_p.h"
 
 namespace fcitx {
 
@@ -60,7 +73,7 @@ enum class DependencyCheckStatus {
 
 class AddonManagerPrivate {
 public:
-    AddonManagerPrivate() : instance_(nullptr) {}
+    AddonManagerPrivate() {}
 
     Addon *addon(const std::string &name) const {
         auto iter = addons_.find(name);
@@ -76,9 +89,8 @@ public:
             if (dependency == "core") {
                 if (depVersion <= version_) {
                     continue;
-                } else {
-                    return DependencyCheckStatus::Failed;
                 }
+                return DependencyCheckStatus::Failed;
             }
             Addon *dep = addon(dependency);
             if (!dep || !dep->isLoadable()) {
@@ -210,6 +222,8 @@ public:
     int64_t timestamp_ = 0;
     const SemanticVersion version_ =
         SemanticVersion::parse(FCITX_VERSION_STRING).value();
+
+    std::unordered_map<std::string, std::vector<std::string>> options_;
 };
 
 AddonManager::AddonManager() : d_ptr(std::make_unique<AddonManagerPrivate>()) {}
@@ -248,29 +262,24 @@ void AddonManager::load(const std::unordered_set<std::string> &enabled,
     const auto &path = StandardPath::global();
     d->timestamp_ =
         path.timestamp(StandardPath::Type::PkgData, d->addonConfigDir_);
-    auto fileMap =
-        path.multiOpenAll(StandardPath::Type::PkgData, d->addonConfigDir_,
-                          O_RDONLY, filter::Suffix(".conf"));
+    auto fileNames = path.locate(StandardPath::Type::PkgData,
+                                 d->addonConfigDir_, filter::Suffix(".conf"));
     bool enableAll = enabled.count("all");
     bool disableAll = disabled.count("all");
-    for (const auto &file : fileMap) {
+    for (const auto &[fileName, fullName] : fileNames) {
         // remove .conf
-        auto name = file.first.substr(0, file.first.size() - 5);
+        std::string name = fileName.substr(0, fileName.size() - 5);
         if (name == "core") {
             FCITX_ERROR() << "\"core\" is not a valid addon name.";
+            continue;
         }
         if (d->addons_.count(name)) {
             continue;
         }
 
-        const auto &files = file.second;
         RawConfig config;
-        // reverse the order, so we end up parse user file at last.
-        for (auto iter = files.rbegin(), end = files.rend(); iter != end;
-             iter++) {
-            auto fd = iter->fd();
-            readFromIni(config, fd);
-        }
+        UnixFD fd = UnixFD::own(open(fullName.c_str(), O_RDONLY));
+        readFromIni(config, fd.fd());
 
         // override configuration
         auto addon = std::make_unique<Addon>(name, config);
@@ -341,6 +350,17 @@ const AddonInfo *AddonManager::addonInfo(const std::string &name) const {
     return nullptr;
 }
 
+AddonInstance *AddonManager::lookupAddon(const std::string &name) const {
+    FCITX_D();
+    auto *addon = d->addon(name);
+    return addon ? addon->instance() : nullptr;
+}
+
+const std::vector<std::string> &AddonManager::loadedAddonNames() const {
+    FCITX_D();
+    return d->loadOrder_;
+}
+
 std::unordered_set<std::string>
 AddonManager::addonNames(AddonCategory category) {
     FCITX_D();
@@ -385,6 +405,20 @@ bool AddonManager::checkUpdate() const {
     auto timestamp = StandardPath::global().timestamp(
         StandardPath::Type::PkgData, d->addonConfigDir_);
     return timestamp > d->timestamp_;
+}
+
+void AddonManager::setAddonOptions(
+    std::unordered_map<std::string, std::vector<std::string>> options) {
+    FCITX_D();
+    d->options_ = std::move(options);
+}
+
+std::vector<std::string> AddonManager::addonOptions(const std::string &name) {
+    FCITX_D();
+    if (auto *options = findValue(d->options_, name)) {
+        return *options;
+    }
+    return {};
 }
 
 } // namespace fcitx

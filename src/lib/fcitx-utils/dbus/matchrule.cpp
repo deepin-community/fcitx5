@@ -22,10 +22,11 @@ public:
                      std::string destination, std::string path,
                      std::string interface, std::string name,
                      std::vector<std::string> argumentMatch, bool eavesdrop)
-        : type_(type), service_(std::move(service)), destination_(destination),
-          path_(std::move(path)), interface_(std::move(interface)),
-          name_(std::move(name)), argumentMatch_(std::move(argumentMatch)),
-          eavesdrop_(eavesdrop), rule_(buildRule()) {}
+        : type_(type), service_(std::move(service)),
+          destination_(std::move(destination)), path_(std::move(path)),
+          interface_(std::move(interface)), name_(std::move(name)),
+          argumentMatch_(std::move(argumentMatch)), eavesdrop_(eavesdrop),
+          rule_(buildRule()) {}
 
     FCITX_INLINE_DEFINE_DEFAULT_DTOR_COPY_AND_MOVE_WITHOUT_SPEC(
         MatchRulePrivate)
@@ -133,8 +134,9 @@ public:
 MatchRule::MatchRule(std::string service, std::string path,
                      std::string interface, std::string name,
                      std::vector<std::string> argumentMatch)
-    : MatchRule(MessageType::Signal, service, "", path, interface, name,
-                argumentMatch, false) {}
+    : MatchRule(MessageType::Signal, std::move(service), "", std::move(path),
+                std::move(interface), std::move(name), std::move(argumentMatch),
+                false) {}
 
 MatchRule::MatchRule(MessageType type, std::string service,
                      std::string destination, std::string path,

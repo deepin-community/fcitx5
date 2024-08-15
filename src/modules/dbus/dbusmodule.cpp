@@ -8,7 +8,6 @@
 #include "config.h"
 
 #include <pwd.h>
-#include <sys/types.h>
 #include <fstream>
 #include <set>
 #include <sstream>
@@ -554,7 +553,16 @@ public:
     void openX11Connection(const std::string &name) {
 #ifdef ENABLE_X11
         if (auto *xcb = module_->xcb()) {
-            xcb->call<IXCBModule::openConnection>(name);
+            if (xcb->call<IXCBModule::exists>(name)) {
+                throw dbus::MethodCallError(
+                    "org.freedesktop.DBus.Error.InvalidArgs",
+                    "X11 connection already exists.");
+            }
+            if (!xcb->call<IXCBModule::openConnectionChecked>(name)) {
+                throw dbus::MethodCallError(
+                    "org.freedesktop.DBus.Error.InvalidArgs",
+                    "Failed to create X11 connection.");
+            }
             return;
         }
 #else
@@ -586,6 +594,24 @@ public:
         if (auto *wayland = module_->wayland()) {
             if (!wayland->call<IWaylandModule::openConnectionSocket>(
                     fd.release())) {
+                throw dbus::MethodCallError(
+                    "org.freedesktop.DBus.Error.InvalidArgs",
+                    "Failed to create wayland connection.");
+            }
+            return;
+        }
+#else
+        FCITX_UNUSED(fd);
+#endif
+        throw dbus::MethodCallError("org.freedesktop.DBus.Error.InvalidArgs",
+                                    "Wayland addon is not available.");
+    }
+
+    void reopenWaylandConnectionSocket(const std::string &name, UnixFD &fd) {
+#ifdef WAYLAND_FOUND
+        if (auto *wayland = module_->wayland()) {
+            if (!wayland->call<IWaylandModule::reopenConnectionSocket>(
+                    name, fd.release())) {
                 throw dbus::MethodCallError(
                     "org.freedesktop.DBus.Error.InvalidArgs",
                     "Failed to create wayland connection.");
@@ -649,7 +675,11 @@ public:
 
     bool checkUpdate() { return instance_->checkUpdate(); }
 
+    bool canRestart() { return instance_->canRestart(); }
+
     void save() { return instance_->save(); }
+
+    void setLogRule(const std::string &rule) { Log::setLogRule(rule); }
 
 private:
     DBusModule *module_;
@@ -712,10 +742,14 @@ private:
                                "s", "");
     FCITX_OBJECT_VTABLE_METHOD(openWaylandConnectionSocket,
                                "OpenWaylandConnectionSocket", "h", "");
+    FCITX_OBJECT_VTABLE_METHOD(reopenWaylandConnectionSocket,
+                               "ReopenWaylandConnectionSocket", "sh", "");
     FCITX_OBJECT_VTABLE_METHOD(debugInfo, "DebugInfo", "", "s");
     FCITX_OBJECT_VTABLE_METHOD(refresh, "Refresh", "", "");
     FCITX_OBJECT_VTABLE_METHOD(checkUpdate, "CheckUpdate", "", "b");
     FCITX_OBJECT_VTABLE_METHOD(save, "Save", "", "");
+    FCITX_OBJECT_VTABLE_METHOD(setLogRule, "SetLogRule", "s", "");
+    FCITX_OBJECT_VTABLE_METHOD(canRestart, "CanRestart", "", "b");
 };
 
 DBusModule::DBusModule(Instance *instance)
@@ -723,7 +757,9 @@ DBusModule::DBusModule(Instance *instance)
       serviceWatcher_(std::make_unique<dbus::ServiceWatcher>(*bus_)) {
     bus_->attachEventLoop(&instance->eventLoop());
     auto uniqueName = bus_->uniqueName();
-    Flags<RequestNameFlag> requestFlag = RequestNameFlag::AllowReplacement;
+    Flags<RequestNameFlag> requestFlag = instance->canRestart()
+                                             ? RequestNameFlag::AllowReplacement
+                                             : RequestNameFlag::None;
     if (instance_->willTryReplace()) {
         requestFlag |= RequestNameFlag::ReplaceExisting;
     }
@@ -748,9 +784,11 @@ DBusModule::DBusModule(Instance *instance)
         });
 
     selfWatcher_ = serviceWatcher_->watchService(
-        FCITX_DBUS_SERVICE,
-        [uniqueName, instance](const std::string &, const std::string &,
-                               const std::string &newName) {
+        FCITX_DBUS_SERVICE, [uniqueName, instance](const std::string &service,
+                                                   const std::string &oldName,
+                                                   const std::string &newName) {
+            FCITX_INFO() << "Service name change: " << service << " " << oldName
+                         << " " << newName;
             if (newName != uniqueName) {
                 instance->exit();
             }

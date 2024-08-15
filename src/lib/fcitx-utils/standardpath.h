@@ -19,12 +19,14 @@
 /// \endcode
 /// Open all files under $XDG_CONFIG_{HOME,DIRS}/fcitx5/inputmethod/*.conf.
 
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
-#include <fcitx-utils/flags.h>
+#include <fcitx-utils/log.h>
 #include <fcitx-utils/macros.h>
 #include <fcitx-utils/stringutils.h>
 #include <fcitx-utils/unixfd.h>
@@ -41,17 +43,19 @@ class Chainer;
 template <>
 class Chainer<> {
 public:
-    bool operator()(const std::string &, const std::string &, bool) {
+    bool operator()(const std::string & /*unused*/,
+                    const std::string & /*unused*/, bool /*unused*/) {
         return true;
     }
 };
 
 template <typename First, typename... Rest>
 class Chainer<First, Rest...> : Chainer<Rest...> {
-    typedef Chainer<Rest...> super_class;
+    using super_class = Chainer<Rest...>;
 
 public:
-    Chainer(First first, Rest... rest) : super_class(rest...), filter(first) {}
+    Chainer(First first, Rest... rest)
+        : super_class(std::move(rest)...), filter(std::move(first)) {}
 
     bool operator()(const std::string &path, const std::string &dir,
                     bool user) {
@@ -86,7 +90,8 @@ NotFilter<T> Not(T t) {
 
 /// \brief Filter class that filters based on user file.
 struct FCITXUTILS_EXPORT User {
-    bool operator()(const std::string &, const std::string &, bool isUser) {
+    bool operator()(const std::string & /*unused*/,
+                    const std::string & /*unused*/, bool isUser) {
         return isUser;
     }
 };
@@ -95,7 +100,8 @@ struct FCITXUTILS_EXPORT User {
 struct FCITXUTILS_EXPORT Prefix {
     Prefix(const std::string &prefix_) : prefix(prefix_) {}
 
-    bool operator()(const std::string &path, const std::string &, bool) const {
+    bool operator()(const std::string &path, const std::string & /*unused*/,
+                    bool /*unused*/) const {
         return stringutils::startsWith(path, prefix);
     }
 
@@ -106,7 +112,8 @@ struct FCITXUTILS_EXPORT Prefix {
 struct FCITXUTILS_EXPORT Suffix {
     Suffix(const std::string &suffix_) : suffix(suffix_) {}
 
-    bool operator()(const std::string &path, const std::string &, bool) const {
+    bool operator()(const std::string &path, const std::string & /*unused*/,
+                    bool /*unused*/) const {
         return stringutils::endsWith(path, suffix);
     }
 
@@ -165,9 +172,9 @@ private:
 
 class StandardPathPrivate;
 
-typedef std::map<std::string, StandardPathFile> StandardPathFileMap;
-typedef std::map<std::string, std::vector<StandardPathFile>>
-    StandardPathFilesMap;
+using StandardPathFileMap = std::map<std::string, StandardPathFile>;
+using StandardPathFilesMap =
+    std::map<std::string, std::vector<StandardPathFile>>;
 
 /// \brief Utility class to open, locate, list files based on XDG standard.
 class FCITXUTILS_EXPORT StandardPath {
@@ -189,6 +196,20 @@ public:
         /// Xdg data dir/fcitx5
         PkgData
     };
+
+    /**
+     * Allow to construct a StandardPath with customized internal value.
+     *
+     * @param packageName the sub directory under other paths.
+     * @param builtInPath this will override the value from fcitxPath.
+     * @param skipBuiltInPath skip built-in path
+     * @param skipUserPath skip user path, useful when doing readonly-test.
+     * @since 5.1.9
+     */
+    StandardPath(
+        const std::string &packageName,
+        const std::unordered_map<std::string, std::string> &builtInPath,
+        bool skipBuiltInPath, bool skipUserPath);
 
     StandardPath(bool skipFcitxPath, bool skipUserPath);
     StandardPath(bool skipFcitxPath = false);
@@ -283,9 +304,41 @@ public:
     bool safeSave(Type type, const std::string &pathOrig,
                   const std::function<bool(int)> &callback) const;
 
+    /**
+     * \brief Locate all files match the filter under first [directory]/[path].
+     *
+     * Prefer this function over multiOpenFilter, if there could be too many
+     * files that exceeds the systems file descriptor limit.
+     * @since 5.1.10
+     * @see multiOpenFilter
+     */
+    std::map<std::string, std::string>
+    locateWithFilter(Type type, const std::string &path,
+                     std::function<bool(const std::string &path,
+                                        const std::string &dir, bool user)>
+                         filter) const;
+
+    /**
+     * \brief Locate all files match the filter under first [directory]/[path].
+     *
+     * You may pass multiple filter to it.
+     * Prefer this function over multiOpen, if there could be too many
+     * files that exceeds the systems file descriptor limit.
+     * @since 5.1.10
+     * @see multiOpen
+     */
+    template <typename Arg1, typename... Args>
+    std::map<std::string, std::string>
+    locate(Type type, const std::string &path, Arg1 arg1, Args... args) const {
+        return locateWithFilter(type, path,
+                                filter::Chainer<Arg1, Args...>(
+                                    std::move(arg1), std::move(args)...));
+    }
+
     /// \brief Open all files match the first [directory]/[path].
     std::vector<StandardPathFile> openAll(Type type, const std::string &path,
                                           int flags) const;
+
     /// \brief Open all files match the filter under first [directory]/[path].
     StandardPathFileMap
     multiOpenFilter(Type type, const std::string &path, int flags,
@@ -300,7 +353,7 @@ public:
     StandardPathFileMap multiOpen(Type type, const std::string &path, int flags,
                                   Args... args) const {
         return multiOpenFilter(type, path, flags,
-                               filter::Chainer<Args...>(args...));
+                               filter::Chainer<Args...>(std::move(args)...));
     }
 
     /// \brief Open all files match the filter under all [directory]/[path].
@@ -348,6 +401,24 @@ public:
      * @since 5.1.2
      */
     void syncUmask() const;
+
+    /**
+     * Whether this StandardPath is configured to Skip built-in path.
+     *
+     * Built-in path is usually configured at build time, hardcoded.
+     * In portable environment (Install prefix is not fixed), this should be
+     * set to false.
+     *
+     * @since 5.1.9
+     */
+    bool skipBuiltInPath() const;
+
+    /**
+     * Whether this StandardPath is configured to Skip user path.
+     *
+     * @since 5.1.9
+     */
+    bool skipUserPath() const;
 
 private:
     std::unique_ptr<StandardPathPrivate> d_ptr;

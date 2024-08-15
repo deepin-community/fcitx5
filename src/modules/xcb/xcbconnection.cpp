@@ -26,6 +26,10 @@
 #include "xcbkeyboard.h"
 #include "xcbmodule.h"
 
+#ifdef WAYLAND_FOUND
+#include "waylandim_public.h"
+#endif
+
 namespace fcitx {
 
 bool extensionCheckXWayland(xcb_connection_t *conn) {
@@ -272,7 +276,6 @@ void XCBConnection::ungrabKey(const Key &key) {
     }
 
     xcb_ungrab_key(conn_.get(), keycode, root_, modifiers);
-    xcb_flush(conn_.get());
 }
 
 void XCBConnection::grabKey() {
@@ -288,7 +291,6 @@ void XCBConnection::grabKey() {
     }
     // addEventMaskToWindow(conn_.get(), root_, XCB_EVENT_MASK_KEY_PRESS |
     // XCB_EVENT_MASK_KEY_RELEASE);
-    xcb_flush(conn_.get());
 }
 
 void XCBConnection::ungrabKey() {
@@ -326,7 +328,6 @@ void XCBConnection::ungrabXKeyboard() {
     FCITX_XCB_DEBUG() << "Ungrab keyboard for display: " << name_;
     keyboardGrabbed_ = false;
     xcb_ungrab_keyboard(conn_.get(), XCB_CURRENT_TIME);
-    xcb_flush(conn_.get());
 }
 
 void XCBConnection::processEvent() {
@@ -338,7 +339,6 @@ void XCBConnection::processEvent() {
             }
         }
     }
-    xcb_flush(conn_.get());
     reader_->wakeUp();
 }
 
@@ -409,15 +409,49 @@ bool XCBConnection::filterEvent(xcb_connection_t *,
 
         auto *keypress = reinterpret_cast<xcb_key_press_event_t *>(event);
         if (keypress->event == root_) {
-            FCITX_XCB_DEBUG() << "Received key event from root";
             auto sym = xcb_key_press_lookup_keysym(syms_.get(), keypress, 0);
             auto state = keypress->state;
             bool forward;
             Key key(static_cast<KeySym>(sym), KeyStates(state),
                     keypress->detail);
+            FCITX_XCB_DEBUG()
+                << "Received key event from root, resolved as: " << key
+                << " code: " << static_cast<int>(keypress->detail);
             key = key.normalize();
             if ((forward = key.checkKeyList(forwardGroup_)) ||
                 key.checkKeyList(backwardGroup_)) {
+
+#ifdef WAYLAND_FOUND
+                // When wayland im is used, don't grab keyboard again, otherwise
+                // we may get same event twice. Whne wayland keyboard grab is
+                // active, we will rely on wayland im to handle group switching
+                // key.
+                // This allows KDE Plasma's X11 legacy support to work
+                // correctly.
+                if (isXWayland_ && parent_->waylandim() &&
+                    parent_->mainDisplay() == name_) {
+                    bool isWaylandAppFocused =
+                        !parent_->instance()
+                             ->inputContextManager()
+                             .foreachFocused([](InputContext *ic) {
+                                 // Main wayland display, but not wayland im.
+                                 if (ic->display() == "wayland:" &&
+                                     !stringutils::startsWith(
+                                         ic->frontendName(), "wayland")) {
+                                     return false;
+                                 }
+                                 return true;
+                             });
+                    if (isWaylandAppFocused ||
+                        parent_->waylandim()
+                            ->call<IWaylandIMModule::hasKeyboardGrab>("")) {
+                        if (keyboardGrabbed_) {
+                            ungrabXKeyboard();
+                        }
+                        return true;
+                    }
+                }
+#endif
                 if (keyboardGrabbed_) {
                     navigateGroup(key, forward);
                 } else {
@@ -537,7 +571,6 @@ void XCBConnection::addSelectionAtom(xcb_atom_t atom) {
         XCB_XFIXES_SELECTION_EVENT_MASK_SET_SELECTION_OWNER |
             XCB_XFIXES_SELECTION_EVENT_MASK_SELECTION_WINDOW_DESTROY |
             XCB_XFIXES_SELECTION_EVENT_MASK_SELECTION_CLIENT_CLOSE);
-    xcb_flush(conn_.get());
 }
 
 void XCBConnection::removeSelectionAtom(xcb_atom_t atom) {

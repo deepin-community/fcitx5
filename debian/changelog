@@ -1,22 +1,42 @@
-fcitx5 (5.1.5-1deepin4) unstable; urgency=medium
+fcitx5 (5.1.10-1) unstable; urgency=medium
 
-  * feat: add Sogou to the default zh_CN input method list
-    (linuxdeepin/developer-center#9901)
+  * New upstream release.
 
- -- zsien <quezhiyong@deepin.org>  Tue, 23 Jul 2024 19:05:36 +0800
+ -- Boyuan Yang <byang@debian.org>  Fri, 31 May 2024 22:36:55 -0400
 
-fcitx5 (5.1.5-1deepin3) unstable; urgency=medium
+fcitx5 (5.1.9-1) unstable; urgency=medium
 
-  * fix #7815
+  * New upstream release.
 
- -- Mike Chen <chenke@deepin.org>  Fri, 12 Apr 2024 10:17:51 +0800
+ -- Boyuan Yang <byang@debian.org>  Wed, 24 Apr 2024 12:00:54 -0400
 
-fcitx5 (5.1.5-1deepin2) unstable; urgency=medium
+fcitx5 (5.1.8-1) unstable; urgency=medium
 
-  * Add deepin patchs.
-  * modify: change Breaks and Conflicts packages to support deepin(5.0.24+).
+  * New upstream release.
 
- -- xiangzelong <xiangzelong@deepin.org>  Thu, 30 Nov 2023 14:12:02 +0800
+ -- Boyuan Yang <byang@debian.org>  Mon, 18 Mar 2024 22:06:42 -0400
+
+fcitx5 (5.1.7-1) unstable; urgency=medium
+
+  * New upstream release.
+  * debian/control: Fix libuv dev pkg name (should be libuv1-dev).
+  * debian/fcitx5.install: Also install new file
+    /etc/xdg/Xwayland-session.d/20-fcitx-x11.
+
+ -- Boyuan Yang <byang@debian.org>  Tue, 16 Jan 2024 23:02:43 -0500
+
+fcitx5 (5.1.6-2) unstable; urgency=medium
+
+  * debian/control: Add missing build-dependency libuv-dev [!linux-any]
+    and try to fix FTBFS on hurd platform.
+
+ -- Boyuan Yang <byang@debian.org>  Wed, 10 Jan 2024 12:23:49 -0500
+
+fcitx5 (5.1.6-1) unstable; urgency=medium
+
+  * New upstream release.
+
+ -- Boyuan Yang <byang@debian.org>  Sat, 06 Jan 2024 00:12:36 -0500
 
 fcitx5 (5.1.5-1) unstable; urgency=medium
 

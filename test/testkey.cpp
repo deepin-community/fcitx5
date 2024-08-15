@@ -6,26 +6,28 @@
  */
 
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include "fcitx-utils/key.h"
+#include "fcitx-utils/keydata.h"
 #include "fcitx-utils/keynametable-compat.h"
 #include "fcitx-utils/keynametable.h"
 #include "fcitx-utils/log.h"
 
 #define CHECK_ARRAY_ORDER(ARRAY, COMPARE_FUNC)                                 \
     for (size_t i = 0; i < FCITX_ARRAY_SIZE(ARRAY) - 1; i++) {                 \
-        FCITX_ASSERT(COMPARE_FUNC(ARRAY[i], ARRAY[i + 1]));                    \
+        FCITX_ASSERT(COMPARE_FUNC(ARRAY[i], ARRAY[i + 1])) << i;               \
     }
 
 int main() {
 #define _STRING_LESS(A, B) (strcmp((A), (B)) < 0)
 #define _STRING_LESS_2(A, B) (strcmp((A).name, (B).name) < 0)
 #define _SYM_LESS(A, B) ((A).sym < (B).sym)
+#define _KEYSYM_LESS(A, B) ((A).keysym < (B).keysym)
 
     CHECK_ARRAY_ORDER(keyNameList, _STRING_LESS);
     CHECK_ARRAY_ORDER(keyNameOffsetByValue, _SYM_LESS);
     CHECK_ARRAY_ORDER(keyNameListCompat, _STRING_LESS_2);
+    CHECK_ARRAY_ORDER(fcitx::keysym_to_unicode_tab, _KEYSYM_LESS);
 
     // Test convert
     for (size_t i = 0; i < FCITX_ARRAY_SIZE(keyValueByNameOffset); i++) {
@@ -36,6 +38,17 @@ int main() {
                      keyValueByNameOffset[i]);
     }
 
+    const std::pair<FcitxKeySym, uint32_t> keySymUnicode[]{
+        {FcitxKey_BackSpace, '\b'}, {FcitxKey_Tab, '\t'},
+        {FcitxKey_Linefeed, '\n'},  {FcitxKey_Clear, '\v'},
+        {FcitxKey_Return, '\r'},    {FcitxKey_Escape, '\033'},
+        {FcitxKey_space, ' '},
+    };
+
+    for (const auto &pair : keySymUnicode) {
+        FCITX_ASSERT(fcitx::Key::keySymToUnicode(pair.first) == pair.second);
+        FCITX_ASSERT(fcitx::Key::keySymFromUnicode(pair.second) == pair.first);
+    }
     FCITX_ASSERT(fcitx::Key::keySymFromUnicode(' ') == FcitxKey_space);
     FCITX_ASSERT(fcitx::Key("1").isDigit());
     FCITX_ASSERT(fcitx::Key(FcitxKey_KP_7).isDigit());
@@ -136,6 +149,10 @@ int main() {
 
     FCITX_INFO() << fcitx::Key::keySymToString(
         FcitxKey_Insert, fcitx::KeyStringFormat::Localized);
+    FCITX_ASSERT(fcitx::Key::keySymToUnicode(
+                     static_cast<fcitx::KeySym>(0x100fdd7)) == 0xfdd7);
+    FCITX_ASSERT(fcitx::Key::keySymToUnicode(
+                     static_cast<fcitx::KeySym>(0x120fdd7)) == 0);
 
     return 0;
 }

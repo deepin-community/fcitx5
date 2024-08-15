@@ -1,3 +1,4 @@
+etc/xdg/Xwayland-session.d/20-fcitx-x11
 usr/bin/
 usr/libexec/
 usr/share/applications/

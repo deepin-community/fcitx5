@@ -7,6 +7,7 @@
 #ifndef _FCITX_UTILS_COMBINETUPLES_H_
 #define _FCITX_UTILS_COMBINETUPLES_H_
 
+#include <functional>
 #include <tuple>
 
 namespace fcitx {
@@ -16,23 +17,23 @@ struct CombineTuples;
 
 template <>
 struct CombineTuples<> {
-    typedef std::tuple<> type;
+    using type = std::tuple<>;
 };
 
 template <typename _T1, typename... _Rem>
 struct CombineTuples<_T1, _Rem...> {
-    typedef typename CombineTuples<std::tuple<_T1>, _Rem...>::type type;
+    using type = typename CombineTuples<std::tuple<_T1>, _Rem...>::type;
 };
 
 template <typename... _Ts>
 struct CombineTuples<std::tuple<_Ts...>> {
-    typedef std::tuple<_Ts...> type;
+    using type = std::tuple<_Ts...>;
 };
 
 template <typename... _T1s, typename... _T2s, typename... _Rem>
 struct CombineTuples<std::tuple<_T1s...>, std::tuple<_T2s...>, _Rem...> {
-    typedef typename CombineTuples<std::tuple<_T1s..., _T2s...>, _Rem...>::type
-        type;
+    using type =
+        typename CombineTuples<std::tuple<_T1s..., _T2s...>, _Rem...>::type;
 };
 
 template <typename... Args>
@@ -46,11 +47,12 @@ struct MakeSequence : MakeSequence<N - 1, N - 1, S...> {};
 
 template <int... S>
 struct MakeSequence<0, S...> {
-    typedef Sequence<S...> type;
+    using type = Sequence<S...>;
 };
 
 template <typename... Args, typename F, int... S>
-auto callWithIndices(F func, Sequence<S...>, std::tuple<Args...> &tuple) {
+auto callWithIndices(const F &func, Sequence<S...>,
+                     std::tuple<Args...> &tuple) {
 
     return func(std::get<S>(tuple)...);
 }

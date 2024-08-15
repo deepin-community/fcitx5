@@ -30,7 +30,7 @@ endif()
 if (NOT TARGET Systemd::Systemd)
   set(FCITX_UTILS_SOURCES
     ${FCITX_UTILS_SOURCES}
-    event_libevent.cpp)
+    event_libuv.cpp)
 else()
   set(FCITX_UTILS_SOURCES
     ${FCITX_UTILS_SOURCES}
@@ -59,6 +59,7 @@ set(FCITX_UTILS_SOURCES
     log.cpp
     misc.cpp
     semver.cpp
+    keydata.cpp
     )
 
 set(FCITX_UTILS_HEADERS
@@ -134,7 +135,7 @@ if(LIBKVM_FOUND)
 endif()
 
 if (NOT TARGET Systemd::Systemd)
-    target_link_libraries(Fcitx5Utils PRIVATE ${LIBEVENT_TARGET})
+    target_link_libraries(Fcitx5Utils PRIVATE ${LIBUV_TARGET})
     if (ENABLE_DBUS)
         target_link_libraries(Fcitx5Utils PRIVATE PkgConfig::DBus)
     endif()
@@ -169,6 +170,6 @@ install(FILES  "${CMAKE_CURRENT_BINARY_DIR}/Fcitx5UtilsConfig.cmake"
                Fcitx5Macros.cmake
                Fcitx5Download.cmake.in
                Fcitx5ModuleTemplate.cmake.in
-               "${CMAKE_SOURCE_DIR}/cmake/Fcitx5CompilerSettings.cmake"
+               "${PROJECT_SOURCE_DIR}/cmake/Fcitx5CompilerSettings.cmake"
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Fcitx5Utils
         COMPONENT Devel )

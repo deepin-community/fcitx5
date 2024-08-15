@@ -5,8 +5,6 @@
  *
  */
 #include "eventdispatcher.h"
-#include <fcntl.h>
-#include <unistd.h>
 #include <mutex>
 #include <queue>
 #include <stdexcept>
@@ -53,7 +51,7 @@ EventDispatcher::EventDispatcher()
     d->fd_[1].give(selfpipe[1]);
 }
 
-EventDispatcher::~EventDispatcher() {}
+EventDispatcher::~EventDispatcher() = default;
 
 void EventDispatcher::attach(EventLoop *event) {
     FCITX_D();

@@ -6,21 +6,13 @@
  */
 
 #include "keyboard.h"
-#include <fcntl.h>
 #include <algorithm>
-#include <cstring>
 #include <fmt/format.h>
-#include <libintl.h>
 #include <xkbcommon/xkbcommon.h>
 #include "fcitx-config/iniparser.h"
-#include "fcitx-utils/charutils.h"
-#include "fcitx-utils/cutf8.h"
 #include "fcitx-utils/i18n.h"
-#include "fcitx-utils/log.h"
-#include "fcitx-utils/standardpath.h"
 #include "fcitx-utils/stringutils.h"
 #include "fcitx-utils/utf8.h"
-#include "fcitx/inputcontext.h"
 #include "fcitx/inputcontextmanager.h"
 #include "fcitx/inputcontextproperty.h"
 #include "fcitx/inputmethodentry.h"
@@ -34,6 +26,7 @@
 #include "spell_public.h"
 
 #ifdef ENABLE_X11
+#define FCITX_NO_XCB
 #include "xcb_public.h"
 #endif
 
@@ -699,7 +692,7 @@ bool KeyboardEngineState::handleLongPress(const KeyEvent &event) {
             repeatStarted_ = true;
 
             mode_ = CandidateMode::LongPress;
-            origKeyString_ = keystr;
+            origKeyString_ = std::move(keystr);
             if (buffer_.empty()) {
                 if (inputContext->capabilityFlags().test(
                         CapabilityFlag::SurroundingText)) {

@@ -10,6 +10,7 @@
 #include <utility>
 #include "fcitx/instance.h"
 #include "fcitx/misc_p.h"
+#include "xcbconnection.h"
 
 namespace fcitx {
 
@@ -17,31 +18,48 @@ FCITX_DEFINE_LOG_CATEGORY(xcb_log, "xcb");
 
 XCBModule::XCBModule(Instance *instance) : instance_(instance) {
     reloadConfig();
-    openConnection("");
+
+    auto *env = getenv("DISPLAY");
+    if (env) {
+        mainDisplay_ = env;
+    }
+
+    if (!containerContains(instance->addonManager().addonOptions("xcb"),
+                           "nodefault")) {
+        openConnection("");
+    }
 }
 
 void XCBModule::reloadConfig() { readAsIni(config_, "conf/xcb.conf"); }
 
 void XCBModule::openConnection(const std::string &name_) {
+    openConnectionChecked(name_);
+}
+
+bool XCBModule::openConnectionChecked(const std::string &name_) {
     std::string name = name_;
     if (name.empty()) {
         auto *env = getenv("DISPLAY");
         if (env) {
             name = env;
-            mainDisplay_ = name;
         }
     }
     if (name.empty() || conns_.count(name)) {
-        return;
+        return false;
     }
 
+    XCBConnection *connection = nullptr;
     try {
         auto iter = conns_.emplace(std::piecewise_construct,
                                    std::forward_as_tuple(name),
                                    std::forward_as_tuple(this, name));
-        onConnectionCreated(iter.first->second);
+        connection = &iter.first->second;
     } catch (const std::exception &e) {
     }
+    if (connection) {
+        onConnectionCreated(*connection);
+    }
+    return connection != nullptr;
 }
 
 void XCBModule::removeConnection(const std::string &name) {
@@ -176,6 +194,10 @@ void XCBModule::setXkbOption(const std::string &name,
         return;
     }
     iter->second.setXkbOption(option);
+}
+
+bool XCBModule::exists(const std::string &name) {
+    return conns_.count(name) > 0;
 }
 
 class XCBModuleFactory : public AddonFactory {

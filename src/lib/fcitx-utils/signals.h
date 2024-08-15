@@ -16,7 +16,7 @@
 #include <fcitx-utils/handlertable.h>
 #include <fcitx-utils/intrusivelist.h>
 #include <fcitx-utils/macros.h>
-#include <fcitx-utils/signals_details.h>
+#include <fcitx-utils/signals_details.h> // IWYU pragma: export
 #include <fcitx-utils/trackableobject.h>
 #include <fcitx-utils/tuplehelpers.h>
 
@@ -44,7 +44,7 @@ private:
 template <>
 class LastValue<void> {
 public:
-    LastValue() {}
+    LastValue() = default;
     template <typename InputIterator>
     void operator()(InputIterator begin, InputIterator end) {
         for (; begin != end; begin++) {
@@ -57,7 +57,7 @@ public:
 /// connection.
 class Connection {
 public:
-    Connection() {}
+    Connection() = default;
     explicit Connection(TrackableObjectReference<ConnectionBody> body)
         : body_(std::move(body)) {}
 
@@ -92,7 +92,7 @@ public:
     ScopedConnection(Connection &&other) noexcept
         : Connection(std::move(other)) {}
     ScopedConnection(const ScopedConnection &) = delete;
-    ScopedConnection() {}
+    ScopedConnection() = default;
 
     ScopedConnection &operator=(ScopedConnection &&other) noexcept {
         if (&other == this) {
@@ -134,11 +134,11 @@ class Signal<Ret(Args...), Combiner> : public SignalBase {
     };
 
 public:
-    typedef Ret return_type;
-    typedef Ret function_type(Args...);
+    using return_type = Ret;
+    using function_type = Ret(Args...);
     Signal(Combiner combiner = Combiner())
         : d_ptr(std::make_unique<SignalData>(std::move(combiner))) {}
-    virtual ~Signal() {
+    ~Signal() override {
         if (d_ptr) {
             disconnectAll();
         }

@@ -8,7 +8,6 @@
 #define _FCITX_UTILS_MISC_H_
 
 #include <unistd.h>
-#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
@@ -49,11 +48,11 @@ inline const Parent *parentFromMember(const Member *member,
 template <typename Iter>
 class KeyIterator {
 public:
-    typedef typename Iter::iterator_category iterator_category;
-    typedef typename Iter::value_type::first_type value_type;
-    typedef typename Iter::difference_type difference_type;
-    typedef typename Iter::value_type::first_type &reference;
-    typedef typename Iter::value_type::first_type *pointer;
+    using iterator_category = typename Iter::iterator_category;
+    using value_type = typename Iter::value_type::first_type;
+    using difference_type = typename Iter::difference_type;
+    using reference = typename Iter::value_type::first_type &;
+    using pointer = typename Iter::value_type::first_type *;
 
     KeyIterator(Iter iter) : iter_(iter) {}
     FCITX_INLINE_DEFINE_DEFAULT_DTOR_AND_COPY(KeyIterator)
@@ -120,8 +119,9 @@ struct FunctionDeleter {
 };
 template <typename T, auto FreeFunction = std::free>
 using UniqueCPtr = std::unique_ptr<T, FunctionDeleter<FreeFunction>>;
-static_assert(sizeof(char *) == sizeof(UniqueCPtr<char>),
-              ""); // ensure no overhead
+static_assert(
+    sizeof(char *) == sizeof(UniqueCPtr<char>),
+    "UniqueCPtr size is not same as raw pointer."); // ensure no overhead
 
 using UniqueFilePtr = std::unique_ptr<FILE, FunctionDeleter<std::fclose>>;
 
@@ -144,12 +144,25 @@ FCITXUTILS_EXPORT ssize_t getline(UniqueCPtr<char> &lineptr, size_t *n,
 FCITXUTILS_EXPORT bool isInFlatpak();
 
 /**
- * Util function that returns whether it is compile agsinst android.
+ * Util function that returns whether it is compile against android.
  *
  * @since 5.1.2
  */
 FCITXUTILS_EXPORT constexpr inline bool isAndroid() {
 #if defined(ANDROID) || defined(__ANDROID__)
+    return true;
+#else
+    return false;
+#endif
+}
+
+/**
+ * Util function that returns whether it is compile against apple.
+ *
+ * @since 5.1.7
+ */
+FCITXUTILS_EXPORT constexpr inline bool isApple() {
+#if defined(__APPLE__)
     return true;
 #else
     return false;

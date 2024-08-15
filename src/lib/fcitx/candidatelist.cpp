@@ -6,8 +6,10 @@
  */
 
 #include "candidatelist.h"
+#include <functional>
 #include <stdexcept>
 #include <unordered_set>
+#include <fcitx-utils/macros.h>
 #include <fcitx-utils/utf8.h>
 
 namespace fcitx {
@@ -29,7 +31,53 @@ void fillLabels(std::vector<Text> &labels, const Container &container,
     }
 }
 
+template <typename CandidateListType, typename InterfaceType>
+class CandidateListInterfaceAdapter : public QPtrHolder<CandidateListType>,
+                                      public InterfaceType {
+public:
+    CandidateListInterfaceAdapter(CandidateListType *q)
+        : QPtrHolder<CandidateListType>(q) {}
+};
+
+#define FCITX_COMMA_IF_2 ,
+#define FCITX_COMMA_IF_1
+#define FCITX_COMMA_IF(X) FCITX_EXPAND(FCITX_CONCATENATE(FCITX_COMMA_IF_, X))
+
+#define FCITX_FORWARD_METHOD_ARG(N, ARG) ARG arg##N FCITX_COMMA_IF(N)
+
+#define FCITX_FORWARD_METHOD_ARG_NAME(N, ARG) arg##N FCITX_COMMA_IF(N)
+
+#define FCITX_FORWARD_METHOD(RETURN_TYPE, METHOD_NAME, ARGS, ...)              \
+    RETURN_TYPE METHOD_NAME(FCITX_FOR_EACH_IDX(FCITX_FORWARD_METHOD_ARG,       \
+                                               FCITX_REMOVE_PARENS(ARGS)))     \
+        __VA_ARGS__ override {                                                 \
+        FCITX_Q();                                                             \
+        return q->METHOD_NAME(FCITX_FOR_EACH_IDX(                              \
+            FCITX_FORWARD_METHOD_ARG_NAME, FCITX_REMOVE_PARENS(ARGS)));        \
+    }
+
+class BulkCursorAdaptorForCommonCandidateList
+    : public CandidateListInterfaceAdapter<CommonCandidateList,
+                                           BulkCursorCandidateList> {
+public:
+    using CandidateListInterfaceAdapter::CandidateListInterfaceAdapter;
+
+    FCITX_FORWARD_METHOD(void, setGlobalCursorIndex, (int));
+    FCITX_FORWARD_METHOD(int, globalCursorIndex, (), const);
+};
+
+class CursorModifiableAdaptorForCommonCandidateList
+    : public CandidateListInterfaceAdapter<CommonCandidateList,
+                                           CursorModifiableCandidateList> {
+public:
+    using CandidateListInterfaceAdapter::CandidateListInterfaceAdapter;
+
+    FCITX_FORWARD_METHOD(void, setCursorIndex, (int));
+};
+
 } // namespace
+
+ActionableCandidateList::~ActionableCandidateList() = default;
 
 class CandidateListPrivate {
 public:
@@ -37,6 +85,9 @@ public:
     ModifiableCandidateList *modifiable_ = nullptr;
     PageableCandidateList *pageable_ = nullptr;
     CursorMovableCandidateList *cursorMovable_ = nullptr;
+    BulkCursorCandidateList *bulkCursor_ = nullptr;
+    CursorModifiableCandidateList *cursorModifiable_ = nullptr;
+    ActionableCandidateList *actionable_ = nullptr;
 };
 
 CandidateList::CandidateList()
@@ -66,6 +117,21 @@ CursorMovableCandidateList *CandidateList::toCursorMovable() const {
     return d->cursorMovable_;
 }
 
+CursorModifiableCandidateList *CandidateList::toCursorModifiable() const {
+    FCITX_D();
+    return d->cursorModifiable_;
+}
+
+BulkCursorCandidateList *CandidateList::toBulkCursor() const {
+    FCITX_D();
+    return d->bulkCursor_;
+}
+
+ActionableCandidateList *CandidateList::toActionable() const {
+    FCITX_D();
+    return d->actionable_;
+}
+
 void CandidateList::setBulk(BulkCandidateList *list) {
     FCITX_D();
     d->bulk_ = list;
@@ -86,6 +152,21 @@ void CandidateList::setCursorMovable(CursorMovableCandidateList *list) {
     d->cursorMovable_ = list;
 }
 
+void CandidateList::setCursorModifiable(CursorModifiableCandidateList *list) {
+    FCITX_D();
+    d->cursorModifiable_ = list;
+}
+
+void CandidateList::setBulkCursor(BulkCursorCandidateList *list) {
+    FCITX_D();
+    d->bulkCursor_ = list;
+}
+
+void CandidateList::setActionable(ActionableCandidateList *list) {
+    FCITX_D();
+    d->actionable_ = list;
+}
+
 class CandidateWordPrivate {
 public:
     CandidateWordPrivate(Text &&text) : text_(std::move(text)) {}
@@ -93,6 +174,7 @@ public:
     bool isPlaceHolder_ = false;
     Text customLabel_;
     bool hasCustomLabel_ = false;
+    Text comment_;
 };
 
 CandidateWord::CandidateWord(Text text)
@@ -108,6 +190,26 @@ const Text &CandidateWord::text() const {
 void CandidateWord::setText(Text text) {
     FCITX_D();
     d->text_ = std::move(text);
+}
+
+const Text &CandidateWord::comment() const {
+    FCITX_D();
+    return d->comment_;
+}
+
+void CandidateWord::setComment(Text comment) {
+    FCITX_D();
+    d->comment_ = std::move(comment);
+}
+
+Text CandidateWord::textWithComment(std::string separator) const {
+    FCITX_D();
+    auto text = d->text_;
+    if (!d->comment_.empty()) {
+        text.append(std::move(separator));
+        text.append(d->comment_);
+    }
+    return text;
 }
 
 bool CandidateWord::isPlaceHolder() const {
@@ -224,6 +326,11 @@ CandidateLayoutHint DisplayOnlyCandidateList::layoutHint() const {
 
 class CommonCandidateListPrivate {
 public:
+    CommonCandidateListPrivate(CommonCandidateList *q)
+        : bulkCursor_(q), cursorModifiable_(q) {}
+
+    BulkCursorAdaptorForCommonCandidateList bulkCursor_;
+    CursorModifiableAdaptorForCommonCandidateList cursorModifiable_;
     bool usedNextBefore_ = false;
     int cursorIndex_ = -1;
     int currentPage_ = 0;
@@ -236,6 +343,7 @@ public:
     bool cursorKeepInSamePage_ = false;
     CursorPositionAfterPaging cursorPositionAfterPaging_ =
         CursorPositionAfterPaging::DonotChange;
+    std::unique_ptr<ActionableCandidateList> actionable_;
 
     int size() const {
         auto start = currentPage_ * pageSize_;
@@ -286,11 +394,14 @@ public:
 };
 
 CommonCandidateList::CommonCandidateList()
-    : d_ptr(std::make_unique<CommonCandidateListPrivate>()) {
+    : d_ptr(std::make_unique<CommonCandidateListPrivate>(this)) {
+    FCITX_D();
     setPageable(this);
     setModifiable(this);
     setBulk(this);
     setCursorMovable(this);
+    setBulkCursor(&d->bulkCursor_);
+    setCursorModifiable(&d->cursorModifiable_);
 
     setLabels();
 }
@@ -471,6 +582,13 @@ void CommonCandidateList::setGlobalCursorIndex(int index) {
     }
 }
 
+void CommonCandidateList::setCursorIndex(int index) {
+    FCITX_D();
+    d->checkIndex(index);
+    auto globalIndex = d->toGlobalIndex(index);
+    setGlobalCursorIndex(globalIndex);
+}
+
 int CommonCandidateList::globalCursorIndex() const {
     FCITX_D();
     return d->cursorIndex_;
@@ -607,4 +725,12 @@ void CommonCandidateList::fixAfterUpdate() {
         }
     }
 }
+
+void CommonCandidateList::setActionableImpl(
+    std::unique_ptr<ActionableCandidateList> actionable) {
+    FCITX_D();
+    d->actionable_ = std::move(actionable);
+    setActionable(d->actionable_.get());
+}
+
 } // namespace fcitx

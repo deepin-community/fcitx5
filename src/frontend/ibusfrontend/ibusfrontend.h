@@ -8,24 +8,20 @@
 #define _FCITX_FRONTEND_IBUSFRONTEND_IBUSFRONTEND_H_
 
 #include <unistd.h>
-#include "fcitx-utils/dbus/servicewatcher.h"
-#include "fcitx-utils/event.h"
-#include "fcitx/addonfactory.h"
+#include "fcitx-utils/dbus/bus.h"
+#include "fcitx-utils/standardpath.h"
 #include "fcitx/addoninstance.h"
 #include "fcitx/addonmanager.h"
-#include "fcitx/focusgroup.h"
 #include "fcitx/instance.h"
 
 namespace fcitx {
 
-class AddonInstance;
-class Instance;
 class IBusFrontend;
 
 class IBusFrontendModule : public AddonInstance {
 public:
     IBusFrontendModule(Instance *instance);
-    ~IBusFrontendModule();
+    ~IBusFrontendModule() override;
 
     dbus::Bus *bus();
     Instance *instance() { return instance_; }
@@ -39,6 +35,7 @@ private:
     // Check if org.freedesktop.IBus is owned by us and socket file is ours.
     void ensureIsIBus();
 
+    const StandardPath &standardPath_ = StandardPath::global();
     Instance *instance_;
     std::unique_ptr<dbus::Bus> portalBus_;
     std::unique_ptr<IBusFrontend> inputMethod1_;

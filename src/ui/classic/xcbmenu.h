@@ -7,8 +7,6 @@
 #ifndef _FCITX_UI_CLASSIC_XCBMENU_H_
 #define _FCITX_UI_CLASSIC_XCBMENU_H_
 
-#include <pango/pango.h>
-#include <xcb/xproto.h>
 #include "fcitx/menu.h"
 #include "common.h"
 #include "xcbwindow.h"
@@ -79,7 +77,6 @@ private:
     void update();
     void setHoveredIndex(int idx);
     void setChild(XCBMenu *child);
-    void setFocus();
     void updateDPI(int x, int y);
     std::pair<MenuItem *, Action *> actionAt(size_t index);
 
