@@ -9,20 +9,13 @@
 #include "fcitx-utils/dbus/message.h"
 #include "fcitx-utils/dbus/objectvtable.h"
 #include "fcitx-utils/dbus/servicewatcher.h"
-#include "fcitx-utils/event.h"
-#include "fcitx-utils/i18n.h"
 #include "fcitx-utils/key.h"
 #include "fcitx-utils/log.h"
-#include "fcitx-utils/stringutils.h"
 #include "fcitx-utils/utf8.h"
 #include "fcitx/addonmanager.h"
 #include "fcitx/candidatelist.h"
 #include "fcitx/inputcontext.h"
-#include "fcitx/inputmethodengine.h"
-#include "fcitx/inputmethodentry.h"
-#include "fcitx/inputmethodmanager.h"
 #include "fcitx/instance.h"
-#include "fcitx/misc_p.h"
 #include "fcitx/userinterfacemanager.h"
 #include "dbus_public.h"
 #include "notificationitem_public.h"
@@ -427,7 +420,7 @@ std::vector<std::string> VirtualKeyboard::makeCandidateTextList(
         }
 
         auto candidateText =
-            instance_->outputFilter(inputContext, candidate.text());
+            instance_->outputFilter(inputContext, candidate.textWithComment());
         candidateTextList.push_back(candidateText.toString());
     }
 
@@ -453,7 +446,7 @@ std::vector<std::string> VirtualKeyboard::makeBulkCandidateTextList(
                 continue;
             }
 
-            candidateText = candidate.text();
+            candidateText = candidate.textWithComment();
         } catch (...) {
             break;
         }
@@ -466,13 +459,12 @@ std::vector<std::string> VirtualKeyboard::makeBulkCandidateTextList(
 
 int VirtualKeyboard::globalCursorIndex(
     std::shared_ptr<CandidateList> candidateList) const {
-    auto *commonCandidateList =
-        dynamic_cast<CommonCandidateList *>(candidateList.get());
-    if (commonCandidateList == nullptr) {
+    auto *bulkCursor = candidateList->toBulkCursor();
+    if (bulkCursor == nullptr) {
         return -1;
     }
 
-    return commonCandidateList->globalCursorIndex();
+    return bulkCursor->globalCursorIndex();
 }
 
 void VirtualKeyboard::updateCandidateArea(

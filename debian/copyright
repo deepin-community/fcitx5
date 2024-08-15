@@ -4,7 +4,9 @@ Upstream-Contact: Weng Xuetian <wengxt@gmail.com>
 Source: https://github.com/fcitx/fcitx5
 
 Files: *
-Copyright: 2015-2023, CSSlayer <wengxt@gmail.com>
+Copyright:
+ 2015-2024, CSSlayer <wengxt@gmail.com>
+ 2017-2017, Henry Hu <henry.hu.sh@gmail.com>
 License: LGPL-2.1-or-later
 
 Files: debian/*
@@ -60,6 +62,13 @@ Files:
  src/lib/fcitx-utils/keydata.h
 Copyright: 1995-1997 Peter Mattis, Spencer Kimball and Josh MacDonald
 License: LGPL-2-or-later
+
+Files:
+ src/lib/fcitx-wayland/cursor-shape/cursor-shape-v1.xml
+Copyright:
+ 2018 The Chromium Authors
+ 2023 Simon Ser
+License: Expat
 
 Files:
  src/modules/unicode/gen.py

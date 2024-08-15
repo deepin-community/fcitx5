@@ -13,18 +13,26 @@
 namespace fcitx {
 
 WaylandEventReader::WaylandEventReader(WaylandConnection *conn)
-    : module_(conn->parent()), conn_(conn), display_(*conn_->display()) {
-    dispatcherToMain_.attach(&conn->parent()->instance()->eventLoop());
+    : module_(conn->parent()), conn_(conn), display_(*conn_->display()),
+      dispatcherToMain_(module_->instance()->eventDispatcher()) {
+    postEvent_ = module_->instance()->eventLoop().addPostEvent(
+        [this](EventSource *source) {
+            if (wl_display_get_error(display_)) {
+                source->setEnabled(false);
+                return true;
+            }
+            FCITX_WAYLAND_DEBUG() << "wl_display_flush";
+            display_.flush();
+            return true;
+        });
     // Actively trigger an initial dispatch so we can make sure:
     // 1. depending even before this WaylandEventReader are handled.
     // 2. prepare_read is called.
-    dispatcherToMain_.schedule([this]() { dispatch(); });
+    dispatcherToMain_.scheduleWithContext(watch(), [this]() { dispatch(); });
     thread_ =
         std::make_unique<std::thread>(&WaylandEventReader::runThread, this);
 }
 WaylandEventReader::~WaylandEventReader() {
-    // Prevent that dispatcherToMain_ to deliver removeConnection.
-    dispatcherToMain_.detach();
     if (thread_->joinable()) {
         quit();
         thread_->join();
@@ -34,7 +42,7 @@ WaylandEventReader::~WaylandEventReader() {
 void WaylandEventReader::run() {
     EventLoop event;
     dispatcherToWorker_.attach(&event);
-    int fd = wl_display_get_fd(display_);
+    int fd = display_.fd();
     std::unique_ptr<EventSourceIO> ioEvent;
     ioEvent = event.addIOEvent(
         fd, IOEventFlag::In,
@@ -49,7 +57,7 @@ void WaylandEventReader::run() {
     ioEvent.reset();
     dispatcherToWorker_.detach();
     {
-        std::lock_guard lock(mutex_);
+        const std::lock_guard lock(mutex_);
         if (isReading_) {
             wl_display_cancel_read(display_);
         }
@@ -60,7 +68,12 @@ bool WaylandEventReader::onIOEvent(IOEventFlags flags) {
     {
         // Make sure previous dispatch ended.
         std::unique_lock lock(mutex_);
-        condition_.wait(lock, [this] { return quitting_ || isReading_; });
+        condition_.wait(lock, [this, &lock] {
+            assert(lock.owns_lock());
+            return quitting_ || isReading_;
+        });
+
+        assert(lock.owns_lock());
 
         if (quitting_) {
             return false;
@@ -78,7 +91,7 @@ bool WaylandEventReader::onIOEvent(IOEventFlags flags) {
     }
 
     wl_display_read_events(display_);
-    dispatcherToMain_.schedule([this]() { dispatch(); });
+    dispatcherToMain_.scheduleWithContext(watch(), [this]() { dispatch(); });
     return true;
 }
 
@@ -95,9 +108,10 @@ void WaylandEventReader::quit() {
 
     // Make sure the connection will be removed.
     // The destructor will join the reader thread so it's ok.
-    dispatcherToMain_.schedule([module = module_, name = conn_->name()]() {
-        module->removeConnection(name);
-    });
+    dispatcherToMain_.scheduleWithContext(
+        watch(), [module = module_, name = conn_->name()]() {
+            module->removeConnection(name);
+        });
 }
 
 void WaylandEventReader::dispatch() {

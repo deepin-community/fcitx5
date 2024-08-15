@@ -9,11 +9,11 @@
 
 #include <memory>
 #include <fcitx-utils/connectableobject.h>
-#include <fcitx-utils/handlertable.h>
 #include <fcitx-utils/macros.h>
 #include <fcitx/event.h>
 #include <fcitx/globalconfig.h>
 #include <fcitx/text.h>
+#include "fcitx-utils/eventdispatcher.h"
 #include "fcitxcore_export.h"
 
 #define FCITX_INVALID_COMPOSE_RESULT 0xffffffff
@@ -21,7 +21,6 @@
 namespace fcitx {
 
 class InputContext;
-class KeyEvent;
 class InstancePrivate;
 class EventLoop;
 class AddonManager;
@@ -33,7 +32,7 @@ class UserInterfaceManager;
 class GlobalConfig;
 class FocusGroup;
 
-typedef std::function<void(Event &event)> EventHandler;
+using EventHandler = std::function<void(Event &event)>;
 
 /**
  * The function mode of virtual keyboard.
@@ -155,6 +154,15 @@ public:
 
     /// Get the fcitx event loop.
     EventLoop &eventLoop();
+
+    /**
+     * Return a shared event dispatcher that is already attached to instance's
+     * event loop.
+     *
+     * @return shared event dispatcher.
+     * @since 5.1.9
+     */
+    EventDispatcher &eventDispatcher();
 
     /// Get the addon manager.
     AddonManager &addonManager();
@@ -322,6 +330,9 @@ public:
 
     /// Exit the fcitx event loop
     void exit();
+
+    /// Exit the fcitx event loop with an exit code.
+    void exit(int exitCode);
 
     /// Restart fcitx instance, this should only be used within a regular Fcitx
     /// server, not within embedded mode.
@@ -515,6 +526,28 @@ public:
     VirtualKeyboardFunctionMode virtualKeyboardFunctionMode() const;
 
     void setVirtualKeyboardFunctionMode(VirtualKeyboardFunctionMode mode);
+
+    /**
+     * Set if this instance is running as fcitx5 binary.
+     *
+     * This will affect return value of Instance::canRestart.
+     *
+     * @see Instance::canRestart
+     * @since 5.1.6
+     */
+    void setBinaryMode();
+
+    /**
+     * Check if fcitx 5 can safely restart by itself.
+     *
+     * When the existing fcitx 5 instance returns false, fcitx5 -r, or
+     * Instance::restart will just be no-op.
+     *
+     * @return whether it is safe for fcitx to restart on its own.
+     * @see AddonInstance::setCanRestart
+     * @since 5.1.6
+     */
+    bool canRestart() const;
 
 protected:
     // For testing purpose

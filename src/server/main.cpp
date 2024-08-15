@@ -5,18 +5,23 @@
  *
  */
 
-#include <fcntl.h>
 #include <locale.h>
 #include <sys/stat.h>
-#include <unistd.h>
+#include <cstdio>
+#include <cstdlib>
 #include <exception>
 #include <iostream>
-#include <libintl.h>
+#include <string>
+#include <utility>
+#include <vector>
 #include "fcitx-utils/fs.h"
+#include "fcitx-utils/log.h"
 #include "fcitx-utils/misc.h"
 #include "fcitx-utils/misc_p.h"
 #include "fcitx-utils/standardpath.h"
+#include "fcitx-utils/stringutils.h"
 #include "fcitx/addonfactory.h"
+#include "fcitx/addonloader.h"
 #include "fcitx/addonmanager.h"
 #include "fcitx/instance.h"
 #include "errorhandler.h"
@@ -68,27 +73,32 @@ int main(int argc, char *argv[]) {
     // Log::setLogRule("wayland=5");
     int ret = 0;
     bool restart = false;
+    bool canRestart = false;
     try {
         FCITX_LOG_IF(Info, isInFlatpak()) << "Running inside flatpak.";
         Instance instance(argc, argv);
+        instance.setBinaryMode();
         instance.setSignalPipe(selfpipe[0]);
         instance.addonManager().registerDefaultLoader(&staticAddon);
 
         ret = instance.exec();
         restart = instance.isRestartRequested();
+        canRestart = instance.canRestart();
     } catch (const InstanceQuietQuit &) {
     } catch (const std::exception &e) {
-        std::cerr << "Received exception: " << e.what() << std::endl;
+        std::cerr << "Received exception: " << e.what() << '\n';
         return 1;
     }
 
-    if (restart) {
-        auto fcitxBinary = StandardPath::fcitxPath("bindir", "fcitx5");
+    if (restart && canRestart) {
+        std::vector<std::string> args;
         if (isInFlatpak()) {
-            startProcess({"flatpak-spawn", fcitxBinary, "-rd"});
+            args = {"flatpak-spawn",
+                    StandardPath::fcitxPath("bindir", "fcitx5"), "-rd"};
         } else {
-            startProcess({fcitxBinary, "-r"});
+            args = {StandardPath::fcitxPath("bindir", "fcitx5"), "-r"};
         }
+        startProcess(args);
     }
     return ret;
 }

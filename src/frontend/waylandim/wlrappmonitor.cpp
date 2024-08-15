@@ -6,8 +6,6 @@
  */
 #include "wlrappmonitor.h"
 #include <wayland-client-core.h>
-#include "fcitx/addoninstance.h"
-#include "wayland_public.h"
 #include "zwlr_foreign_toplevel_handle_v1.h"
 #include "zwlr_foreign_toplevel_manager_v1.h"
 
@@ -85,6 +83,7 @@ void WlrAppMonitor::setup(wayland::ZwlrForeignToplevelManagerV1 *management) {
 
 void WlrAppMonitor::remove(wayland::ZwlrForeignToplevelHandleV1 *handle) {
     windows_.erase(handle);
+    refresh();
 }
 
 void WlrAppMonitor::refresh() {

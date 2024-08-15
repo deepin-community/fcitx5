@@ -265,6 +265,10 @@ void Kimpanel::resume() {
 
 void Kimpanel::update(UserInterfaceComponent component,
                       InputContext *inputContext) {
+    if (!inputContext->hasFocus() && inputContext != lastInputContext_.get() &&
+        inputContext != instance_->mostRecentInputContext()) {
+        return;
+    }
     if (component == UserInterfaceComponent::InputPanel) {
         if (classicui() && isKDE() &&
             (stringutils::startsWith(inputContext->frontendName(), "wayland") ||
@@ -355,8 +359,8 @@ void Kimpanel::updateInputPanel(InputContext *inputContext) {
 
                 labelText = instance->outputFilter(inputContext, labelText);
                 labels.push_back(labelText.toString());
-                auto candidateText =
-                    instance->outputFilter(inputContext, candidate.text());
+                auto candidateText = instance->outputFilter(
+                    inputContext, candidate.textWithComment());
                 texts.push_back(candidateText.toString());
                 attrs.emplace_back("");
             }
@@ -405,13 +409,9 @@ std::string Kimpanel::inputMethodStatus(InputContext *ic) {
     std::string icon = "input-keyboard";
     if (ic) {
         icon = instance_->inputMethodIcon(ic);
+        label = instance_->inputMethodLabel(ic);
         if (auto entry = instance_->inputMethodEntry(ic)) {
-            label = entry->label();
             if (auto engine = instance_->inputMethodEngine(ic)) {
-                auto subModeLabel = engine->subModeLabel(*entry, *ic);
-                if (!subModeLabel.empty()) {
-                    label = subModeLabel;
-                }
                 altDescription = engine->subMode(*entry, *ic);
             }
             description = entry->name();
@@ -469,10 +469,10 @@ void Kimpanel::msgV1Handler(dbus::Message &msg) {
             }
             proxy_->execMenu(menuitems);
         } else if (stringutils::startsWith(property, "/Fcitx/im/")) {
-            auto imName = property.substr(10);
             timeEvent_ = instance_->eventLoop().addTimeEvent(
                 CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 30000, 0,
-                [this, imName](EventSourceTime *, uint64_t) {
+                [this, imName = property.substr(10)](EventSourceTime *,
+                                                     uint64_t) {
                     instance_->setCurrentInputMethod(imName);
                     timeEvent_.reset();
                     return true;
@@ -502,7 +502,8 @@ void Kimpanel::msgV1Handler(dbus::Message &msg) {
                 // make ic has focus.
                 timeEvent_ = instance_->eventLoop().addTimeEvent(
                     CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 30000, 0,
-                    [this, actionName](EventSourceTime *, uint64_t) {
+                    [this, actionName = std::move(actionName)](
+                        EventSourceTime *, uint64_t) {
                         if (auto *action =
                                 instance_->userInterfaceManager().lookupAction(
                                     actionName)) {

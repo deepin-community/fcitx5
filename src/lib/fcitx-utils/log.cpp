@@ -6,16 +6,15 @@
  */
 
 #include "log.h"
-#include <chrono>
 #include <mutex>
 #include <type_traits>
 #include <unordered_set>
 #include <fmt/format.h>
+#include "stringutils.h"
+
 #if FMT_VERSION >= 50300
 #include <fmt/chrono.h>
 #endif
-#include "fs.h"
-#include "stringutils.h"
 
 namespace fcitx {
 
@@ -158,21 +157,20 @@ void Log::setLogRule(const std::string &ruleString) {
         if (rule == "notimedate") {
             globalLogConfig.showTimeDate = false;
             continue;
-        } else {
-            auto ruleItem = stringutils::split(rule, "=");
-            if (ruleItem.size() != 2) {
-                continue;
+        }
+
+        auto ruleItem = stringutils::split(rule, "=");
+        if (ruleItem.size() != 2) {
+            continue;
+        }
+        auto &name = ruleItem[0];
+        try {
+            auto level = std::stoi(ruleItem[1]);
+            if (validateLogLevel(level)) {
+                parsedRules.emplace_back(name, static_cast<LogLevel>(level));
             }
-            auto &name = ruleItem[0];
-            try {
-                auto level = std::stoi(ruleItem[1]);
-                if (validateLogLevel(level)) {
-                    parsedRules.emplace_back(name,
-                                             static_cast<LogLevel>(level));
-                }
-            } catch (const std::exception &) {
-                continue;
-            }
+        } catch (const std::exception &) {
+            continue;
         }
     }
     LogRegistry::instance().setLogRules(parsedRules);
@@ -209,12 +207,16 @@ LogMessageBuilder::LogMessageBuilder(std::ostream &out, LogLevel l,
 
 #if FMT_VERSION >= 50300
     if (globalLogConfig.showTimeDate) {
-        auto now = std::chrono::system_clock::now();
-        auto floor = std::chrono::floor<std::chrono::seconds>(now);
-        auto micro =
-            std::chrono::duration_cast<std::chrono::microseconds>(now - floor);
-        auto t = fmt::localtime(std::chrono::system_clock::to_time_t(now));
-        out_ << fmt::format("{:%F %T}.{:06d}", t, micro.count()) << " ";
+        try {
+            auto now = std::chrono::system_clock::now();
+            auto floor = std::chrono::floor<std::chrono::seconds>(now);
+            auto micro = std::chrono::duration_cast<std::chrono::microseconds>(
+                now - floor);
+            auto t = fmt::localtime(std::chrono::system_clock::to_time_t(now));
+            auto timeString = fmt::format("{:%F %T}.{:06d}", t, micro.count());
+            out_ << timeString << " ";
+        } catch (...) {
+        }
     }
 #endif
     out_ << filename << ":" << lineNumber << "] ";

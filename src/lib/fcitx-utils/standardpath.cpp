@@ -8,22 +8,40 @@
 #include "standardpath.h"
 #include <dirent.h>
 #include <fcntl.h>
-#include <string.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include <algorithm>
 #include <atomic>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <exception>
+#include <functional>
+#include <map>
+#include <memory>
 #include <stdexcept>
+#include <string>
+#include <string_view>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 #include "config.h"
 #include "fs.h"
+#include "macros.h"
+#include "misc.h"
 #include "misc_p.h"
 #include "stringutils.h"
 
 #if __has_include(<paths.h>)
 #include <paths.h>
+#endif
+
+#ifndef O_ACCMODE
+#define O_ACCMODE (O_RDONLY | O_WRONLY | O_RDWR)
 #endif
 
 namespace fcitx {
@@ -34,16 +52,16 @@ bool isAbsolutePath(const std::string &path) {
 }
 
 std::string constructPath(const std::string &basepath,
-                          const std::string &path) {
+                          const std::string &subpath) {
     if (basepath.empty()) {
         return {};
     }
-    return fs::cleanPath(stringutils::joinPath(basepath, path));
+    return fs::cleanPath(stringutils::joinPath(basepath, subpath));
 }
 
 } // namespace
 
-StandardPathFile::~StandardPathFile() {}
+StandardPathFile::~StandardPathFile() = default;
 
 int StandardPathFile::release() { return fd_.release(); }
 
@@ -72,40 +90,51 @@ void StandardPathTempFile::close() {
 
 class StandardPathPrivate {
 public:
-    StandardPathPrivate(bool skipFcitxPath, bool skipUserPath)
-        : skipUserPath_(skipUserPath) {
+    StandardPathPrivate(
+        const std::string &packageName,
+        const std::unordered_map<std::string, std::string> &builtInPathMap,
+        bool skipBuiltInPath, bool skipUserPath)
+        : skipBuiltInPath_(skipBuiltInPath), skipUserPath_(skipUserPath) {
+        bool isFcitx = (packageName == "fcitx5");
         // initialize user directory
         configHome_ = defaultPath("XDG_CONFIG_HOME", ".config");
-        pkgconfigHome_ = defaultPath(
-            "FCITX_CONFIG_HOME", constructPath(configHome_, "fcitx5").c_str());
-        configDirs_ = defaultPaths("XDG_CONFIG_DIRS", "/etc/xdg", nullptr);
+        pkgconfigHome_ =
+            defaultPath((isFcitx ? "FCITX_CONFIG_HOME" : nullptr),
+                        constructPath(configHome_, packageName).c_str());
+        configDirs_ = defaultPaths("XDG_CONFIG_DIRS", "/etc/xdg",
+                                   builtInPathMap, nullptr);
         auto pkgconfigDirFallback = configDirs_;
         for (auto &path : pkgconfigDirFallback) {
-            path = constructPath(path, "fcitx5");
+            path = constructPath(path, packageName);
         }
-        pkgconfigDirs_ = defaultPaths(
-            "FCITX_CONFIG_DIRS",
-            stringutils::join(pkgconfigDirFallback, ":").c_str(), nullptr);
+        pkgconfigDirs_ =
+            defaultPaths((isFcitx ? "FCITX_CONFIG_DIRS" : nullptr),
+                         stringutils::join(pkgconfigDirFallback, ":").c_str(),
+                         builtInPathMap, nullptr);
 
         dataHome_ = defaultPath("XDG_DATA_HOME", ".local/share");
-        pkgdataHome_ = defaultPath("FCITX_DATA_HOME",
-                                   constructPath(dataHome_, "fcitx5").c_str());
+        pkgdataHome_ =
+            defaultPath((isFcitx ? "FCITX_DATA_HOME" : nullptr),
+                        constructPath(dataHome_, packageName).c_str());
         dataDirs_ = defaultPaths("XDG_DATA_DIRS", "/usr/local/share:/usr/share",
-                                 skipFcitxPath ? nullptr : "datadir");
+                                 builtInPathMap,
+                                 skipBuiltInPath_ ? nullptr : "datadir");
         auto pkgdataDirFallback = dataDirs_;
         for (auto &path : pkgdataDirFallback) {
-            path = constructPath(path, "fcitx5");
+            path = constructPath(path, packageName);
         }
-        pkgdataDirs_ =
-            defaultPaths("FCITX_DATA_DIRS",
-                         stringutils::join(pkgdataDirFallback, ":").c_str(),
-                         skipFcitxPath ? nullptr : "pkgdatadir");
+        pkgdataDirs_ = defaultPaths(
+            (isFcitx ? "FCITX_DATA_DIRS" : nullptr),
+            stringutils::join(pkgdataDirFallback, ":").c_str(), builtInPathMap,
+            skipBuiltInPath_ ? nullptr : "pkgdatadir");
         cacheHome_ = defaultPath("XDG_CACHE_HOME", ".cache");
         const char *tmpdir = getenv("TMPDIR");
         runtimeDir_ = defaultPath("XDG_RUNTIME_DIR",
                                   !tmpdir || !tmpdir[0] ? "/tmp" : tmpdir);
-        addonDirs_ =
-            defaultPaths("FCITX_ADDON_DIRS", FCITX_INSTALL_ADDONDIR, nullptr);
+        // Though theoratically, this is also fcitxPath, we just simply don't
+        // use it here.
+        addonDirs_ = defaultPaths("FCITX_ADDON_DIRS", FCITX_INSTALL_ADDONDIR,
+                                  builtInPathMap, nullptr);
 
         syncUmask();
     }
@@ -150,6 +179,7 @@ public:
     }
 
     bool skipUser() const { return skipUserPath_; }
+    bool skipBuiltIn() const { return skipBuiltInPath_; }
 
     void syncUmask() {
         // read umask, use 022 which is likely the default value, so less likely
@@ -165,7 +195,10 @@ public:
 private:
     // http://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html
     static std::string defaultPath(const char *env, const char *defaultPath) {
-        char *cdir = getenv(env);
+        char *cdir = nullptr;
+        if (env) {
+            cdir = getenv(env);
+        }
         std::string dir;
         if (cdir && cdir[0]) {
             dir = cdir;
@@ -178,7 +211,7 @@ private:
                 }
                 dir = stringutils::joinPath(home, defaultPath);
             } else {
-                if (strcmp(env, "XDG_RUNTIME_DIR") == 0) {
+                if (env && strcmp(env, "XDG_RUNTIME_DIR") == 0) {
                     dir = stringutils::joinPath(
                         defaultPath,
                         stringutils::concat("fcitx-runtime-", geteuid()));
@@ -193,7 +226,7 @@ private:
             }
         }
 
-        if (!dir.empty() && strcmp(env, "XDG_RUNTIME_DIR") == 0) {
+        if (!dir.empty() && env && strcmp(env, "XDG_RUNTIME_DIR") == 0) {
             struct stat buf;
             if (stat(dir.c_str(), &buf) != 0 || buf.st_uid != geteuid() ||
                 (buf.st_mode & 0777) != S_IRWXU) {
@@ -203,12 +236,16 @@ private:
         return dir;
     }
 
-    static std::vector<std::string> defaultPaths(const char *env,
-                                                 const char *defaultPath,
-                                                 const char *fcitxPath) {
+    static std::vector<std::string> defaultPaths(
+        const char *env, const char *defaultPath,
+        const std::unordered_map<std::string, std::string> &builtInPathMap,
+        const char *builtInPathType) {
         std::vector<std::string> dirs;
 
-        const char *dir = getenv(env);
+        const char *dir = nullptr;
+        if (env) {
+            dir = getenv(env);
+        }
         if (!dir) {
             dir = defaultPath;
         }
@@ -227,9 +264,15 @@ private:
                 dirs.push_back(s);
             }
         }
-        if (fcitxPath) {
-            std::string path =
-                fs::cleanPath(StandardPath::fcitxPath(fcitxPath));
+        if (builtInPathType) {
+            std::string builtInPath;
+            if (const auto *value =
+                    findValue(builtInPathMap, builtInPathType)) {
+                builtInPath = *value;
+            } else {
+                builtInPath = StandardPath::fcitxPath(builtInPathType);
+            }
+            std::string path = fs::cleanPath(builtInPath);
             if (!path.empty() &&
                 std::find(dirs.begin(), dirs.end(), path) == dirs.end()) {
                 dirs.push_back(path);
@@ -239,6 +282,7 @@ private:
         return dirs;
     }
 
+    bool skipBuiltInPath_;
     bool skipUserPath_;
     std::string configHome_;
     std::vector<std::string> configDirs_;
@@ -254,14 +298,20 @@ private:
     std::atomic<mode_t> umask_;
 };
 
+StandardPath::StandardPath(
+    const std::string &packageName,
+    const std::unordered_map<std::string, std::string> &builtInPath,
+    bool skipBuiltInPath, bool skipUserPath)
+    : d_ptr(std::make_unique<StandardPathPrivate>(
+          packageName, builtInPath, skipBuiltInPath, skipUserPath)) {}
+
 StandardPath::StandardPath(bool skipFcitxPath, bool skipUserPath)
-    : d_ptr(
-          std::make_unique<StandardPathPrivate>(skipFcitxPath, skipUserPath)) {}
+    : StandardPath("fcitx5", {}, skipFcitxPath, skipUserPath) {}
 
 StandardPath::StandardPath(bool skipFcitxPath)
     : StandardPath(skipFcitxPath, false) {}
 
-StandardPath::~StandardPath() {}
+StandardPath::~StandardPath() = default;
 
 const StandardPath &StandardPath::global() {
     bool skipFcitx = checkBoolEnvVar("SKIP_FCITX_PATH");
@@ -404,11 +454,11 @@ std::string StandardPath::locate(Type type, const std::string &path) const {
     } else {
         scanDirectories(type,
                         [&retPath, &path](const std::string &dirPath, bool) {
-                            auto fullPath = constructPath(dirPath, path);
+                            std::string fullPath = constructPath(dirPath, path);
                             if (!fs::isreg(fullPath)) {
                                 return true;
                             }
-                            retPath = fullPath;
+                            retPath = std::move(fullPath);
                             return false;
                         });
     }
@@ -454,7 +504,7 @@ StandardPathFile StandardPath::open(Type type, const std::string &path,
                 return true;
             }
             retFD = fd;
-            fdPath = fullPath;
+            fdPath = std::move(fullPath);
             return false;
         });
     }
@@ -510,7 +560,7 @@ StandardPathFile StandardPath::openSystem(Type type, const std::string &path,
                 return true;
             }
             retFD = fd;
-            fdPath = fullPath;
+            fdPath = std::move(fullPath);
             return false;
         });
     }
@@ -544,9 +594,10 @@ std::vector<StandardPathFile> StandardPath::openAll(StandardPath::Type type,
 StandardPathTempFile
 StandardPath::openUserTemp(Type type, const std::string &pathOrig) const {
     std::string path = pathOrig + "_XXXXXX";
-    std::string fullPath, fullPathOrig;
+    std::string fullPath;
+    std::string fullPathOrig;
     if (isAbsolutePath(pathOrig)) {
-        fullPath = path;
+        fullPath = std::move(path);
         fullPathOrig = pathOrig;
     } else {
         auto dirPath = userDirectory(type);
@@ -557,10 +608,11 @@ StandardPath::openUserTemp(Type type, const std::string &pathOrig) const {
         fullPathOrig = constructPath(dirPath, pathOrig);
     }
     if (fs::makePath(fs::dirName(fullPath))) {
-        auto cPath = makeUniqueCPtr(strdup(fullPath.c_str()));
-        int fd = mkstemp(cPath.get());
+        std::vector<char> cPath(fullPath.data(),
+                                fullPath.data() + fullPath.size() + 1);
+        int fd = mkstemp(cPath.data());
         if (fd >= 0) {
-            return {fd, fullPathOrig, cPath.get()};
+            return {fd, fullPathOrig, cPath.data()};
         }
     }
     return {};
@@ -584,6 +636,27 @@ bool StandardPath::safeSave(Type type, const std::string &pathOrig,
     }
     file.removeTemp();
     return false;
+}
+
+std::map<std::string, std::string> StandardPath::locateWithFilter(
+    Type type, const std::string &path,
+    std::function<bool(const std::string &path, const std::string &dir,
+                       bool user)>
+        filter) const {
+    std::map<std::string, std::string> result;
+    scanFiles(type, path,
+              [&result, &filter](const std::string &path,
+                                 const std::string &dir, bool isUser) {
+                  if (!result.count(path) && filter(path, dir, isUser)) {
+                      auto fullPath = constructPath(dir, path);
+                      if (fs::isreg(fullPath)) {
+                          result.emplace(path, std::move(fullPath));
+                      }
+                  }
+                  return true;
+              });
+
+    return result;
 }
 
 StandardPathFileMap StandardPath::multiOpenFilter(
@@ -690,5 +763,15 @@ bool StandardPath::hasExecutable(const std::string &name) {
 }
 
 void StandardPath::syncUmask() const { d_ptr->syncUmask(); }
+
+bool StandardPath::skipBuiltInPath() const {
+    FCITX_D();
+    return d->skipBuiltIn();
+}
+
+bool StandardPath::skipUserPath() const {
+    FCITX_D();
+    return d->skipUser();
+}
 
 } // namespace fcitx

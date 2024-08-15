@@ -6,7 +6,6 @@
  */
 
 #include "addoninstance.h"
-#include "fcitx/addoninfo.h"
 #include "addoninstance_p.h"
 
 namespace fcitx {
@@ -34,4 +33,15 @@ AddonFunctionAdaptorBase *AddonInstance::findCall(const std::string &name) {
     }
     return iter->second;
 }
+
+void AddonInstance::setCanRestart(bool canRestart) {
+    FCITX_D();
+    d->canRestart_ = canRestart;
+}
+
+bool AddonInstance::canRestart() const {
+    FCITX_D();
+    return d->canRestart_;
+}
+
 } // namespace fcitx

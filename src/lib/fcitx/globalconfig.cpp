@@ -7,6 +7,7 @@
 
 #include "globalconfig.h"
 #include "fcitx-config/configuration.h"
+#include "fcitx-config/enum.h"
 #include "fcitx-config/iniparser.h"
 #include "fcitx-config/option.h"
 #include "fcitx-utils/i18n.h"
@@ -138,8 +139,14 @@ FCITX_CONFIGURATION(
                                                  _("Active By Default")};
     OptionWithAnnotation<PropertyPropagatePolicy,
                          PropertyPropagatePolicyI18NAnnotation>
+        resetStateWhenFocusIn{this, "resetStateWhenFocusIn",
+                              _("Reset state on Focus In"),
+                              PropertyPropagatePolicy::No};
+    OptionWithAnnotation<PropertyPropagatePolicy,
+                         PropertyPropagatePolicyI18NAnnotation>
         shareState{this, "ShareInputState", _("Share Input State"),
-                   PropertyPropagatePolicy::No};
+                   isAndroid() ? PropertyPropagatePolicy::All
+                               : PropertyPropagatePolicy::No};
     Option<bool> preeditEnabledByDefault{this, "PreeditEnabledByDefault",
                                          _("Show preedit in application"),
                                          true};
@@ -281,6 +288,11 @@ const KeyList &GlobalConfig::togglePreeditKeys() const {
 bool GlobalConfig::activeByDefault() const {
     FCITX_D();
     return d->behavior->activeByDefault.value();
+}
+
+PropertyPropagatePolicy GlobalConfig::resetStateWhenFocusIn() const {
+    FCITX_D();
+    return d->behavior->resetStateWhenFocusIn.value();
 }
 
 bool GlobalConfig::showInputMethodInformation() const {

@@ -247,7 +247,6 @@ void XCBTrayWindow::sendTrayOpcode(long message, long data1, long data2,
 
     xcb_send_event(ui_->connection(), false, dockWindow_,
                    XCB_EVENT_MASK_NO_EVENT, reinterpret_cast<char *>(&ev));
-    xcb_flush(ui_->connection());
 }
 
 xcb_visualid_t XCBTrayWindow::trayVisual() {
@@ -331,7 +330,6 @@ void XCBTrayWindow::postCreateWindow() {
             ui_->connection(), wid_,
             XCB_CW_BACKING_PIXEL | XCB_CW_BORDER_PIXEL | XCB_CW_BACK_PIXMAP,
             &list);
-        xcb_flush(ui_->connection());
     }
 }
 
@@ -402,7 +400,6 @@ void XCBTrayWindow::render() {
     cairo_paint(cr);
     cairo_destroy(cr);
     cairo_surface_flush(surface_.get());
-    xcb_flush(ui_->connection());
     CLASSICUI_DEBUG() << "Render";
 }
 
@@ -470,19 +467,19 @@ void XCBTrayWindow::updateMenu() {
 
 void XCBTrayWindow::updateGroupMenu() {
     auto &imManager = ui_->parent()->instance()->inputMethodManager();
-    const auto &list = imManager.groups();
+    std::vector<std::string> list = imManager.groups();
     groupActions_.clear();
     for (size_t i = 0; i < list.size(); i++) {
-        auto groupName = list[i];
+        const std::string &groupName = list[i];
         groupActions_.emplace_back();
         auto &groupAction = groupActions_.back();
-        groupAction.setShortText(list[i]);
+        groupAction.setShortText(groupName);
         groupAction.connect<SimpleAction::Activated>(
             [&imManager, groupName](InputContext *) {
                 imManager.setCurrentGroup(groupName);
             });
         groupAction.setCheckable(true);
-        groupAction.setChecked(list[i] == imManager.currentGroup().name());
+        groupAction.setChecked(groupName == imManager.currentGroup().name());
 
         auto &uiManager = ui_->parent()->instance()->userInterfaceManager();
         uiManager.registerAction(&groupAction);
@@ -501,17 +498,17 @@ void XCBTrayWindow::updateInputMethodMenu() {
             return;
         }
         inputMethodActions_.emplace_back();
-        auto imName = entry->uniqueName();
         auto &inputMethodAction = inputMethodActions_.back();
         inputMethodAction.setShortText(entry->name());
         inputMethodAction.connect<SimpleAction::Activated>(
-            [this, imName](InputContext *ic) {
+            [this, imName = entry->uniqueName()](InputContext *ic) {
                 ui_->parent()->instance()->setCurrentInputMethod(ic, imName,
                                                                  false);
             });
         inputMethodAction.setCheckable(true);
         inputMethodAction.setChecked(
-            ic ? (ui_->parent()->instance()->inputMethod(ic) == imName)
+            ic ? (ui_->parent()->instance()->inputMethod(ic) ==
+                  entry->uniqueName())
                : false);
 
         auto &uiManager = ui_->parent()->instance()->userInterfaceManager();

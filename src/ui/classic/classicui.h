@@ -13,13 +13,10 @@
 #include "fcitx-config/configuration.h"
 #include "fcitx-config/iniparser.h"
 #include "fcitx-config/option.h"
-#include "fcitx-utils/event.h"
 #include "fcitx-utils/i18n.h"
-#include "fcitx-utils/log.h"
 #include "fcitx/addonfactory.h"
 #include "fcitx/addoninstance.h"
 #include "fcitx/addonmanager.h"
-#include "fcitx/focusgroup.h"
 #include "fcitx/instance.h"
 #include "fcitx/userinterface.h"
 #include "classicui_public.h"
@@ -43,7 +40,7 @@ inline constexpr std::string_view PlasmaThemeName = "plasma";
 
 class UIInterface {
 public:
-    UIInterface(std::string name) : name_(name) {}
+    UIInterface(std::string name) : name_(std::move(name)) {}
 
     const std::string &name() const { return name_; }
 
@@ -201,6 +198,7 @@ public:
     FCITX_ADDON_DEPENDENCY_LOADER(xcb, instance_->addonManager());
     FCITX_ADDON_DEPENDENCY_LOADER(wayland, instance_->addonManager());
     FCITX_ADDON_DEPENDENCY_LOADER(waylandim, instance_->addonManager());
+    FCITX_ADDON_DEPENDENCY_LOADER(dbus, instance_->addonManager());
     Instance *instance() const { return instance_; }
     const Configuration *getConfig() const override;
     void setConfig(const RawConfig &config) override {
@@ -228,7 +226,6 @@ public:
 
 private:
     FCITX_ADDON_DEPENDENCY_LOADER(notificationitem, instance_->addonManager());
-    FCITX_ADDON_DEPENDENCY_LOADER(dbus, instance_->addonManager());
     FCITX_ADDON_EXPORT_FUNCTION(ClassicUI, labelIcon);
     FCITX_ADDON_EXPORT_FUNCTION(ClassicUI, preferTextIcon);
     FCITX_ADDON_EXPORT_FUNCTION(ClassicUI, showLayoutNameInIcon);

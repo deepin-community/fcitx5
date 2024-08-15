@@ -10,20 +10,27 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <cstdint>
+#include <ctime>
+#include <memory>
 #include <stdexcept>
+#include <unordered_map>
 #include <utility>
 #include <fmt/format.h>
 #include <getopt.h>
 #include "fcitx-config/iniparser.h"
 #include "fcitx-utils/capabilityflags.h"
 #include "fcitx-utils/event.h"
+#include "fcitx-utils/eventdispatcher.h"
 #include "fcitx-utils/i18n.h"
 #include "fcitx-utils/log.h"
+#include "fcitx-utils/macros.h"
 #include "fcitx-utils/misc.h"
 #include "fcitx-utils/standardpath.h"
 #include "fcitx-utils/stringutils.h"
 #include "fcitx-utils/utf8.h"
 #include "fcitx/event.h"
+#include "fcitx/inputmethodgroup.h"
 #include "../../modules/notifications/notifications_public.h"
 #include "addonmanager.h"
 #include "focusgroup.h"
@@ -39,6 +46,7 @@
 #include "userinterfacemanager.h"
 
 #ifdef ENABLE_X11
+#define FCITX_NO_XCB
 #include <../modules/xcb/xcb_public.h>
 #endif
 
@@ -79,7 +87,7 @@ void initAsDaemon() {
     if (fork() > 0) {
         exit(0);
     }
-    chdir("/");
+    (void)chdir("/");
 
     signal(SIGINT, oldint);
     signal(SIGHUP, oldhup);
@@ -137,6 +145,9 @@ void InstanceArgument::printUsage() const {
         << "  -k, --keep\t\t\tKeep running even the main display is "
            "disconnected.\n"
         << "  -r, --replace\t\t\tReplace the existing instance.\n"
+        << "  -o --option <option>\t\tPass the option to addons\n"
+        << "\t\t\t\t<option> is in format like:\n"
+        << "\t\t\t\tname1=opt1a:opt1b,name2=opt2a:opt2b... .\n"
         << "  -v, --version\t\t\tShow version and quit.\n"
         << "  -h, --help\t\t\tShow this help message and quit.\n";
 }
@@ -395,9 +406,9 @@ void InstancePrivate::showInputMethodInformation(InputContext *ic) {
                         : entry->name();
         if (globalConfig_.compactInputMethodInformation() &&
             !subModeLabel.empty()) {
-            display = subModeLabel;
+            display = std::move(subModeLabel);
         } else if (subMode.empty()) {
-            display = name;
+            display = std::move(name);
         } else {
             display = fmt::format(_("{0} ({1})"), name, subMode);
         }
@@ -496,13 +507,13 @@ void InputState::showInputMethodInformation(const std::string &name) {
 #ifdef ENABLE_KEYBOARD
 xkb_state *InputState::customXkbState(bool refresh) {
     auto *instance = d_ptr->q_func();
-    auto defaultLayout = d_ptr->imManager_.currentGroup().defaultLayout();
-    auto im = instance->inputMethod(ic_);
-    auto layout = d_ptr->imManager_.currentGroup().layoutFor(im);
+    const InputMethodGroup &group = d_ptr->imManager_.currentGroup();
+    const auto im = instance->inputMethod(ic_);
+    auto layout = group.layoutFor(im);
     if (layout.empty() && stringutils::startsWith(im, "keyboard-")) {
         layout = im.substr(9);
     }
-    if (layout == defaultLayout || layout.empty()) {
+    if (layout.empty() || layout == group.defaultLayout()) {
         // Use system one.
         xkbState_.reset();
         modsAllReleased_ = false;
@@ -515,7 +526,7 @@ xkb_state *InputState::customXkbState(bool refresh) {
     }
 
     lastXkbLayout_ = layout;
-    auto layoutAndVariant = parseLayout(layout);
+    const auto layoutAndVariant = parseLayout(layout);
     if (auto *keymap = d_ptr->keymap(ic_->display(), layoutAndVariant.first,
                                      layoutAndVariant.second)) {
         xkbState_.reset(xkb_state_new(keymap));
@@ -635,10 +646,12 @@ Instance::Instance(int argc, char **argv) {
     }
 
     // we need fork before this
-    d_ptr.reset(new InstancePrivate(this));
+    d_ptr = std::make_unique<InstancePrivate>(this);
     FCITX_D();
     d->arg_ = arg;
+    d->eventDispatcher_.attach(&d->eventLoop_);
     d->addonManager_.setInstance(this);
+    d->addonManager_.setAddonOptions(arg.addonOptions_);
     d->icManager_.setInstance(this);
     d->connections_.emplace_back(
         d->imManager_.connect<InputMethodManager::CurrentGroupAboutToChange>(
@@ -905,7 +918,8 @@ Instance::Instance(int argc, char **argv) {
             FCITX_KEYTRACE() << "KeyEvent: " << keyEvent.key()
                              << " rawKey: " << keyEvent.rawKey()
                              << " origKey: " << keyEvent.origKey()
-                             << " Release:" << keyEvent.isRelease();
+                             << " Release:" << keyEvent.isRelease()
+                             << " keycode: " << keyEvent.origKey().code();
 
             if (keyEvent.isRelease()) {
                 return;
@@ -963,13 +977,21 @@ Instance::Instance(int argc, char **argv) {
 #ifdef ENABLE_KEYBOARD
             if (keyEvent.forward()) {
                 FCITX_D();
+                // Always let the release key go through, since it shouldn't
+                // produce character. Otherwise it may wrongly trigger wayland
+                // client side repetition.
+                if (keyEvent.isRelease()) {
+                    keyEvent.filter();
+                    return;
+                }
                 auto *inputState = ic->propertyFor(&d->inputStateFactory_);
                 if (auto *xkbState = inputState->customXkbState()) {
                     if (auto utf32 = xkb_state_key_get_utf32(
                             xkbState, keyEvent.key().code())) {
-                        // Ignore backspace, return, backspace, and delete.
+                        // Ignore newline, return, backspace, tab, and delete.
                         if (utf32 == '\n' || utf32 == '\b' || utf32 == '\r' ||
-                            utf32 == '\033' || utf32 == '\x7f') {
+                            utf32 == '\t' || utf32 == '\033' ||
+                            utf32 == '\x7f') {
                             return;
                         }
                         if (keyEvent.key().states().test(KeyState::Ctrl) ||
@@ -977,10 +999,8 @@ Instance::Instance(int argc, char **argv) {
                                 keyEvent.origKey().sym()) {
                             return;
                         }
-                        if (!keyEvent.isRelease()) {
-                            FCITX_KEYTRACE() << "Will commit char: " << utf32;
-                            ic->commitString(utf8::UCS4ToUTF8(utf32));
-                        }
+                        FCITX_KEYTRACE() << "Will commit char: " << utf32;
+                        ic->commitString(utf8::UCS4ToUTF8(utf32));
                         keyEvent.filterAndAccept();
                     } else if (!keyEvent.key().states().test(KeyState::Ctrl) &&
                                keyEvent.rawKey().sym() !=
@@ -999,6 +1019,26 @@ Instance::Instance(int argc, char **argv) {
         EventType::InputContextFocusIn, EventWatcherPhase::ReservedFirst,
         [this, d](Event &event) {
             auto &icEvent = static_cast<InputContextEvent &>(event);
+            auto isSameProgram = [&icEvent, d]() {
+                // Check if they are same IC, or they are same program.
+                return (icEvent.inputContext() == d->lastUnFocusedIc_.get()) ||
+                       (!icEvent.inputContext()->program().empty() &&
+                        (icEvent.inputContext()->program() ==
+                         d->lastUnFocusedProgram_));
+            };
+
+            if (d->globalConfig_.resetStateWhenFocusIn() ==
+                    PropertyPropagatePolicy::All ||
+                (d->globalConfig_.resetStateWhenFocusIn() ==
+                     PropertyPropagatePolicy::Program &&
+                 !isSameProgram())) {
+                if (d->globalConfig_.activeByDefault()) {
+                    activate(icEvent.inputContext());
+                } else {
+                    deactivate(icEvent.inputContext());
+                }
+            }
+
             activateInputMethod(icEvent);
 
             if (virtualKeyboardAutoShow()) {
@@ -1045,8 +1085,10 @@ Instance::Instance(int argc, char **argv) {
         }));
     d->eventWatchers_.emplace_back(d->watchEvent(
         EventType::InputContextFocusOut, EventWatcherPhase::InputMethod,
-        [this](Event &event) {
+        [this, d](Event &event) {
             auto &icEvent = static_cast<InputContextEvent &>(event);
+            d->lastUnFocusedProgram_ = icEvent.inputContext()->program();
+            d->lastUnFocusedIc_ = icEvent.inputContext()->watch();
             deactivateInputMethod(icEvent);
             if (virtualKeyboardAutoHide()) {
                 auto *inputContext = icEvent.inputContext();
@@ -1212,11 +1254,13 @@ void InstanceArgument::parseOption(int argc, char **argv) {
                                    {"replace", no_argument, nullptr, 'r'},
                                    {"version", no_argument, nullptr, 'v'},
                                    {"help", no_argument, nullptr, 'h'},
+                                   {"option", required_argument, nullptr, 'o'},
                                    {nullptr, 0, 0, 0}};
 
     int optionIndex = 0;
     int c;
-    while ((c = getopt_long(argc, argv, "ru:dDs:hv", longOptions,
+    std::string addonOptionString;
+    while ((c = getopt_long(argc, argv, "ru:dDs:hvo:", longOptions,
                             &optionIndex)) != EOF) {
         switch (c) {
         case 0: {
@@ -1262,6 +1306,9 @@ void InstanceArgument::parseOption(int argc, char **argv) {
             quietQuit = true;
             printVersion();
             break;
+        case 'o':
+            addonOptionString = optarg;
+            break;
         default:
             quietQuit = true;
             printUsage();
@@ -1270,6 +1317,17 @@ void InstanceArgument::parseOption(int argc, char **argv) {
             break;
         }
     }
+
+    std::unordered_map<std::string, std::vector<std::string>> addonOptions;
+    for (const std::string_view item :
+         stringutils::split(addonOptionString, ",")) {
+        auto tokens = stringutils::split(item, "=");
+        if (tokens.size() != 2) {
+            continue;
+        }
+        addonOptions[tokens[0]] = stringutils::split(tokens[1], ":");
+    }
+    addonOptions_ = std::move(addonOptions);
 }
 
 void Instance::setSignalPipe(int fd) {
@@ -1306,6 +1364,9 @@ void Instance::handleSignal() {
             exit();
         } else if (signo == SIGUSR1) {
             reloadConfig();
+        } else if (signo == SIGCHLD) {
+            d->zombieReaper_->setNextInterval(2000000);
+            d->zombieReaper_->setOneShot();
         }
     }
 }
@@ -1356,6 +1417,15 @@ void Instance::initialize() {
             }
             return false;
         });
+    d->zombieReaper_ = d->eventLoop_.addTimeEvent(
+        CLOCK_MONOTONIC, now(CLOCK_MONOTONIC), 0,
+        [](EventSourceTime *, uint64_t) {
+            pid_t res;
+            while ((res = waitpid(-1, nullptr, WNOHANG)) > 0) {
+            }
+            return false;
+        });
+    d->zombieReaper_->setEnabled(false);
 
     d->exitEvent_ = d->eventLoop_.addExitEvent([this](EventSource *) {
         FCITX_DEBUG() << "Running save...";
@@ -1371,15 +1441,16 @@ int Instance::exec() {
         return 0;
     }
     d->exit_ = false;
+    d->exitCode_ = 0;
     initialize();
     if (d->exit_) {
-        return 1;
+        return d->exitCode_;
     }
     d->running_ = true;
     auto r = eventLoop().exec();
     d->running_ = false;
 
-    return r ? 0 : 1;
+    return r ? d->exitCode_ : 1;
 }
 
 void Instance::setRunning(bool running) {
@@ -1442,6 +1513,25 @@ void Instance::setVirtualKeyboardFunctionMode(
     d->virtualKeyboardFunctionMode_ = mode;
 }
 
+void Instance::setBinaryMode() {
+    FCITX_D();
+    d->binaryMode_ = true;
+}
+
+bool Instance::canRestart() const {
+    FCITX_D();
+    const auto &addonNames = d->addonManager_.loadedAddonNames();
+    return d->binaryMode_ &&
+           std::all_of(addonNames.begin(), addonNames.end(),
+                       [d](const std::string &name) {
+                           auto addon = d->addonManager_.lookupAddon(name);
+                           if (!addon) {
+                               return true;
+                           }
+                           return addon->canRestart();
+                       });
+}
+
 InstancePrivate *Instance::privateData() {
     FCITX_D();
     return d;
@@ -1450,6 +1540,11 @@ InstancePrivate *Instance::privateData() {
 EventLoop &Instance::eventLoop() {
     FCITX_D();
     return d->eventLoop_;
+}
+
+EventDispatcher &Instance::eventDispatcher() {
+    FCITX_D();
+    return d->eventDispatcher_;
 }
 
 InputContextManager &Instance::inputContextManager() {
@@ -1583,8 +1678,8 @@ std::string Instance::inputMethod(InputContext *ic) {
     if (ic->capabilityFlags().test(CapabilityFlag::Disable) ||
         (ic->capabilityFlags().test(CapabilityFlag::Password) &&
          !d->globalConfig_.allowInputMethodForPassword())) {
-        auto defaultLayout = group.defaultLayout();
-        auto defaultLayoutIM = fmt::format("keyboard-{}", defaultLayout);
+        auto defaultLayoutIM =
+            stringutils::concat("keyboard-", group.defaultLayout());
         const auto *entry = d->imManager_.entry(defaultLayoutIM);
         if (!entry) {
             entry = d->imManager_.entry("keyboard-us");
@@ -1636,16 +1731,18 @@ InputMethodEngine *Instance::inputMethodEngine(const std::string &name) {
 }
 
 std::string Instance::inputMethodIcon(InputContext *ic) {
-    std::string icon = "input-keyboard";
-
+    std::string icon;
     const auto *entry = inputMethodEntry(ic);
-    auto *engine = inputMethodEngine(ic);
-
-    if (engine) {
-        icon = engine->subModeIcon(*entry, *ic);
-    }
-    if (icon.empty()) {
-        icon = entry->icon();
+    if (entry) {
+        auto *engine = inputMethodEngine(ic);
+        if (engine) {
+            icon = engine->subModeIcon(*entry, *ic);
+        }
+        if (icon.empty()) {
+            icon = entry->icon();
+        }
+    } else {
+        icon = "input-keyboard";
     }
     return icon;
 }
@@ -1852,9 +1949,12 @@ void Instance::deactivate() {
     }
 }
 
-void Instance::exit() {
+void Instance::exit() { exit(0); }
+
+void Instance::exit(int exitCode) {
     FCITX_D();
     d->exit_ = true;
+    d->exitCode_ = exitCode;
     if (d->running_) {
         d->eventLoop_.exit();
     }
@@ -1925,6 +2025,9 @@ void Instance::resetInputMethodList() {
 
 void Instance::restart() {
     FCITX_D();
+    if (!canRestart()) {
+        return;
+    }
     d->restart_ = true;
     exit();
 }
@@ -2218,7 +2321,7 @@ Text Instance::outputFilter(InputContext *inputContext, const Text &orig) {
                 dot += "\xe2\x80\xa2";
                 length -= 1;
             }
-            newText.append(dot,
+            newText.append(std::move(dot),
                            result.formatAt(i) | TextFormatFlag::DontCommit);
         }
         result = std::move(newText);

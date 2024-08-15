@@ -6,12 +6,15 @@
  */
 #include "waylandimserver.h"
 #include <sys/mman.h>
+#include <algorithm>
 #include <memory>
-#include <fcitx-utils/utf8.h>
-#include "appmonitor.h"
+#include "fcitx-utils/macros.h"
+#include "fcitx-utils/utf8.h"
 #include "virtualinputcontext.h"
 #include "wayland-text-input-unstable-v1-client-protocol.h"
+#include "wayland_public.h"
 #include "waylandim.h"
+#include "wl_seat.h"
 
 #ifdef __linux__
 #include <linux/input-event-codes.h>
@@ -24,11 +27,13 @@
 
 namespace fcitx {
 
-constexpr CapabilityFlags baseFlags{CapabilityFlag::Preedit,
-                                    CapabilityFlag::FormattedPreedit,
-                                    CapabilityFlag::SurroundingText};
+namespace {
 
-static inline unsigned int waylandFormat(TextFormatFlags flags) {
+constexpr CapabilityFlags baseFlags{
+    CapabilityFlag::Preedit, CapabilityFlag::FormattedPreedit,
+    CapabilityFlag::SurroundingText, CapabilityFlag::ClientUnfocusCommit};
+
+inline unsigned int waylandFormat(TextFormatFlags flags) {
     if (flags & TextFormatFlag::HighLight) {
         return ZWP_TEXT_INPUT_V1_PREEDIT_STYLE_HIGHLIGHT;
     }
@@ -43,6 +48,8 @@ static inline unsigned int waylandFormat(TextFormatFlags flags) {
     }
     return ZWP_TEXT_INPUT_V1_PREEDIT_STYLE_NONE;
 }
+
+} // namespace
 
 WaylandIMServer::WaylandIMServer(wl_display *display, FocusGroup *group,
                                  const std::string &name,
@@ -72,7 +79,7 @@ void WaylandIMServer::init() {
     auto im = display_->getGlobal<wayland::ZwpInputMethodV1>();
     if (im && !inputMethodV1_) {
         WAYLANDIM_DEBUG() << "WAYLANDIM V1";
-        inputMethodV1_ = im;
+        inputMethodV1_ = std::move(im);
         auto *globalIc = new WaylandIMInputContextV1(
             parent_->instance()->inputContextManager(), this);
         globalIc->setFocusGroup(group_);
@@ -88,7 +95,6 @@ void WaylandIMServer::init() {
                 WAYLANDIM_DEBUG() << "DEACTIVATE " << ic;
                 deactivate(ic);
             });
-        deferredFlush();
     }
 }
 
@@ -106,11 +112,19 @@ void WaylandIMServer::deactivate(wayland::ZwpInputMethodContextV1 *id) {
     }
 }
 
+bool WaylandIMServer::hasKeyboardGrab() const {
+    if (auto *globalIc =
+            static_cast<WaylandIMInputContextV1 *>(globalIc_.get())) {
+        return globalIc->hasKeyboardGrab();
+    }
+    return false;
+}
+
 WaylandIMInputContextV1::WaylandIMInputContextV1(
     InputContextManager &inputContextManager, WaylandIMServer *server)
     : VirtualInputContextGlue(inputContextManager), server_(server) {
     timeEvent_ = server_->instance()->eventLoop().addTimeEvent(
-        CLOCK_MONOTONIC, now(CLOCK_MONOTONIC), 0,
+        CLOCK_MONOTONIC, now(CLOCK_MONOTONIC), 1,
         [this](EventSourceTime *, uint64_t) {
             repeat();
             return true;
@@ -163,7 +177,6 @@ void WaylandIMInputContextV1::activate(wayland::ZwpInputMethodContextV1 *ic) {
     keyboard_->repeatInfo().connect([this](int32_t rate, int32_t delay) {
         repeatInfoCallback(rate, delay);
     });
-    repeatInfoCallback(repeatRate_, repeatDelay_);
     wl_array array;
     wl_array_init(&array);
     constexpr char data[] = "Shift\0Control\0Mod1\0Mod4";
@@ -176,20 +189,19 @@ void WaylandIMInputContextV1::activate(wayland::ZwpInputMethodContextV1 *ic) {
     } else {
         focusIn();
     }
-    server_->deferredFlush();
 }
 
 void WaylandIMInputContextV1::deactivate(wayland::ZwpInputMethodContextV1 *ic) {
     if (ic_.get() == ic) {
         ic_.reset();
         keyboard_.reset();
+        repeatInfo_.reset();
         // This is the only place we update wayland display mask, so it is ok to
         // reset it to 0. This breaks the caps lock or num lock. But we have no
         // other option until we can listen to the mod change globally.
         server_->instance()->clearXkbStateMask(server_->group()->display());
 
         timeEvent_->setEnabled(false);
-        server_->deferredFlush();
         focusOutWrapper();
     } else {
         // This should not happen, but just in case.
@@ -208,14 +220,12 @@ void WaylandIMInputContextV1::repeat() {
         Key(repeatSym_, server_->modifiers_ | KeyState::Repeat, repeatKey_ + 8),
         false, repeatTime_);
 
-    sendKeyToVK(repeatTime_, event.rawKey().code() - 8,
-                WL_KEYBOARD_KEY_STATE_RELEASED);
+    sendKeyToVK(repeatTime_, event.rawKey(), WL_KEYBOARD_KEY_STATE_RELEASED);
     if (!ic->keyEvent(event)) {
-        sendKeyToVK(repeatTime_, event.rawKey().code() - 8,
-                    WL_KEYBOARD_KEY_STATE_PRESSED);
+        sendKeyToVK(repeatTime_, event.rawKey(), WL_KEYBOARD_KEY_STATE_PRESSED);
     }
 
-    uint64_t interval = 1000000 / repeatRate_;
+    uint64_t interval = 1000000 / repeatRate();
     timeEvent_->setTime(timeEvent_->time() + interval);
     timeEvent_->setOneShot();
 }
@@ -244,7 +254,7 @@ void WaylandIMInputContextV1::surroundingTextCallback(const char *text,
             break;
         }
         surroundingText().setText(text, cursorByChar, anchorByChar);
-    } while (0);
+    } while (false);
     updateSurroundingTextWrapper();
 }
 void WaylandIMInputContextV1::resetCallback() {
@@ -430,6 +440,7 @@ void WaylandIMInputContextV1::keymapCallback(uint32_t format, int32_t fd,
 
 void WaylandIMInputContextV1::keyCallback(uint32_t serial, uint32_t time,
                                           uint32_t key, uint32_t state) {
+    FCITX_UNUSED(serial);
     time_ = time;
     if (!server_->state_) {
         return;
@@ -452,13 +463,14 @@ void WaylandIMInputContextV1::keyCallback(uint32_t serial, uint32_t time,
         timeEvent_->setEnabled(false);
     } else if (state == WL_KEYBOARD_KEY_STATE_PRESSED &&
                xkb_keymap_key_repeats(server_->keymap_.get(), code)) {
-        if (repeatRate_) {
+        if (repeatRate() > 0) {
             repeatKey_ = key;
             repeatTime_ = time;
             repeatSym_ = event.rawKey().sym();
             // Let's trick the key event system by fake our first.
             // Remove 100 from the initial interval.
-            timeEvent_->setNextInterval(repeatDelay_ * 1000 - repeatHackDelay);
+            timeEvent_->setNextInterval(std::max(
+                0, std::max(0, repeatDelay() * 1000 - repeatHackDelay)));
             timeEvent_->setOneShot();
         }
     }
@@ -466,7 +478,7 @@ void WaylandIMInputContextV1::keyCallback(uint32_t serial, uint32_t time,
     WAYLANDIM_DEBUG() << event.key().toString()
                       << " IsRelease=" << event.isRelease();
     if (!ic->keyEvent(event)) {
-        ic_->key(serial, time, key, state);
+        sendKeyToVK(time, event.rawKey(), state);
     }
 
     // This means our engine is being too slow, this is usually transient (e.g.
@@ -478,10 +490,8 @@ void WaylandIMInputContextV1::keyCallback(uint32_t serial, uint32_t time,
         WAYLANDIM_DEBUG() << "Engine handling speed can not keep up with key "
                              "repetition rate.";
         timeEvent_->setNextInterval(
-            std::min(1000, repeatDelay_ * 1000 - repeatHackDelay));
+            std::clamp(repeatDelay() * 1000 - repeatHackDelay, 0, 1000));
     }
-
-    server_->deferredFlush();
 }
 void WaylandIMInputContextV1::modifiersCallback(uint32_t serial,
                                                 uint32_t mods_depressed,
@@ -538,9 +548,10 @@ void WaylandIMInputContextV1::modifiersCallback(uint32_t serial,
     }
 }
 
+// This is not sent by either kwin/weston, but since it's unclear whether any
+// one would send it, so keep it as is.
 void WaylandIMInputContextV1::repeatInfoCallback(int32_t rate, int32_t delay) {
-    repeatRate_ = rate;
-    repeatDelay_ = delay;
+    repeatInfo_ = std::make_tuple(rate, delay);
 }
 
 void WaylandIMInputContextV1::sendKey(uint32_t time, uint32_t sym,
@@ -550,16 +561,19 @@ void WaylandIMInputContextV1::sendKey(uint32_t time, uint32_t sym,
     }
     auto modifiers = toModifiers(states);
     ic_->keysym(serial_, time, sym, state, modifiers);
-    server_->deferredFlush();
 }
 
-void WaylandIMInputContextV1::sendKeyToVK(uint32_t time, uint32_t key,
-                                          uint32_t state) {
+void WaylandIMInputContextV1::sendKeyToVK(uint32_t time, const Key &key,
+                                          uint32_t state) const {
     if (!ic_) {
         return;
     }
-    ic_->key(serial_, time, key, state);
-    server_->deferredFlush();
+
+    if (auto text = server_->mayCommitAsText(key, state)) {
+        ic_->commitString(serial_, text->data());
+    } else {
+        ic_->key(serial_, time, key.code() - 8, state);
+    }
 }
 
 void WaylandIMInputContextV1::updatePreeditDelegate(InputContext *ic) const {
@@ -576,7 +590,9 @@ void WaylandIMInputContextV1::updatePreeditDelegate(InputContext *ic) const {
         }
     }
 
-    ic_->preeditCursor(preedit.cursor());
+    // Though negative cursor is allowed by protocol, we just don't use it.
+    ic_->preeditCursor(preedit.cursor() >= 0 ? preedit.cursor()
+                                             : preedit.textLength());
     unsigned int index = 0;
     for (int i = 0, e = preedit.size(); i < e; i++) {
         if (!preedit.stringAt(i).empty()) {
@@ -587,7 +603,6 @@ void WaylandIMInputContextV1::updatePreeditDelegate(InputContext *ic) const {
     }
     ic_->preeditString(serial_, preedit.toString().c_str(),
                        preedit.toStringForCommit().c_str());
-    server_->deferredFlush();
 }
 
 void WaylandIMInputContextV1::deleteSurroundingTextDelegate(
@@ -615,6 +630,14 @@ void WaylandIMInputContextV1::deleteSurroundingTextDelegate(
     auto sizeBytes = utf8::ncharByteLength(text.begin() + startBytes, size);
     ic_->deleteSurroundingText(startBytes - cursorBytes, sizeBytes);
     ic_->commitString(serial_, "");
-    server_->deferredFlush();
 }
+
+int32_t WaylandIMInputContextV1::repeatRate() const {
+    return server_->repeatRate(nullptr, repeatInfo_);
+}
+
+int32_t WaylandIMInputContextV1::repeatDelay() const {
+    return server_->repeatDelay(nullptr, repeatInfo_);
+}
+
 } // namespace fcitx

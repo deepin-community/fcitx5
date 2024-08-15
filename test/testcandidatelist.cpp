@@ -7,6 +7,7 @@
 
 #include <stdexcept>
 #include "fcitx-utils/log.h"
+#include "fcitx/candidateaction.h"
 #include "fcitx/candidatelist.h"
 
 using namespace fcitx;
@@ -14,8 +15,10 @@ int selected = 0;
 
 class TestCandidateWord : public CandidateWord {
 public:
-    TestCandidateWord(int number)
-        : CandidateWord(Text(std::to_string(number))), number_(number) {}
+    TestCandidateWord(int number, Text comment = {})
+        : CandidateWord(Text(std::to_string(number))), number_(number) {
+        setComment(std::move(comment));
+    }
     void select(InputContext *) const override { selected = number_; }
 
 private:
@@ -303,9 +306,65 @@ void test_label() {
     FCITX_ASSERT(candidatelist.label(9).toString() == ",. ");
 }
 
+void test_comment() {
+    TestCandidateWord candidate(1, Text("comment"));
+    FCITX_ASSERT(candidate.text().toString() == "1");
+    FCITX_ASSERT(candidate.comment().toString() == "comment");
+    FCITX_ASSERT(candidate.textWithComment().toString() == "1 comment");
+}
+
+void test_cursor() {
+    CommonCandidateList candidatelist;
+    candidatelist.setPageSize(5);
+    candidatelist.setSelectionKey(
+        Key::keyListFromString("1 2 3 4 5 6 7 8 9 0"));
+    for (int i = 0; i < 10; i++) {
+        candidatelist.append<TestCandidateWord>(i);
+    }
+    candidatelist.setPage(1);
+    candidatelist.toCursorModifiable()->setCursorIndex(3);
+    FCITX_ASSERT(candidatelist.toBulkCursor()->globalCursorIndex(), 8);
+    candidatelist.setCursorIndex(0);
+    FCITX_ASSERT(candidatelist.toBulkCursor()->globalCursorIndex(), 5);
+}
+
+void test_candidateaction() {
+    CandidateAction action;
+    action.setText("Test");
+    action.setId(1);
+    action.setCheckable(true);
+    action.setChecked(false);
+    action.setSeparator(false);
+    action.setIcon("Icon");
+
+    CandidateAction action2;
+    action2 = std::move(action);
+
+    FCITX_ASSERT(action2.text() == "Test");
+    FCITX_ASSERT(action2.id() == 1);
+    FCITX_ASSERT(action2.isCheckable());
+    FCITX_ASSERT(!action2.isChecked());
+    FCITX_ASSERT(!action2.isSeparator());
+    FCITX_ASSERT(action2.icon() == "Icon");
+
+    CandidateAction action3(action2);
+
+    for (const auto &action : {action2, action3}) {
+        FCITX_ASSERT(action.text() == "Test");
+        FCITX_ASSERT(action.id() == 1);
+        FCITX_ASSERT(action.isCheckable());
+        FCITX_ASSERT(!action.isChecked());
+        FCITX_ASSERT(!action.isSeparator());
+        FCITX_ASSERT(action.icon() == "Icon");
+    }
+}
+
 int main() {
     test_basic();
     test_faulty_placeholder();
     test_label();
+    test_comment();
+    test_cursor();
+    test_candidateaction();
     return 0;
 }

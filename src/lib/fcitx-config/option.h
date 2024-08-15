@@ -9,12 +9,11 @@
 
 #include "fcitxconfig_export.h"
 
-#include <functional>
 #include <limits>
 #include <string>
 #include <type_traits>
 #include <fcitx-config/marshallfunction.h>
-#include <fcitx-config/option_details.h>
+#include <fcitx-config/option_details.h> // IWYU pragma: export
 #include <fcitx-config/optiontypename.h>
 #include <fcitx-config/rawconfig.h>
 
@@ -233,11 +232,12 @@ private:
 /// Default marshaller that write the config RawConfig.
 template <typename T>
 struct DefaultMarshaller {
-    virtual void marshall(RawConfig &config, const T &value) const {
+    DefaultMarshaller() = default;
+
+    void marshall(RawConfig &config, const T &value) const {
         return marshallOption(config, value);
     }
-    virtual bool unmarshall(T &value, const RawConfig &config,
-                            bool partial) const {
+    bool unmarshall(T &value, const RawConfig &config, bool partial) const {
         return unmarshallOption(value, config, partial);
     }
 };
@@ -294,8 +294,8 @@ public:
            Annotation annotation = Annotation())
         : OptionBaseV3(parent, std::move(path), std::move(description)),
           defaultValue_(defaultValue), value_(defaultValue),
-          marshaller_(marshaller), constrain_(constrain),
-          annotation_(annotation) {
+          marshaller_(std::move(marshaller)), constrain_(std::move(constrain)),
+          annotation_(std::move(annotation)) {
         if (!constrain_.check(defaultValue_)) {
             throw std::invalid_argument(
                 "defaultValue doesn't satisfy constrain");
@@ -423,7 +423,7 @@ using KeyListOption = Option<KeyList, ListConstrain<KeyConstrain>,
 /// Shorthand for create a key list constrain.
 static inline ListConstrain<KeyConstrain>
 KeyListConstrain(KeyConstrainFlags flags = KeyConstrainFlags()) {
-    return ListConstrain<KeyConstrain>(KeyConstrain(flags));
+    return {KeyConstrain(flags)};
 }
 
 /// Shorthand for option that will not show in UI.

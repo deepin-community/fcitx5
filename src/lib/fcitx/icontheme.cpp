@@ -8,7 +8,6 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <ctime>
 #include <fstream>
 #include <limits>
 #include <stdexcept>
@@ -16,9 +15,7 @@
 #include "fcitx-config/iniparser.h"
 #include "fcitx-config/marshallfunction.h"
 #include "fcitx-utils/fs.h"
-#include "fcitx-utils/log.h"
 #include "fcitx-utils/mtime_p.h"
-#include "config.h"
 #include "misc_p.h"
 
 namespace fcitx {
@@ -553,9 +550,9 @@ public:
                     }
                     auto distance = dir.sizeDistance(size, scale);
                     if (distance < minSize) {
-                        auto path = checkDirectory(dir, baseDir.first);
-                        if (!path.empty()) {
-                            closestFilename = path;
+                        if (auto path = checkDirectory(dir, baseDir.first);
+                            !path.empty()) {
+                            closestFilename = std::move(path);
                             minSize = distance;
                         }
                     }
@@ -800,7 +797,13 @@ std::string IconTheme::defaultIconThemeName() {
 
 /// Rename fcitx-* icon to org.fcitx.Fcitx5.fcitx-* if in flatpak
 std::string IconTheme::iconName(const std::string &icon, bool inFlatpak) {
-    if (inFlatpak && stringutils::startsWith(icon, "fcitx-")) {
+    constexpr std::string_view fcitxIconPrefix = "fcitx";
+    if (inFlatpak && stringutils::startsWith(icon, fcitxIconPrefix)) {
+        // Map "fcitx" to org.fcitx.Fcitx5
+        // And map fcitx* to org.fcitx.Fcitx5.fcitx*
+        if (icon.size() == fcitxIconPrefix.size()) {
+            return "org.fcitx.Fcitx5";
+        }
         return stringutils::concat("org.fcitx.Fcitx5.", icon);
     }
     return icon;

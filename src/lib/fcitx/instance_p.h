@@ -12,8 +12,10 @@
 #include <string>
 #include <unordered_map>
 #include "fcitx-utils/event.h"
+#include "fcitx-utils/eventdispatcher.h"
 #include "fcitx-utils/handlertable.h"
 #include "fcitx-utils/misc.h"
+#include "fcitx-utils/trackableobject.h"
 #include "config.h"
 #include "inputcontextproperty.h"
 #include "inputmethodmanager.h"
@@ -118,6 +120,7 @@ struct InstanceArgument {
     std::string uiName;
     std::vector<std::string> enableList;
     std::vector<std::string> disableList;
+    std::unordered_map<std::string, std::vector<std::string>> addonOptions_;
     std::string argv0;
 };
 
@@ -152,14 +155,17 @@ public:
 
     int signalPipe_ = -1;
     bool exit_ = false;
+    int exitCode_ = 0;
     bool running_ = false;
     InputMethodMode inputMethodMode_ = isAndroid()
                                            ? InputMethodMode::OnScreenKeyboard
                                            : InputMethodMode::PhysicalKeyboard;
 
     EventLoop eventLoop_;
+    EventDispatcher eventDispatcher_;
     std::unique_ptr<EventSourceIO> signalPipeEvent_;
     std::unique_ptr<EventSourceTime> preloadInputMethodEvent_;
+    std::unique_ptr<EventSourceTime> zombieReaper_;
     std::unique_ptr<EventSource> exitEvent_;
     InputContextManager icManager_;
     AddonManager addonManager_;
@@ -219,6 +225,11 @@ public:
 
     VirtualKeyboardFunctionMode virtualKeyboardFunctionMode_ =
         VirtualKeyboardFunctionMode::Full;
+
+    bool binaryMode_ = false;
+
+    std::string lastUnFocusedProgram_;
+    TrackableObjectReference<InputContext> lastUnFocusedIc_;
 };
 
 } // namespace fcitx

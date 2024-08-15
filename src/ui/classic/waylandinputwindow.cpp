@@ -14,6 +14,7 @@
 #include "wl_compositor.h"
 #include "wl_region.h"
 #include "wp_fractional_scale_manager_v1.h"
+#include "zwp_input_method_v2.h"
 #include "zwp_input_panel_v1.h"
 #include "zwp_input_popup_surface_v2.h"
 
@@ -91,7 +92,7 @@ void WaylandInputWindow::initPanel() {
 
 void WaylandInputWindow::setBlurManager(
     std::shared_ptr<wayland::OrgKdeKwinBlurManager> blur) {
-    blurManager_ = blur;
+    blurManager_ = std::move(blur);
     updateBlur();
 }
 
@@ -137,7 +138,6 @@ void WaylandInputWindow::updateScale() { window_->updateScale(); }
 void WaylandInputWindow::resetPanel() { panelSurface_.reset(); }
 
 void WaylandInputWindow::update(fcitx::InputContext *ic) {
-    Finally flush([this]() { ui_->display()->flush(); });
     const auto oldVisible = visible();
     auto [width, height] = InputWindow::update(ic);
     CLASSICUI_DEBUG() << "Wayland Input Window visible:" << visible()
@@ -209,7 +209,8 @@ void WaylandInputWindow::update(fcitx::InputContext *ic) {
 
     if (auto *surface = window_->prerender()) {
         cairo_t *c = cairo_create(surface);
-        paint(c, width, height, window_->bufferScale());
+        paint(c, width, height,
+              window_->bufferScale() / WaylandWindow::ScaleDominatorF);
         cairo_destroy(c);
         window_->render();
     }
@@ -223,7 +224,8 @@ void WaylandInputWindow::repaint() {
 
     if (auto *surface = window_->prerender()) {
         cairo_t *c = cairo_create(surface);
-        paint(c, window_->width(), window_->height(), window_->bufferScale());
+        paint(c, window_->width(), window_->height(),
+              window_->bufferScale() / WaylandWindow::ScaleDominatorF);
         cairo_destroy(c);
         window_->render();
     }
