@@ -259,8 +259,8 @@ void DBusMenu::fillLayoutProperties(
         case BII_Restart:
             appendProperty(properties, propertyNames, "label",
                            dbus::Variant(_("Restart")));
-            appendProperty(properties, propertyNames, "icon-name",
-                           dbus::Variant("view-refresh"));
+            // appendProperty(properties, propertyNames, "icon-name",
+            //                dbus::Variant("view-refresh"));
             break;
         case BII_Exit:
             appendProperty(properties, propertyNames, "label",
