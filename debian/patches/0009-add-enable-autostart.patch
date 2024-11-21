@@ -1,0 +1,23 @@
+Index: fcitx5/debian/fcitx5.install
+===================================================================
+--- fcitx5.orig/debian/fcitx5.install
++++ fcitx5/debian/fcitx5.install
+@@ -5,3 +5,4 @@ usr/share/applications/
+ usr/share/icons/hicolor/*/apps/fcitx.*
+ usr/share/icons/hicolor/*/apps/org.fcitx.Fcitx5.*
+ usr/share/metainfo/org.fcitx.Fcitx5.metainfo.xml
++etc/xdg/autostart/
+\ No newline at end of file
+Index: fcitx5/debian/rules
+===================================================================
+--- fcitx5.orig/debian/rules
++++ fcitx5/debian/rules
+@@ -2,7 +2,7 @@
+ 
+ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+ 
+-config-opt := -DUSE_FLATPAK_ICON=OFF -DENABLE_XDGAUTOSTART=OFF
++config-opt := -DUSE_FLATPAK_ICON=OFF -DENABLE_XDGAUTOSTART=ON
+ 
+ ifneq (linux,$(DEB_HOST_ARCH_OS))
+ config-opt += -DUSE_SYSTEMD=OFF -DENABLE_WAYLAND=OFF

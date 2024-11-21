@@ -1,3 +1,9 @@
+fcitx5 (5.1.10-1deepin6) unstable; urgency=medium
+
+  * add enable autostart
+
+ -- Chengqi E <echengqi@uniontech.com>  Thu, 21 Nov 2024 15:25:33 +0800
+
 fcitx5 (5.1.10-1deepin5) unstable; urgency=medium
 
   * remove the restart icon from the right-click menu
