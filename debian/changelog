@@ -1,3 +1,9 @@
+fcitx5 (5.1.11-2deepin3) unstable; urgency=medium
+
+  * add enable autostart
+
+ -- Chengqi E <echengqi@uniontech.com>  Fri, 10 Jan 2025 13:50:33 +0800
+
 fcitx5 (5.1.11-2deepin2) unstable; urgency=medium
 
   * Disable the default shortcut key for altTriggerKeys
