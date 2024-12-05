@@ -1,3 +1,9 @@
+fcitx5 (5.1.10-1deepin7) unstable; urgency=medium
+
+  * Processing Deepin25 Jump Control Center
+
+ -- caixiangrong <caixiangrong@uniontech.com>  Thu, 05 Dec 2024 16:35:43 +0800
+
 fcitx5 (5.1.10-1deepin6) unstable; urgency=medium
 
   * add enable autostart
