@@ -6,6 +6,7 @@
  */
 
 #include "kimpanel.h"
+#include <fcitx/inputmethodengine.h>
 #include "fcitx-utils/dbus/objectvtable.h"
 #include "fcitx-utils/dbus/servicewatcher.h"
 #include "fcitx-utils/i18n.h"
@@ -15,7 +16,6 @@
 #include "fcitx/action.h"
 #include "fcitx/addonmanager.h"
 #include "fcitx/inputcontext.h"
-#include "fcitx/inputmethodengine.h"
 #include "fcitx/inputmethodentry.h"
 #include "fcitx/inputmethodmanager.h"
 #include "fcitx/instance.h"
@@ -23,9 +23,6 @@
 #include "fcitx/misc_p.h"
 #include "fcitx/userinterfacemanager.h"
 #include "dbus_public.h"
-
-#define FCITX_NO_XCB
-#include "xcb_public.h"
 
 namespace fcitx {
 
@@ -109,7 +106,6 @@ private:
 Kimpanel::Kimpanel(Instance *instance)
     : instance_(instance), bus_(dbus()->call<IDBusModule::bus>()),
       watcher_(*bus_) {
-    reloadConfig();
     entry_ = watcher_.watchService(
         "org.kde.impanel", [this](const std::string &, const std::string &,
                                   const std::string &newOwner) {
@@ -120,8 +116,6 @@ Kimpanel::Kimpanel(Instance *instance)
 
 Kimpanel::~Kimpanel() {}
 
-void Kimpanel::reloadConfig() { readAsIni(config_, "conf/kimpanel.conf"); }
-
 void Kimpanel::suspend() {
     eventHandlers_.clear();
     proxy_.reset();
@@ -129,8 +123,6 @@ void Kimpanel::suspend() {
     hasRelative_ = false;
     hasRelativeV2_ = false;
 }
-
-const Configuration *Kimpanel::getConfig() const { return &config_; }
 
 void Kimpanel::registerAllProperties(InputContext *ic) {
     std::vector<std::string> props;
@@ -169,10 +161,9 @@ std::string Kimpanel::actionToStatus(Action *action, InputContext *ic) {
     if (action->menu()) {
         type = "menu";
     }
-    return stringutils::concat("/Fcitx/", action->name(), ":",
-                               action->shortText(ic), ":",
-                               IconTheme::iconName(action->icon(ic)), ":",
-                               action->longText(ic), ":", type);
+    return stringutils::concat(
+        "/Fcitx/", action->name(), ":", action->shortText(ic), ":",
+        iconName(action->icon(ic)), ":", action->longText(ic), ":", type);
 }
 
 void Kimpanel::resume() {
@@ -265,26 +256,8 @@ void Kimpanel::resume() {
 
 void Kimpanel::update(UserInterfaceComponent component,
                       InputContext *inputContext) {
-    if (!inputContext->hasFocus() && inputContext != lastInputContext_.get() &&
-        inputContext != instance_->mostRecentInputContext()) {
-        return;
-    }
     if (component == UserInterfaceComponent::InputPanel) {
-        if (classicui() && isKDE() &&
-            (stringutils::startsWith(inputContext->frontendName(), "wayland") ||
-             (xcb() &&
-              stringutils::startsWith(inputContext->display(), "x11:") &&
-              xcb()->call<IXCBModule::isXWayland>(
-                  inputContext->display().substr(4))))) {
-            proxy_->showAux(false);
-            proxy_->showPreedit(false);
-            proxy_->showLookupTable(false);
-            static_cast<UserInterface *>(classicui())
-                ->update(component, inputContext);
-            lastInputContext_ = inputContext->watch();
-        } else {
-            updateInputPanel(inputContext);
-        }
+        updateInputPanel(inputContext);
     } else if (component == UserInterfaceComponent::StatusArea) {
         registerAllProperties(inputContext);
     }
@@ -359,8 +332,8 @@ void Kimpanel::updateInputPanel(InputContext *inputContext) {
 
                 labelText = instance->outputFilter(inputContext, labelText);
                 labels.push_back(labelText.toString());
-                auto candidateText = instance->outputFilter(
-                    inputContext, candidate.textWithComment());
+                auto candidateText =
+                    instance->outputFilter(inputContext, candidate.text());
                 texts.push_back(candidateText.toString());
                 attrs.emplace_back("");
             }
@@ -389,19 +362,6 @@ void Kimpanel::updateInputPanel(InputContext *inputContext) {
     bus_->flush();
 }
 
-// This is heuristic, but we guranteed that we don't do crazy things with label.
-std::string extractTextForLabel(const std::string &label) {
-    if (label.empty()) {
-        return "";
-    }
-    auto texts = stringutils::split(label, FCITX_WHITESPACE);
-    if (texts.empty()) {
-        return "";
-    }
-
-    return texts[0];
-}
-
 std::string Kimpanel::inputMethodStatus(InputContext *ic) {
     std::string label;
     std::string description = _("Not available");
@@ -409,29 +369,26 @@ std::string Kimpanel::inputMethodStatus(InputContext *ic) {
     std::string icon = "input-keyboard";
     if (ic) {
         icon = instance_->inputMethodIcon(ic);
-        label = instance_->inputMethodLabel(ic);
         if (auto entry = instance_->inputMethodEntry(ic)) {
+            label = entry->label();
             if (auto engine = instance_->inputMethodEngine(ic)) {
+                auto subModeLabel = engine->subModeLabel(*entry, *ic);
+                if (!subModeLabel.empty()) {
+                    label = subModeLabel;
+                }
                 altDescription = engine->subMode(*entry, *ic);
             }
             description = entry->name();
         }
     }
 
-    label = extractTextForLabel(label);
-
     static const bool preferSymbolic = !isKDE();
-    if (*config_.preferTextIcon) {
-        icon = "";
-        altDescription = description;
-        description = label;
-    } else if (preferSymbolic && icon == "input-keyboard") {
+    if (preferSymbolic && icon == "input-keyboard") {
         icon = "input-keyboard-symbolic";
     }
 
-    return stringutils::concat("/Fcitx/im:", description, ":",
-                               IconTheme::iconName(icon), ":", altDescription,
-                               ":menu,label=", label);
+    return stringutils::concat("/Fcitx/im:", description, ":", iconName(icon),
+                               ":", altDescription, ":menu,label=", label);
 }
 
 void Kimpanel::updateCurrentInputMethod(InputContext *ic) {
@@ -465,14 +422,14 @@ void Kimpanel::msgV1Handler(dbus::Message &msg) {
                 }
                 menuitems.push_back(stringutils::concat(
                     "/Fcitx/im/", entry->uniqueName(), ":", entry->name(), ":",
-                    IconTheme::iconName(entry->icon()), "::"));
+                    iconName(entry->icon()), "::"));
             }
             proxy_->execMenu(menuitems);
         } else if (stringutils::startsWith(property, "/Fcitx/im/")) {
+            auto imName = property.substr(10);
             timeEvent_ = instance_->eventLoop().addTimeEvent(
                 CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 30000, 0,
-                [this, imName = property.substr(10)](EventSourceTime *,
-                                                     uint64_t) {
+                [this, imName](EventSourceTime *, uint64_t) {
                     instance_->setCurrentInputMethod(imName);
                     timeEvent_.reset();
                     return true;
@@ -491,9 +448,6 @@ void Kimpanel::msgV1Handler(dbus::Message &msg) {
             if (auto *menu = action->menu()) {
                 std::vector<std::string> menuitems;
                 for (auto *menuAction : menu->actions()) {
-                    if (menuAction->isSeparator()) {
-                        continue;
-                    }
                     menuitems.push_back(actionToStatus(menuAction, ic));
                 }
                 proxy_->execMenu(menuitems);
@@ -502,8 +456,7 @@ void Kimpanel::msgV1Handler(dbus::Message &msg) {
                 // make ic has focus.
                 timeEvent_ = instance_->eventLoop().addTimeEvent(
                     CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 30000, 0,
-                    [this, actionName = std::move(actionName)](
-                        EventSourceTime *, uint64_t) {
+                    [this, actionName](EventSourceTime *, uint64_t) {
                         if (auto *action =
                                 instance_->userInterfaceManager().lookupAction(
                                     actionName)) {

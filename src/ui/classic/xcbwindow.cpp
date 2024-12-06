@@ -7,7 +7,6 @@
 
 #include "xcbwindow.h"
 #include <cairo-xcb.h>
-#include <cairo.h>
 #include <xcb/xcb.h>
 #include <xcb/xcb_aux.h>
 #include "common.h"
@@ -84,13 +83,12 @@ void XCBWindow::createWindow(xcb_visualid_t vid, bool overrideRedirect) {
     constexpr uint32_t XEMBED_MAPPED = (1 << 0);
     uint32_t data[] = {XEMBED_VERSION, XEMBED_MAPPED};
     xcb_atom_t _XEMBED_INFO = ui_->parent()->xcb()->call<IXCBModule::atom>(
-        ui_->displayName(), "_XEMBED_INFO", false);
+        ui_->name(), "_XEMBED_INFO", false);
     xcb_change_property(conn, XCB_PROP_MODE_REPLACE, wid_, _XEMBED_INFO,
                         _XEMBED_INFO, 32, 2, data);
 
     eventFilter_ = ui_->parent()->xcb()->call<IXCBModule::addEventFilter>(
-        ui_->displayName(),
-        [this](xcb_connection_t *, xcb_generic_event_t *event) {
+        ui_->name(), [this](xcb_connection_t *, xcb_generic_event_t *event) {
             return filterEvent(event);
         });
 
@@ -99,12 +97,10 @@ void XCBWindow::createWindow(xcb_visualid_t vid, bool overrideRedirect) {
         vid ? xcb_aux_find_visual_by_id(screen, vid)
             : xcb_aux_find_visual_by_id(screen, screen->root_visual),
         width_, height_));
-    if (surface_) {
-        ui_->setCairoDevice(cairo_surface_get_device(surface_.get()));
-    }
     contentSurface_.reset();
 
     postCreateWindow();
+    xcb_flush(ui_->connection());
 }
 
 void XCBWindow::destroyWindow() {
@@ -118,10 +114,7 @@ void XCBWindow::destroyWindow() {
         xcb_free_colormap(conn, colorMapNeedFree_);
         colorMapNeedFree_ = 0;
     }
-
-    if (ui_->pointerGrabber() == this) {
-        ui_->ungrabPointer();
-    }
+    xcb_flush(conn);
 }
 
 void XCBWindow::resize(unsigned int width, unsigned int height) {
@@ -129,6 +122,7 @@ void XCBWindow::resize(unsigned int width, unsigned int height) {
     xcb_configure_window(ui_->connection(), wid_,
                          XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
                          vals);
+    xcb_flush(ui_->connection());
     cairo_xcb_surface_set_size(surface_.get(), width, height);
     Window::resize(width, height);
     CLASSICUI_DEBUG() << "Resize: " << width << " " << height;
@@ -151,6 +145,7 @@ void XCBWindow::render() {
     cairo_set_source_surface(cr, contentSurface_.get(), 0, 0);
     cairo_paint(cr);
     cairo_destroy(cr);
+    xcb_flush(ui_->connection());
     CLASSICUI_DEBUG() << "Render";
 }
 } // namespace fcitx::classicui

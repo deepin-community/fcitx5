@@ -6,6 +6,7 @@
  */
 
 #include <libgen.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <fcitx-utils/stringutils.h>
 #include "fcitx-utils/fs.h"

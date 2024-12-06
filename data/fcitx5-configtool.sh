@@ -5,14 +5,14 @@
 
 export TEXTDOMAIN=fcitx5
 
-if command -v kdialog > /dev/null 2>&1; then
+if which kdialog > /dev/null 2>&1; then
     message() {
         kdialog --msgbox "$1"
     }
     error() {
         kdialog --error "$1"
     }
-elif command -v zenity > /dev/null 2>&1; then
+elif which zenity > /dev/null 2>&1; then
     message() {
         zenity --info --text="$1"
     }
@@ -28,7 +28,7 @@ else
     }
 fi
 
-if command -v gettext > /dev/null 2>&1; then
+if which gettext > /dev/null 2>&1; then
     _() {
         gettext "$@"
     }
@@ -108,21 +108,18 @@ detectDE() {
     if [ x"$DE" = x"gnome" ]; then
       # gnome-default-applications-properties is only available in GNOME 2.x
       # but not in GNOME 3.x
-      command -v gnome-default-applications-properties > /dev/null 2>&1  || DE="gnome3"
+      which gnome-default-applications-properties > /dev/null 2>&1  || DE="gnome3"
     fi
 }
 
 run_kde() {
-    if (systemsettings --list 2>/dev/null | grep ^kcm_fcitx5 > /dev/null 2>&1); then
-        exec systemsettings kcm_fcitx5
-    fi
     if (systemsettings5 --list 2>/dev/null | grep ^kcm_fcitx5 > /dev/null 2>&1); then
         exec systemsettings5 kcm_fcitx5
     fi
 }
 
 run_qt() {
-    if command -v fcitx5-config-qt > /dev/null 2>&1; then
+    if which fcitx5-config-qt > /dev/null 2>&1; then
         exec fcitx5-config-qt
     fi
     return 1
@@ -138,13 +135,13 @@ run_xdg() {
             ;;
     esac
 
-    if command="$(command -v xdg-open 2>/dev/null)"; then
+    if command="$(which xdg-open 2>/dev/null)"; then
         exec "$command" "$HOME/.config/fcitx5"
     fi
 }
 
 _which_cmdline() {
-    cmd="$(command -v "$1")" || return 1
+    cmd="$(which "$1")" || return 1
     shift
     echo "$cmd $*"
 }

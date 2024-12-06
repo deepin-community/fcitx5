@@ -7,6 +7,7 @@
 #ifndef _FCITX_ADDONFACTORY_H_
 #define _FCITX_ADDONFACTORY_H_
 
+#include <string>
 #include <fcitx/addoninstance.h>
 #include "fcitxcore_export.h"
 
@@ -28,7 +29,7 @@ public:
      *
      * This function is called by AddonManager
      *
-     * @return a created addon instance.
+     * @return a created addon isntance.
      *
      * @see AddonManager
      */

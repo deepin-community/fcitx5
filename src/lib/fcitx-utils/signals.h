@@ -16,7 +16,7 @@
 #include <fcitx-utils/handlertable.h>
 #include <fcitx-utils/intrusivelist.h>
 #include <fcitx-utils/macros.h>
-#include <fcitx-utils/signals_details.h> // IWYU pragma: export
+#include <fcitx-utils/signals_details.h>
 #include <fcitx-utils/trackableobject.h>
 #include <fcitx-utils/tuplehelpers.h>
 
@@ -44,7 +44,7 @@ private:
 template <>
 class LastValue<void> {
 public:
-    LastValue() = default;
+    LastValue() {}
     template <typename InputIterator>
     void operator()(InputIterator begin, InputIterator end) {
         for (; begin != end; begin++) {
@@ -57,15 +57,13 @@ public:
 /// connection.
 class Connection {
 public:
-    Connection() = default;
+    Connection() {}
     explicit Connection(TrackableObjectReference<ConnectionBody> body)
         : body_(std::move(body)) {}
 
     FCITX_INLINE_DEFINE_DEFAULT_DTOR_COPY_AND_MOVE(Connection)
 
-    // FIXME: merge this
     bool connected() { return body_.isValid(); }
-    bool connected() const { return body_.isValid(); }
 
     void disconnect() {
         auto *body = body_.get();
@@ -92,7 +90,7 @@ public:
     ScopedConnection(Connection &&other) noexcept
         : Connection(std::move(other)) {}
     ScopedConnection(const ScopedConnection &) = delete;
-    ScopedConnection() = default;
+    ScopedConnection() {}
 
     ScopedConnection &operator=(ScopedConnection &&other) noexcept {
         if (&other == this) {
@@ -134,11 +132,11 @@ class Signal<Ret(Args...), Combiner> : public SignalBase {
     };
 
 public:
-    using return_type = Ret;
-    using function_type = Ret(Args...);
+    typedef Ret return_type;
+    typedef Ret function_type(Args...);
     Signal(Combiner combiner = Combiner())
         : d_ptr(std::make_unique<SignalData>(std::move(combiner))) {}
-    ~Signal() override {
+    virtual ~Signal() {
         if (d_ptr) {
             disconnectAll();
         }

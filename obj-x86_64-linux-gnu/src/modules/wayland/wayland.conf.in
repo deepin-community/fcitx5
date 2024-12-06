@@ -1,0 +1,10 @@
+[Addon]
+Name=Wayland
+Type=SharedLibrary
+Library=libwayland
+Category=Module
+Version=5.0.21
+
+[Addon/OptionalDependencies]
+0=dbus
+1=xcb

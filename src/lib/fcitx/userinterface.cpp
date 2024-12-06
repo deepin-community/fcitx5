@@ -10,7 +10,4 @@
 namespace fcitx {
 
 UserInterface::~UserInterface() {}
-
-VirtualKeyboardUserInterface::~VirtualKeyboardUserInterface() {}
-
 } // namespace fcitx

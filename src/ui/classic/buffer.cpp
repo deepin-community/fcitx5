@@ -7,12 +7,15 @@
 #include "buffer.h"
 #include <fcntl.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <cassert>
 #include <stdexcept>
 #include <vector>
 #include <cairo.h>
 #include <sys/syscall.h>
+#include <wayland-client.h>
 #include "fcitx-utils/stringutils.h"
 #include "theme.h"
 #include "wl_buffer.h"
@@ -151,9 +154,9 @@ Buffer::~Buffer() {
     }
 }
 
-bool Buffer::attachToSurface(WlSurface *surface, int scale) {
+void Buffer::attachToSurface(WlSurface *surface, int scale) {
     if (busy_) {
-        return false;
+        return;
     }
     busy_ = true;
     callback_.reset(surface->frame());
@@ -168,7 +171,7 @@ bool Buffer::attachToSurface(WlSurface *surface, int scale) {
     surface->attach(buffer(), 0, 0);
     surface->setBufferScale(scale);
     surface->damage(0, 0, width_, height_);
-    return true;
+    surface->commit();
 }
 
 } // namespace fcitx::wayland

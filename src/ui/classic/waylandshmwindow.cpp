@@ -12,13 +12,10 @@ namespace fcitx::classicui {
 
 namespace {
 
-void surfaceToBufferSize(unsigned int buffer_scale, uint32_t *width,
+void surfaceToBufferSize(int32_t buffer_scale, uint32_t *width,
                          uint32_t *height) {
-    // round (size * scale), but all integer calculation.
-    *width = (*width * buffer_scale + (WaylandWindow::ScaleDominator / 2)) /
-             WaylandWindow::ScaleDominator;
-    *height = (*height * buffer_scale + (WaylandWindow::ScaleDominator / 2)) /
-              WaylandWindow::ScaleDominator;
+    *width *= buffer_scale;
+    *height *= buffer_scale;
 }
 
 } // namespace
@@ -69,7 +66,7 @@ cairo_surface_t *WaylandShmWindow::prerender() {
     }
 
     uint32_t bufferWidth = width_, bufferHeight = height_;
-    surfaceToBufferSize(bufferScale(), &bufferWidth, &bufferHeight);
+    surfaceToBufferSize(scale_, &bufferWidth, &bufferHeight);
 
     if (iter != buffers_.end() && ((*iter)->width() != bufferWidth ||
                                    (*iter)->height() != bufferHeight)) {
@@ -107,16 +104,7 @@ void WaylandShmWindow::render() {
         return;
     }
 
-    if (viewport_) {
-        if (buffer_->attachToSurface(surface_.get(), 1)) {
-            viewport_->setDestination(width_, height_);
-            surface_->commit();
-        }
-    } else {
-        if (buffer_->attachToSurface(surface_.get(), lastOutputScale_)) {
-            surface_->commit();
-        }
-    }
+    buffer_->attachToSurface(surface_.get(), scale_);
 }
 
 void WaylandShmWindow::hide() {

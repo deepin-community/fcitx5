@@ -1,6 +1,7 @@
-add_subdirectory(classic)
+if (ENABLE_X11 OR WAYLAND_FOUND)
+    add_subdirectory(classic)
+endif()
 
 if (ENABLE_DBUS)
     add_subdirectory(kimpanel)
-    add_subdirectory(virtualkeyboard)
 endif()

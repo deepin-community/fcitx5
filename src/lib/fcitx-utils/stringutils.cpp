@@ -7,7 +7,6 @@
 #include "stringutils.h"
 #include <climits>
 #include <cstring>
-#include <string>
 #include "charutils.h"
 #include "macros.h"
 
@@ -22,7 +21,7 @@ concatPieces(std::initializer_list<std::pair<const char *, std::size_t>> list) {
     }
     std::string result;
     result.reserve(size);
-    for (const auto &pair : list) {
+    for (auto pair : list) {
         result.append(pair.first, pair.first + pair.second);
     }
     assert(result.size() == size);
@@ -38,7 +37,7 @@ std::string concatPathPieces(
     bool first = true;
     bool firstPieceIsSlash = false;
     std::size_t size = 0;
-    for (const auto &pair : list) {
+    for (auto pair : list) {
         if (first) {
             if (pair.first[pair.second - 1] == '/') {
                 firstPieceIsSlash = true;
@@ -125,11 +124,14 @@ trimInplace(std::string_view str) {
 }
 
 FCITXUTILS_DEPRECATED_EXPORT
-std::string trim(const std::string &str) { return trim(std::string_view(str)); }
+std::string trim(const std::string &str) {
+    auto pair = trimInplaceImpl(str);
+    return std::string(str.begin() + pair.first, str.begin() + pair.second);
+}
 
 std::string trim(std::string_view str) {
     auto pair = trimInplaceImpl(str);
-    return {str.begin() + pair.first, str.begin() + pair.second};
+    return std::string(str.begin() + pair.first, str.begin() + pair.second);
 }
 
 std::string_view trimView(std::string_view str) {
@@ -146,8 +148,7 @@ std::vector<std::string> split(const std::string &str, const std::string &delim,
 std::vector<std::string> split(std::string_view str, std::string_view delim,
                                SplitBehavior behavior) {
     std::vector<std::string> strings;
-    std::string::size_type lastPos;
-    std::string::size_type pos;
+    std::string::size_type lastPos, pos;
     if (behavior == SplitBehavior::SkipEmpty) {
         lastPos = str.find_first_not_of(delim, 0);
     } else {
@@ -180,35 +181,23 @@ std::vector<std::string> split(std::string_view str, std::string_view delim) {
     return split(str, delim, SplitBehavior::SkipEmpty);
 }
 
+#define MAX_REPLACE_INDICES_NUM 128
+
 std::string replaceAll(std::string str, const std::string &before,
                        const std::string &after) {
     if (before.empty()) {
         return str;
     }
 
-    constexpr int MAX_REPLACE_INDICES_NUM = 128;
-
     size_t pivot = 0;
     std::string newString;
     size_t lastLen = 0;
-    size_t indices[MAX_REPLACE_INDICES_NUM];
+    int indices[MAX_REPLACE_INDICES_NUM];
 
-    size_t newStringPos = 0;
-    size_t oldStringPos = 0;
-
-    auto copyAndMoveOn = [&newString, &newStringPos](std::string_view source,
-                                                     size_t pos,
-                                                     size_t length) {
-        if (length == 0) {
-            return;
-        }
-        // Append source[pos..pos+length] to newString.
-        newString.replace(newStringPos, length, source, pos, length);
-        newStringPos += length;
-    };
+    int newStringPos = 0;
+    int oldStringPos = 0;
 
     do {
-
         int nIndices = 0;
         while (nIndices < MAX_REPLACE_INDICES_NUM) {
             pivot = str.find(before, pivot);
@@ -222,27 +211,38 @@ std::string replaceAll(std::string str, const std::string &before,
 
         if (nIndices) {
             if (!lastLen) {
-                lastLen = str.size() + nIndices * after.size() -
-                          nIndices * before.size();
+                lastLen =
+                    str.size() + nIndices * (after.size() - before.size());
                 newString.resize(lastLen);
             } else {
-                size_t newLen = lastLen + nIndices * after.size() -
-                                nIndices * before.size();
+                size_t newLen =
+                    lastLen + nIndices * (after.size() - before.size());
                 lastLen = newLen;
                 newString.resize(newLen);
             }
+
+#define _COPY_AND_MOVE_ON(s, pos, LEN)                                         \
+    do {                                                                       \
+        int diffLen = (LEN);                                                   \
+        if ((LEN) == 0) {                                                      \
+            break;                                                             \
+        }                                                                      \
+        newString.replace(newStringPos, diffLen, s, pos, diffLen);             \
+        newStringPos += diffLen;                                               \
+    } while (0)
 
             // string s is split as
             // oldStringPos, indices[0], indices[0] + before.size(), indices[1],
             // indices[1] + before.size()
             // .... indices[nIndices - 1], indices[nIndices - 1] + before.size()
-            copyAndMoveOn(str, oldStringPos, indices[0] - oldStringPos);
-            copyAndMoveOn(after, 0, after.size());
+            _COPY_AND_MOVE_ON(str, oldStringPos, indices[0] - oldStringPos);
+            _COPY_AND_MOVE_ON(after, 0, after.size());
 
             for (int i = 1; i < nIndices; i++) {
-                copyAndMoveOn(str, indices[i - 1] + before.size(),
-                              indices[i] - (indices[i - 1] + before.size()));
-                copyAndMoveOn(after, 0, after.size());
+                _COPY_AND_MOVE_ON(str, indices[i] + before.size(),
+                                  indices[i] -
+                                      (indices[i - 1] + before.size()));
+                _COPY_AND_MOVE_ON(after, 0, after.size());
             }
 
             oldStringPos = indices[nIndices - 1] + before.size();
@@ -253,7 +253,7 @@ std::string replaceAll(std::string str, const std::string &before,
         return str;
     }
 
-    copyAndMoveOn(str, oldStringPos, str.size() - oldStringPos);
+    _COPY_AND_MOVE_ON(str, oldStringPos, str.size() - oldStringPos);
     newString.resize(newStringPos);
 
     return newString;
@@ -282,8 +282,7 @@ const char *backwardSearch(const char *haystack, size_t l, const char *needle,
     const unsigned int ol_minus_1 = ol - 1;
     const char *n = needle + ol_minus_1;
     const char *h = haystack + ol_minus_1;
-    unsigned int hashNeedle = 0;
-    unsigned int hashHaystack = 0;
+    unsigned int hashNeedle = 0, hashHaystack = 0;
     size_t idx;
     for (idx = 0; idx < ol; ++idx) {
         hashNeedle = ((hashNeedle << 1) + *(n - idx));
@@ -378,31 +377,15 @@ std::optional<std::string> unescapeForValue(std::string_view str) {
 }
 
 std::string escapeForValue(std::string_view str) {
-    std::string value;
-    value.reserve(str.size());
-    const bool needQuote =
-        str.find_first_of("\f\r\t\v \"") != std::string::npos;
+    std::string value(str);
+    value = stringutils::replaceAll(value, "\\", "\\\\");
+    value = stringutils::replaceAll(value, "\n", "\\n");
+
+    bool needQuote = value.find_first_of("\f\r\t\v \"") != std::string::npos;
+
     if (needQuote) {
-        value.push_back('"');
-    }
-    for (char c : str) {
-        switch (c) {
-        case '\\':
-            value.append("\\\\");
-            break;
-        case '\n':
-            value.append("\\n");
-            break;
-        case '"':
-            value.append("\\\"");
-            break;
-        default:
-            value.push_back(c);
-            break;
-        }
-    }
-    if (needQuote) {
-        value.push_back('"');
+        value = stringutils::replaceAll(value, "\"", "\\\"");
+        return stringutils::concat("\"", value, "\"");
     }
 
     return value;

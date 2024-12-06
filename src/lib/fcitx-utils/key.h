@@ -24,9 +24,9 @@
 
 namespace fcitx {
 class Key;
-using KeySym = FcitxKeySym;
-using KeyStates = Flags<KeyState>;
-using KeyList = std::vector<Key>;
+typedef FcitxKeySym KeySym;
+typedef Flags<KeyState> KeyStates;
+typedef std::vector<Key> KeyList;
 
 /// Control the behavior of toString function.
 enum class KeyStringFormat {
@@ -144,9 +144,6 @@ public:
     /// Check if states has modifier.
     bool hasModifier() const;
 
-    /// Check if states has virtual bit
-    bool isVirtual() const;
-
     /// \brief Normalize a key, usually used when key is from frontend.
     ///
     /// states will be filtered to have only ctrl alt shift and super.
@@ -200,11 +197,11 @@ public:
     /// Convert a key list to string.
     template <typename Container>
     static std::string
-    keyListToString(const Container &container,
+    keyListToString(Container container,
                     KeyStringFormat format = KeyStringFormat::Portable) {
         std::string result;
         bool first = true;
-        for (const auto &k : container) {
+        for (auto k : container) {
             if (first) {
                 first = false;
             } else {
@@ -239,7 +236,7 @@ public:
         if (idx == c.size()) {
             return -1;
         }
-        return static_cast<int>(idx);
+        return idx;
     }
 
 private:

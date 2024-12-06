@@ -1,0 +1,2 @@
+/usr/bin/ar qc libFcitx5WaylandBlur.a CMakeFiles/Fcitx5WaylandBlur.dir/org_kde_kwin_blur.cpp.o CMakeFiles/Fcitx5WaylandBlur.dir/org_kde_kwin_blur_manager.cpp.o "CMakeFiles/Fcitx5WaylandBlur.dir/wayland-blur-protocol.c.o"
+/usr/bin/ranlib libFcitx5WaylandBlur.a

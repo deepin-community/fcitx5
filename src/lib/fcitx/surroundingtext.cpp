@@ -6,7 +6,6 @@
  */
 
 #include "surroundingtext.h"
-#include "fcitx-utils/macros.h"
 #include "fcitx-utils/utf8.h"
 
 namespace fcitx {
@@ -25,7 +24,7 @@ public:
 SurroundingText::SurroundingText()
     : d_ptr(std::make_unique<SurroundingTextPrivate>()) {}
 
-FCITX_DEFINE_DPTR_COPY_AND_DEFAULT_DTOR_AND_MOVE(SurroundingText)
+SurroundingText::~SurroundingText() {}
 
 bool SurroundingText::isValid() const {
     FCITX_D();

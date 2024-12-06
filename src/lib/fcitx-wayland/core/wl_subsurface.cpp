@@ -1,4 +1,5 @@
 #include "wl_subsurface.h"
+#include <cassert>
 #include "wl_surface.h"
 namespace fcitx::wayland {
 WlSubsurface::WlSubsurface(wl_subsurface *data)

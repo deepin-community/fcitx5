@@ -5,23 +5,16 @@
  *
  */
 
+#include <fcntl.h>
 #include <locale.h>
-#include <sys/stat.h>
-#include <cstdio>
-#include <cstdlib>
+#include <unistd.h>
 #include <exception>
 #include <iostream>
-#include <string>
-#include <utility>
-#include <vector>
+#include <libintl.h>
 #include "fcitx-utils/fs.h"
-#include "fcitx-utils/log.h"
-#include "fcitx-utils/misc.h"
 #include "fcitx-utils/misc_p.h"
 #include "fcitx-utils/standardpath.h"
-#include "fcitx-utils/stringutils.h"
 #include "fcitx/addonfactory.h"
-#include "fcitx/addonloader.h"
 #include "fcitx/addonmanager.h"
 #include "fcitx/instance.h"
 #include "errorhandler.h"
@@ -45,8 +38,6 @@ StaticAddonRegistry staticAddon = {
 };
 
 int main(int argc, char *argv[]) {
-    umask(077);
-    StandardPath::global().syncUmask();
     if (safePipe(selfpipe) < 0) {
         fprintf(stderr, "Could not create self-pipe.\n");
         return 1;
@@ -73,32 +64,26 @@ int main(int argc, char *argv[]) {
     // Log::setLogRule("wayland=5");
     int ret = 0;
     bool restart = false;
-    bool canRestart = false;
     try {
-        FCITX_LOG_IF(Info, isInFlatpak()) << "Running inside flatpak.";
         Instance instance(argc, argv);
-        instance.setBinaryMode();
         instance.setSignalPipe(selfpipe[0]);
         instance.addonManager().registerDefaultLoader(&staticAddon);
 
         ret = instance.exec();
         restart = instance.isRestartRequested();
-        canRestart = instance.canRestart();
     } catch (const InstanceQuietQuit &) {
     } catch (const std::exception &e) {
-        std::cerr << "Received exception: " << e.what() << '\n';
+        std::cerr << "Received exception: " << e.what() << std::endl;
         return 1;
     }
 
-    if (restart && canRestart) {
-        std::vector<std::string> args;
-        if (isInFlatpak()) {
-            args = {"flatpak-spawn",
-                    StandardPath::fcitxPath("bindir", "fcitx5"), "-rd"};
+    if (restart) {
+        auto fcitxBinary = StandardPath::fcitxPath("bindir", "fcitx5");
+        if (fs::isreg("/.flatpak-info")) {
+            startProcess({"flatpak-spawn", fcitxBinary, "-rd"});
         } else {
-            args = {StandardPath::fcitxPath("bindir", "fcitx5"), "-r"};
+            startProcess({fcitxBinary, "-r"});
         }
-        startProcess(args);
     }
     return ret;
 }

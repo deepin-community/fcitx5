@@ -27,7 +27,7 @@ enum class TextFormatFlag : int {
     NoFlag = 0,
 };
 
-using TextFormatFlags = Flags<TextFormatFlag>;
+typedef Flags<TextFormatFlag> TextFormatFlags;
 } // namespace fcitx
 
 #endif // _FCITX_UTILS_TEXTFORMATFLAGS_H_

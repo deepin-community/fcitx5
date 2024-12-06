@@ -9,7 +9,7 @@
 
 #include <functional>
 #include <unordered_map>
-#include <fcitx-utils/handlertable_details.h> // IWYU pragma: export
+#include <fcitx-utils/handlertable_details.h>
 #include <fcitx-utils/intrusivelist.h>
 
 namespace fcitx {
@@ -48,14 +48,14 @@ private:
 template <typename Key, typename T>
 class MultiHandlerTable {
     friend class MultiHandlerTableEntry<Key, T>;
-    using map_type =
-        std::unordered_map<Key,
-                           IntrusiveListFor<MultiHandlerTableEntry<Key, T>>>;
+    typedef std::unordered_map<Key,
+                               IntrusiveListFor<MultiHandlerTableEntry<Key, T>>>
+        map_type;
 
 public:
     MultiHandlerTable(std::function<bool(const Key &)> addKey = {},
                       std::function<void(const Key &)> removeKey = {})
-        : addKey_(std::move(addKey)), removeKey_(std::move(removeKey)) {}
+        : addKey_(addKey), removeKey_(removeKey) {}
 
     FCITX_INLINE_DEFINE_DEFAULT_DTOR_AND_MOVE(MultiHandlerTable)
 

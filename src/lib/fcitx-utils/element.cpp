@@ -13,7 +13,7 @@
 namespace fcitx {
 
 class ElementPrivate {
-    using ElementList = std::list<Element *>;
+    typedef std::list<Element *> ElementList;
 
 public:
     OrderedSet<Element *> parents_, childs_;

@@ -11,6 +11,7 @@
 #include <ostream>
 #include <string>
 #include <vector>
+#include <fcitx-utils/flags.h>
 #include <fcitx-utils/macros.h>
 #include <fcitx-utils/textformatflags.h>
 #include "fcitxcore_export.h"
@@ -37,13 +38,6 @@ public:
     void setCursor(int pos = -1);
     void clear();
     void append(std::string str, TextFormatFlags flag = TextFormatFlag::NoFlag);
-    /**
-     * Append another text.
-     *
-     * @param text text to append
-     * @since 5.1.9
-     */
-    void append(Text text);
     const std::string &stringAt(int idx) const;
     TextFormatFlags formatAt(int idx) const;
     size_t size() const;
@@ -51,16 +45,6 @@ public:
     size_t textLength() const;
     std::string toString() const;
     std::string toStringForCommit() const;
-
-    /**
-     * Remove empty string piece and merge the string with same format.
-     *
-     * This function is useful for frontend to send less data over the wire and
-     * avoid send data that is problematic for some frontend.
-     *
-     * @since 5.1.1
-     */
-    Text normalize() const;
 
     /**
      * Split Text object into lines.

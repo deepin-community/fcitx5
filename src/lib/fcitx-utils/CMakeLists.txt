@@ -30,7 +30,7 @@ endif()
 if (NOT TARGET Systemd::Systemd)
   set(FCITX_UTILS_SOURCES
     ${FCITX_UTILS_SOURCES}
-    event_libuv.cpp)
+    event_libevent.cpp)
 else()
   set(FCITX_UTILS_SOURCES
     ${FCITX_UTILS_SOURCES}
@@ -59,7 +59,6 @@ set(FCITX_UTILS_SOURCES
     log.cpp
     misc.cpp
     semver.cpp
-    keydata.cpp
     )
 
 set(FCITX_UTILS_HEADERS
@@ -111,7 +110,6 @@ set(FCITX_UTILS_DBUS_HEADERS
     dbus/message_details.h
     dbus/servicewatcher.h
     dbus/matchrule.h
-    dbus/variant.h
     )
 
 ecm_setup_version(PROJECT
@@ -135,7 +133,7 @@ if(LIBKVM_FOUND)
 endif()
 
 if (NOT TARGET Systemd::Systemd)
-    target_link_libraries(Fcitx5Utils PRIVATE ${LIBUV_TARGET})
+    target_link_libraries(Fcitx5Utils PRIVATE ${LIBEVENT_TARGET})
     if (ENABLE_DBUS)
         target_link_libraries(Fcitx5Utils PRIVATE PkgConfig::DBus)
     endif()
@@ -148,7 +146,7 @@ configure_file(Fcitx5Utils.pc.in ${CMAKE_CURRENT_BINARY_DIR}/Fcitx5Utils.pc @ONL
 install(TARGETS Fcitx5Utils EXPORT Fcitx5UtilsTargets LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/Fcitx5Utils.pc
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
-install(FILES ${FCITX_UTILS_HEADERS} DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/Fcitx5/Utils/fcitx-utils" COMPONENT header)
+install(FILES ${FCITX_UTILS_HEADERS} DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/Fcitx5/Utils/fcitx-utils")
 
 if (ENABLE_DBUS)
     install(FILES ${FCITX_UTILS_DBUS_HEADERS} DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/Fcitx5/Utils/fcitx-utils/dbus")
@@ -170,6 +168,6 @@ install(FILES  "${CMAKE_CURRENT_BINARY_DIR}/Fcitx5UtilsConfig.cmake"
                Fcitx5Macros.cmake
                Fcitx5Download.cmake.in
                Fcitx5ModuleTemplate.cmake.in
-               "${PROJECT_SOURCE_DIR}/cmake/Fcitx5CompilerSettings.cmake"
+               "${CMAKE_SOURCE_DIR}/cmake/Fcitx5CompilerSettings.cmake"
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Fcitx5Utils
         COMPONENT Devel )

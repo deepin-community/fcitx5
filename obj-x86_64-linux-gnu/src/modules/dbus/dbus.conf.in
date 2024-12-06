@@ -1,0 +1,12 @@
+[Addon]
+Name=DBus
+Type=SharedLibrary
+Library=libdbus
+Category=Module
+Version=5.0.21
+
+[Addon/Dependencies]
+0=keyboard
+
+[Addon/OptionalDependencies]
+0=xcb

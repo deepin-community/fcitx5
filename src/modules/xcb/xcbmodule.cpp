@@ -10,7 +10,6 @@
 #include <utility>
 #include "fcitx/instance.h"
 #include "fcitx/misc_p.h"
-#include "xcbconnection.h"
 
 namespace fcitx {
 
@@ -18,48 +17,31 @@ FCITX_DEFINE_LOG_CATEGORY(xcb_log, "xcb");
 
 XCBModule::XCBModule(Instance *instance) : instance_(instance) {
     reloadConfig();
-
-    auto *env = getenv("DISPLAY");
-    if (env) {
-        mainDisplay_ = env;
-    }
-
-    if (!containerContains(instance->addonManager().addonOptions("xcb"),
-                           "nodefault")) {
-        openConnection("");
-    }
+    openConnection("");
 }
 
 void XCBModule::reloadConfig() { readAsIni(config_, "conf/xcb.conf"); }
 
 void XCBModule::openConnection(const std::string &name_) {
-    openConnectionChecked(name_);
-}
-
-bool XCBModule::openConnectionChecked(const std::string &name_) {
     std::string name = name_;
     if (name.empty()) {
         auto *env = getenv("DISPLAY");
         if (env) {
             name = env;
+            mainDisplay_ = name;
         }
     }
     if (name.empty() || conns_.count(name)) {
-        return false;
+        return;
     }
 
-    XCBConnection *connection = nullptr;
     try {
         auto iter = conns_.emplace(std::piecewise_construct,
                                    std::forward_as_tuple(name),
                                    std::forward_as_tuple(this, name));
-        connection = &iter.first->second;
+        onConnectionCreated(iter.first->second);
     } catch (const std::exception &e) {
     }
-    if (connection) {
-        onConnectionCreated(*connection);
-    }
-    return connection != nullptr;
 }
 
 void XCBModule::removeConnection(const std::string &name) {
@@ -179,14 +161,6 @@ xcb_ewmh_connection_t *XCBModule::ewmh(const std::string &name) {
     return iter->second.ewmh();
 }
 
-bool XCBModule::isXWayland(const std::string &name) {
-    auto iter = conns_.find(name);
-    if (iter == conns_.end()) {
-        return false;
-    }
-    return iter->second.isXWayland();
-}
-
 void XCBModule::setXkbOption(const std::string &name,
                              const std::string &option) {
     auto iter = conns_.find(name);
@@ -194,10 +168,6 @@ void XCBModule::setXkbOption(const std::string &name,
         return;
     }
     iter->second.setXkbOption(option);
-}
-
-bool XCBModule::exists(const std::string &name) {
-    return conns_.count(name) > 0;
 }
 
 class XCBModuleFactory : public AddonFactory {

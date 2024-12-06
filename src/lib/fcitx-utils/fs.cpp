@@ -6,10 +6,10 @@
  */
 
 #include "fs.h"
+#include <errno.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <algorithm>
-#include <cerrno>
 #include "mtime_p.h"
 #include "standardpath.h"
 #include "stringutils.h"
@@ -19,7 +19,7 @@ namespace fcitx::fs {
 namespace {
 
 bool makePathHelper(const std::string &name) {
-    if (::mkdir(name.c_str(), 0777) == 0) {
+    if (::mkdir(name.c_str(), S_IRWXU) == 0) {
         return true;
     }
     if (errno == EEXIST) {
@@ -43,7 +43,7 @@ bool makePathHelper(const std::string &name) {
     }
 
     // try again
-    if (::mkdir(name.c_str(), 0777) == 0) {
+    if (::mkdir(name.c_str(), S_IRWXU) == 0) {
         return true;
     }
     return errno == EEXIST && isdir(name);

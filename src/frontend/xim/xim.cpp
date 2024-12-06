@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
  */
-
 #include "xim.h"
 #include <unistd.h>
 #include <cstdarg>
@@ -12,13 +11,12 @@
 #include <xcb-imdkit/encoding.h>
 #include <xcb/xcb_aux.h>
 #include <xkbcommon/xkbcommon.h>
-#include "fcitx-utils/misc.h"
 #include "fcitx-utils/misc_p.h"
 #include "fcitx-utils/stringutils.h"
 #include "fcitx-utils/utf8.h"
+#include "fcitx/focusgroup.h"
 #include "fcitx/inputcontext.h"
 #include "fcitx/instance.h"
-#include "fcitx/userinterface.h"
 
 FCITX_DEFINE_LOG_CATEGORY(xim, "xim")
 FCITX_DEFINE_LOG_CATEGORY(xim_key, "xim_key")
@@ -185,7 +183,6 @@ private:
     // bool value: isUtf8
     std::unordered_map<xcb_im_client_t *, bool> clientEncodingMapping_;
     std::unordered_set<uint32_t> supportedStyles_;
-    UniqueCPtr<struct xkb_state, xkb_state_unref> localState_;
 };
 
 pid_t getWindowPid(xcb_ewmh_connection_t *ewmh, xcb_window_t w) {
@@ -447,7 +444,7 @@ protected:
             }
             feedbackBuffer_.clear();
 
-            for (size_t i = 0; i < text.size(); i++) {
+            for (size_t i = 0, offset = 0; i < text.size(); i++) {
                 auto format = text.formatAt(i);
                 const auto &str = text.stringAt(i);
                 uint32_t feedback = 0;
@@ -460,6 +457,7 @@ protected:
                 unsigned int strLen = utf8::length(str);
                 for (size_t j = 0; j < strLen; j++) {
                     feedbackBuffer_.push_back(feedback);
+                    offset++;
                 }
             }
             feedbackBuffer_.push_back(0);
@@ -570,31 +568,17 @@ void XIMServer::callback(xcb_im_client_t *client, xcb_im_input_context_t *xic,
         if (!state) {
             break;
         }
-
-        auto *keymap = xkb_state_get_keymap(state);
-        if (!localState_ || xkb_state_get_keymap(localState_.get()) !=
-                                xkb_state_get_keymap(state)) {
-            localState_.reset(xkb_state_new(keymap));
-        }
         xcb_key_press_event_t *xevent =
             static_cast<xcb_key_press_event_t *>(arg);
-        auto layout =
-            xkb_state_serialize_layout(state, XKB_STATE_LAYOUT_EFFECTIVE);
-        // Always use the state that is forwarded by client.
-        // For xkb_state_key_get_one_sym, no need to distinguish
-        // depressed/latched/locked.
-        xkb_state_update_mask(localState_.get(), xevent->state, 0, 0, 0, 0,
-                              layout);
         KeyEvent event(ic,
                        Key(static_cast<KeySym>(xkb_state_key_get_one_sym(
-                               localState_.get(), xevent->detail)),
+                               state, xevent->detail)),
                            ic->updateAutoRepeatState(xevent), xevent->detail),
                        (xevent->response_type & ~0x80) == XCB_KEY_RELEASE,
                        xevent->time);
         XIM_KEY_DEBUG() << "XIM Key Event: "
                         << static_cast<int>(xevent->response_type) << " "
-                        << event.rawKey().toString() << " time:" << xevent->time
-                        << " sequence:" << xevent->sequence;
+                        << event.rawKey().toString();
         if (!ic->hasFocus()) {
             ic->focusIn();
         }
@@ -607,6 +591,8 @@ void XIMServer::callback(xcb_im_client_t *client, xcb_im_input_context_t *xic,
         if (!result) {
             xcb_im_forward_event(im(), xic, xevent);
         }
+        // Make sure xcb ui can be updated.
+        instance()->flushUI();
         break;
     }
     case XCB_XIM_RESET_IC:
@@ -639,12 +625,11 @@ XIMModule::XIMModule(Instance *instance) : instance_(instance) {
         });
 
     updateRootStyleCallback_ = instance_->watchEvent(
-        EventType::InputContextFlushUI, EventWatcherPhase::PreInputMethod,
+        EventType::InputContextUpdateUI, EventWatcherPhase::PreInputMethod,
         [](Event &event) {
-            auto &uiEvent = static_cast<InputContextFlushUIEvent &>(event);
+            auto &uiEvent = static_cast<InputContextUpdateUIEvent &>(event);
             auto ic = uiEvent.inputContext();
-            if (uiEvent.component() == UserInterfaceComponent::InputPanel &&
-                ic->frontendName() == "xim") {
+            if (ic->frontend() == std::string_view("xim")) {
                 auto xic = static_cast<XIMInputContext *>(ic);
                 xic->maybeUpdateCursorLocationForRootStyle();
             }

@@ -1,0 +1,41 @@
+file(REMOVE_RECURSE
+  "CMakeFiles/classicui.dir/buffer.cpp.o"
+  "CMakeFiles/classicui.dir/buffer.cpp.o.d"
+  "CMakeFiles/classicui.dir/classicui.cpp.o"
+  "CMakeFiles/classicui.dir/classicui.cpp.o.d"
+  "CMakeFiles/classicui.dir/inputwindow.cpp.o"
+  "CMakeFiles/classicui.dir/inputwindow.cpp.o.d"
+  "CMakeFiles/classicui.dir/plasmathemewatchdog.cpp.o"
+  "CMakeFiles/classicui.dir/plasmathemewatchdog.cpp.o.d"
+  "CMakeFiles/classicui.dir/theme.cpp.o"
+  "CMakeFiles/classicui.dir/theme.cpp.o.d"
+  "CMakeFiles/classicui.dir/waylandinputwindow.cpp.o"
+  "CMakeFiles/classicui.dir/waylandinputwindow.cpp.o.d"
+  "CMakeFiles/classicui.dir/waylandpointer.cpp.o"
+  "CMakeFiles/classicui.dir/waylandpointer.cpp.o.d"
+  "CMakeFiles/classicui.dir/waylandshmwindow.cpp.o"
+  "CMakeFiles/classicui.dir/waylandshmwindow.cpp.o.d"
+  "CMakeFiles/classicui.dir/waylandui.cpp.o"
+  "CMakeFiles/classicui.dir/waylandui.cpp.o.d"
+  "CMakeFiles/classicui.dir/waylandwindow.cpp.o"
+  "CMakeFiles/classicui.dir/waylandwindow.cpp.o.d"
+  "CMakeFiles/classicui.dir/window.cpp.o"
+  "CMakeFiles/classicui.dir/window.cpp.o.d"
+  "CMakeFiles/classicui.dir/xcbinputwindow.cpp.o"
+  "CMakeFiles/classicui.dir/xcbinputwindow.cpp.o.d"
+  "CMakeFiles/classicui.dir/xcbmenu.cpp.o"
+  "CMakeFiles/classicui.dir/xcbmenu.cpp.o.d"
+  "CMakeFiles/classicui.dir/xcbtraywindow.cpp.o"
+  "CMakeFiles/classicui.dir/xcbtraywindow.cpp.o.d"
+  "CMakeFiles/classicui.dir/xcbui.cpp.o"
+  "CMakeFiles/classicui.dir/xcbui.cpp.o.d"
+  "CMakeFiles/classicui.dir/xcbwindow.cpp.o"
+  "CMakeFiles/classicui.dir/xcbwindow.cpp.o.d"
+  "libclassicui.pdb"
+  "libclassicui.so"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang CXX)
+  include(CMakeFiles/classicui.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()

@@ -4,39 +4,21 @@
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
  */
-#include "clipboard.h"
-#include <cstdint>
-#include <limits>
-#include <unordered_set>
-#include "fcitx-utils/event.h"
+#include <fcntl.h>
+
+#include "fcitx-config/iniparser.h"
 #include "fcitx-utils/i18n.h"
+#include "fcitx-utils/inputbuffer.h"
 #include "fcitx-utils/log.h"
 #include "fcitx-utils/misc_p.h"
 #include "fcitx-utils/utf8.h"
-#include "fcitx/addonfactory.h"
 #include "fcitx/addonmanager.h"
 #include "fcitx/inputcontext.h"
 #include "fcitx/inputcontextmanager.h"
 #include "fcitx/inputpanel.h"
-#include "clipboardentry.h"
+#include "clipboard.h"
 
 namespace fcitx {
-
-namespace {
-
-constexpr uint64_t oneSecond = 1000000ULL;
-
-bool shouldClearPassword(const ClipboardEntry &entry, uint64_t life) {
-    if (entry.passwordTimestamp == 0 || life == 0) {
-        // Not password.
-        return false;
-    }
-    // Allow 0.5 second skew.
-    return (entry.passwordTimestamp + life * oneSecond - oneSecond / 2) <=
-           now(CLOCK_MONOTONIC);
-}
-
-} // namespace
 
 FCITX_DEFINE_LOG_CATEGORY(clipboard_log, "clipboard");
 
@@ -100,30 +82,18 @@ std::string ClipboardSelectionStrip(const std::string &text) {
 
 class ClipboardCandidateWord : public CandidateWord {
 public:
-    ClipboardCandidateWord(Clipboard *q, const std::string &str, bool password)
+    ClipboardCandidateWord(Clipboard *q, const std::string &str)
         : q_(q), str_(str) {
         Text text;
-        if (password && !*q->config().showPassword) {
-            auto length = utf8::length(str);
-            length = std::min(length, static_cast<size_t>(8));
-            std::string dot;
-            dot.reserve(length * 3);
-            while (length != 0) {
-                dot += "\xe2\x80\xa2";
-                length -= 1;
-            }
-            text.append(dot);
-            setComment(Text{_("<Passowrd>")});
-        } else {
-            text.append(ClipboardSelectionStrip(str));
-        }
+        text.append(ClipboardSelectionStrip(str));
         setText(std::move(text));
     }
 
     void select(InputContext *inputContext) const override {
+        auto commit = str_;
         auto *state = inputContext->propertyFor(&q_->factory());
-        inputContext->commitString(str_);
         state->reset(inputContext);
+        inputContext->commitString(commit);
     }
 
     Clipboard *q_;
@@ -136,21 +106,42 @@ Clipboard::Clipboard(Instance *instance)
     instance_->inputContextManager().registerProperty("clipboardState",
                                                       &factory_);
 #ifdef ENABLE_X11
-    if (auto *xcb = this->xcb()) {
+    if (auto xcb = this->xcb()) {
         xcbCreatedCallback_ =
             xcb->call<IXCBModule::addConnectionCreatedCallback>(
                 [this](const std::string &name, xcb_connection_t *, int,
                        FocusGroup *) {
-                    xcbClipboards_[name].reset(new XcbClipboard(this, name));
+                    auto &callbacks = selectionCallbacks_[name];
+
+                    // Ensure that atom exists. See:
+                    // https://github.com/fcitx/fcitx5/issues/610 PRIMARY /
+                    // CLIPBOARD is not guaranteed to exist if fcitx5 is
+                    // launched at an very early stage. We should try to create
+                    // atom ourselves.
+                    this->xcb()->call<IXCBModule::atom>(name, "PRIMARY", false);
+                    this->xcb()->call<IXCBModule::atom>(name, "CLIPBOARD",
+                                                        false);
+                    callbacks.emplace_back(
+                        this->xcb()->call<IXCBModule::addSelection>(
+                            name, "PRIMARY", [this, name](xcb_atom_t) {
+                                primaryChanged(name);
+                            }));
+                    callbacks.emplace_back(
+                        this->xcb()->call<IXCBModule::addSelection>(
+                            name, "CLIPBOARD", [this, name](xcb_atom_t) {
+                                clipboardChanged(name);
+                            }));
+                    primaryChanged(name);
+                    clipboardChanged(name);
                 });
         xcbClosedCallback_ = xcb->call<IXCBModule::addConnectionClosedCallback>(
             [this](const std::string &name, xcb_connection_t *) {
-                xcbClipboards_.erase(name);
+                selectionCallbacks_.erase(name);
             });
     }
 #endif
 #ifdef WAYLAND_FOUND
-    if (auto *wayland = this->wayland()) {
+    if (auto wayland = this->wayland()) {
         waylandCreatedCallback_ =
             wayland->call<IWaylandModule::addConnectionCreatedCallback>(
                 [this](const std::string &name, wl_display *display,
@@ -240,7 +231,7 @@ Clipboard::Clipboard(Instance *instance)
                     keyEvent.key().check(FcitxKey_Return) ||
                     keyEvent.key().check(FcitxKey_KP_Enter)) {
                     keyEvent.accept();
-                    if (!candidateList->empty() &&
+                    if (candidateList->size() > 0 &&
                         candidateList->cursorIndex() >= 0) {
                         candidateList->candidate(candidateList->cursorIndex())
                             .select(inputContext);
@@ -314,21 +305,10 @@ Clipboard::Clipboard(Instance *instance)
 
             updateUI(inputContext);
         }));
-    clearPasswordTimer_ = instance_->eventLoop().addTimeEvent(
-        CLOCK_MONOTONIC, now(CLOCK_MONOTONIC), 0,
-        [this](EventSourceTime *, uint64_t) {
-            refreshPasswordTimer();
-            return true;
-        });
     reloadConfig();
 }
 
 Clipboard::~Clipboard() {}
-
-void Clipboard::reloadConfig() {
-    readAsIni(config_, configFile);
-    refreshPasswordTimer();
-}
 
 void Clipboard::trigger(InputContext *inputContext) {
     auto *state = inputContext->propertyFor(&factory_);
@@ -344,15 +324,20 @@ void Clipboard::updateUI(InputContext *inputContext) {
     // Append first item from history_.
     auto iter = history_.begin();
     if (iter != history_.end()) {
-        candidateList->append<ClipboardCandidateWord>(this, iter->text,
-                                                      iter->passwordTimestamp);
+        candidateList->append<ClipboardCandidateWord>(this, *iter);
         iter++;
     }
     // Append primary_, but check duplication first.
     if (!primary_.empty()) {
-        if (!history_.contains(primary_)) {
-            candidateList->append<ClipboardCandidateWord>(
-                this, primary_.text, primary_.passwordTimestamp);
+        bool dup = false;
+        for (const auto &s : history_) {
+            if (s == primary_) {
+                dup = true;
+                break;
+            }
+        }
+        if (!dup) {
+            candidateList->append<ClipboardCandidateWord>(this, primary_);
         }
     }
     // If primary_ is appended, it might squeeze one space out.
@@ -360,8 +345,7 @@ void Clipboard::updateUI(InputContext *inputContext) {
         if (candidateList->totalSize() >= config_.numOfEntries.value()) {
             break;
         }
-        candidateList->append<ClipboardCandidateWord>(this, iter->text,
-                                                      iter->passwordTimestamp);
+        candidateList->append<ClipboardCandidateWord>(this, *iter);
     }
     candidateList->setSelectionKey(selectionKeys_);
     candidateList->setLayoutHint(CandidateLayoutHint::Vertical);
@@ -379,116 +363,72 @@ void Clipboard::updateUI(InputContext *inputContext) {
     inputContext->updateUserInterface(UserInterfaceComponent::InputPanel);
 }
 
+void Clipboard::primaryChanged(const std::string &name) {
+    FCITX_UNUSED(name);
+#ifdef ENABLE_X11
+    primaryCallback_ = xcb()->call<IXCBModule::convertSelection>(
+        name, "PRIMARY", "",
+        [this, name](xcb_atom_t, const char *data, size_t length) {
+            if (!data) {
+                setPrimary(name, "");
+            } else {
+                std::string str(data, length);
+                setPrimary(name, str);
+            }
+            primaryCallback_.reset();
+        });
+#endif
+}
+
+void Clipboard::clipboardChanged(const std::string &name) {
+    FCITX_UNUSED(name);
+#ifdef ENABLE_X11
+    clipboardCallback_ = xcb()->call<IXCBModule::convertSelection>(
+        name, "CLIPBOARD", "",
+        [this, name](xcb_atom_t, const char *data, size_t length) {
+            if (!data || !length) {
+                return;
+            }
+            std::string str(data, length);
+            setClipboard(name, str);
+            clipboardCallback_.reset();
+        });
+#endif
+}
+
 void Clipboard::setPrimary(const std::string &name, const std::string &str) {
-    setPrimaryV2(name, str, false);
+    FCITX_UNUSED(name);
+    if (!utf8::validate(str)) {
+        return;
+    }
+    primary_ = str;
 }
 
 void Clipboard::setClipboard(const std::string &name, const std::string &str) {
-    setClipboardV2(name, str, false);
-}
-
-void Clipboard::setPrimaryV2(const std::string &name, const std::string &str,
-                             bool password) {
-    setPrimaryEntry(name,
-                    ClipboardEntry{.text = str,
-                                   .passwordTimestamp =
-                                       (password ? now(CLOCK_MONOTONIC) : 0)});
-}
-
-void Clipboard::setClipboardV2(const std::string &name, const std::string &str,
-                               bool password) {
-    setClipboardEntry(
-        name, ClipboardEntry{.text = str,
-                             .passwordTimestamp =
-                                 (password ? now(CLOCK_MONOTONIC) : 0)});
-}
-
-void Clipboard::setPrimaryEntry(const std::string &name, ClipboardEntry entry) {
     FCITX_UNUSED(name);
-    if (!utf8::validate(entry.text)) {
+    if (!utf8::validate(str)) {
         return;
     }
-    primary_ = std::move(entry);
-    if (entry.passwordTimestamp) {
-        refreshPasswordTimer();
-    }
-}
-
-void Clipboard::setClipboardEntry(const std::string &name,
-                                  const ClipboardEntry &entry) {
-    FCITX_UNUSED(name);
-    if (entry.text.empty() || !utf8::validate(entry.text)) {
-        return;
-    }
-
-    if (!history_.pushFront(entry)) {
-        history_.moveToTop(entry);
-    }
-    if (history_.front().passwordTimestamp || entry.passwordTimestamp) {
-        history_.front().passwordTimestamp = std::max(
-            entry.passwordTimestamp, history_.front().passwordTimestamp);
+    if (!history_.pushFront(str)) {
+        history_.moveToTop(str);
     }
     while (!history_.empty() &&
            static_cast<int>(history_.size()) > config_.numOfEntries.value()) {
         history_.pop();
     }
-    if (entry.passwordTimestamp) {
-        refreshPasswordTimer();
-    }
 }
 
-std::string Clipboard::primary(const InputContext * /*unused*/) const {
+std::string Clipboard::primary(const InputContext *) {
     // TODO: per ic
-    return primary_.text;
+    return primary_;
 }
 
-std::string Clipboard::clipboard(const InputContext * /*unused*/) const {
+std::string Clipboard::clipboard(const InputContext *) {
     // TODO: per ic
     if (history_.empty()) {
         return "";
     }
-    return history_.front().text;
-}
-
-void Clipboard::refreshPasswordTimer() {
-    if (*config_.clearPasswordAfter == 0) {
-        FCITX_CLIPBOARD_DEBUG() << "Disable Password Clearing Timer.";
-        clearPasswordTimer_->setEnabled(false);
-        return;
-    }
-
-    uint64_t minTimestamp = std::numeric_limits<uint64_t>::max();
-
-    if (shouldClearPassword(primary_, *config_.clearPasswordAfter)) {
-        FCITX_CLIPBOARD_DEBUG() << "Clear password in primary.";
-        primary_.clear();
-    } else if (primary_.passwordTimestamp) {
-        minTimestamp = std::min(minTimestamp, primary_.passwordTimestamp);
-    }
-
-    // Not efficient, but we don't have lots of entries anyway.
-    std::unordered_set<ClipboardEntry> needRemove;
-    for (const auto &entry : history_) {
-        if (shouldClearPassword(entry, *config_.clearPasswordAfter)) {
-            needRemove.insert(entry);
-        } else if (entry.passwordTimestamp) {
-            minTimestamp = std::min(minTimestamp, entry.passwordTimestamp);
-        }
-    }
-    FCITX_CLIPBOARD_DEBUG() << "Clear " << needRemove.size()
-                            << " password(s) in clipboard history.";
-    for (const auto &entry : needRemove) {
-        history_.remove(entry);
-    }
-
-    if (minTimestamp != std::numeric_limits<uint64_t>::max()) {
-        clearPasswordTimer_->setTime(minTimestamp +
-                                     oneSecond * (*config_.clearPasswordAfter));
-        FCITX_CLIPBOARD_DEBUG()
-            << "Password Clearing Timer will be triggered after: "
-            << clearPasswordTimer_->time() - now(CLOCK_MONOTONIC);
-        clearPasswordTimer_->setOneShot();
-    }
+    return history_.front();
 }
 
 class ClipboardModuleFactory : public AddonFactory {

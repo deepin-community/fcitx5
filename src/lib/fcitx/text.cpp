@@ -6,7 +6,6 @@
  */
 
 #include "text.h"
-#include <iterator>
 #include <stdexcept>
 #include <tuple>
 #include <vector>
@@ -54,13 +53,6 @@ void Text::append(std::string str, TextFormatFlags flag) {
         throw std::invalid_argument("Invalid utf8 string");
     }
     d->texts_.emplace_back(std::move(str), flag);
-}
-
-void Text::append(Text text) {
-    FCITX_D();
-    std::copy(std::make_move_iterator(text.d_ptr->texts_.begin()),
-              std::make_move_iterator(text.d_ptr->texts_.end()),
-              std::back_inserter(d->texts_));
 }
 
 const std::string &Text::stringAt(int idx) const {
@@ -147,33 +139,6 @@ std::vector<Text> Text::splitByLine() const {
     }
 
     return texts;
-}
-
-Text Text::normalize() const {
-    FCITX_D();
-
-    Text normalized;
-    std::string curStr;
-    TextFormatFlags curFormat;
-    for (const auto &[str, format] : d->texts_) {
-        if (str.empty()) {
-            continue;
-        }
-        if (curFormat == format) {
-            curStr.append(str);
-        } else {
-            if (!curStr.empty()) {
-                normalized.append(std::move(curStr), curFormat);
-            }
-            curStr = str;
-            curFormat = format;
-        }
-    }
-    if (!curStr.empty()) {
-        normalized.append(std::move(curStr), curFormat);
-    }
-    normalized.setCursor(cursor());
-    return normalized;
 }
 
 } // namespace fcitx

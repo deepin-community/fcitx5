@@ -6,27 +6,24 @@
  */
 #include "waylandimserverv2.h"
 #include <sys/mman.h>
-#include <ctime>
-#include "fcitx-utils/keysymgen.h"
 #include "fcitx-utils/unixfd.h"
 #include "fcitx-utils/utf8.h"
-#include "fcitx/inputcontext.h"
-#include "virtualinputcontext.h"
 #include "wayland-text-input-unstable-v3-client-protocol.h"
 #include "waylandim.h"
 #include "wl_seat.h"
 
 namespace fcitx {
 
-constexpr CapabilityFlags baseFlags{
-    CapabilityFlag::Preedit, CapabilityFlag::FormattedPreedit,
-    CapabilityFlag::SurroundingText, CapabilityFlag::ClientUnfocusCommit};
+constexpr CapabilityFlags baseFlags{CapabilityFlag::Preedit,
+                                    CapabilityFlag::FormattedPreedit,
+                                    CapabilityFlag::SurroundingText};
 
 WaylandIMServerV2::WaylandIMServerV2(wl_display *display, FocusGroup *group,
                                      const std::string &name,
                                      WaylandIMModule *waylandim)
-    : WaylandIMServerBase(display, group, name, waylandim),
-      inputMethodManagerV2_(nullptr) {
+    : group_(group), name_(name), parent_(waylandim),
+      inputMethodManagerV2_(nullptr), display_(static_cast<wayland::Display *>(
+                                          wl_display_get_user_data(display))) {
     display_->requestGlobals<wayland::ZwpInputMethodManagerV2>();
     display_->requestGlobals<wayland::ZwpVirtualKeyboardManagerV1>();
     display_->requestGlobals<wayland::WlSeat>();
@@ -50,11 +47,11 @@ WaylandIMServerV2::WaylandIMServerV2(wl_display *display, FocusGroup *group,
         });
 
     if (auto im = display_->getGlobal<wayland::ZwpInputMethodManagerV2>()) {
-        inputMethodManagerV2_ = std::move(im);
+        inputMethodManagerV2_ = im;
     }
 
     if (auto vk = display_->getGlobal<wayland::ZwpVirtualKeyboardManagerV1>()) {
-        virtualKeyboardManagerV1_ = std::move(vk);
+        virtualKeyboardManagerV1_ = vk;
     }
     init();
 }
@@ -71,13 +68,6 @@ InputContextManager &WaylandIMServerV2::inputContextManager() {
 
 Instance *WaylandIMServerV2::instance() { return parent_->instance(); }
 
-bool WaylandIMServerV2::hasKeyboardGrab() const {
-    return std::any_of(icMap_.begin(), icMap_.end(),
-                       [](const decltype(icMap_)::value_type &ic) {
-                           return ic.second && ic.second->hasKeyboardGrab();
-                       });
-}
-
 void WaylandIMServerV2::init() {
     if (init_) {
         return;
@@ -89,6 +79,8 @@ void WaylandIMServerV2::init() {
     }
     WAYLANDIM_DEBUG() << "INIT IM V2";
     refreshSeat();
+
+    display_->flush();
 }
 
 void WaylandIMServerV2::refreshSeat() {
@@ -108,13 +100,12 @@ void WaylandIMServerV2::refreshSeat() {
     }
 }
 
-void WaylandIMServerV2::add(WaylandIMInputContextV2 *ic,
-                            wayland::WlSeat *seat) {
-    icMap_[seat] = ic;
+void WaylandIMServerV2::add(WaylandIMInputContextV2 *ic, wayland::WlSeat *id) {
+    icMap_[id] = ic;
 }
 
-void WaylandIMServerV2::remove(wayland::WlSeat *seat) {
-    auto iter = icMap_.find(seat);
+void WaylandIMServerV2::remove(wayland::WlSeat *id) {
+    auto iter = icMap_.find(id);
     if (iter != icMap_.end()) {
         icMap_.erase(iter);
     }
@@ -123,7 +114,7 @@ void WaylandIMServerV2::remove(wayland::WlSeat *seat) {
 WaylandIMInputContextV2::WaylandIMInputContextV2(
     InputContextManager &inputContextManager, WaylandIMServerV2 *server,
     std::shared_ptr<wayland::WlSeat> seat, wayland::ZwpVirtualKeyboardV1 *vk)
-    : VirtualInputContextGlue(inputContextManager), server_(server),
+    : InputContext(inputContextManager), server_(server),
       seat_(std::move(seat)),
       ic_(server->inputMethodManagerV2()->getInputMethod(seat_.get())),
       vk_(vk) {
@@ -146,27 +137,19 @@ WaylandIMInputContextV2::WaylandIMInputContextV2(
         if (pendingDeactivate_) {
             pendingDeactivate_ = false;
             keyboardGrab_.reset();
-            repeatInfo_.reset();
-            // This is the only place we update wayland xkb mask, so it is ok to
-            // reset it to 0. This breaks the caps lock or num lock. But we have
-            // no other option until we can listen to the mod change globally.
-            server_->instance()->clearXkbStateMask(server_->group()->display());
-
             timeEvent_->setEnabled(false);
-            if (realFocus()) {
+            if (hasFocus()) {
                 if (vkReady_) {
                     // If last key to vk is press, send a release.
                     while (!pressedVKKey_.empty()) {
                         auto [vkkey, vktime] = *pressedVKKey_.begin();
-                        // This is key release, so we don't need real sym and
-                        // states.
-                        sendKeyToVK(vktime,
-                                    Key(FcitxKey_None, KeyStates(), vkkey + 8),
+                        sendKeyToVK(vktime, vkkey,
                                     WL_KEYBOARD_KEY_STATE_RELEASED);
                     }
                     vk_->modifiers(0, 0, 0, 0);
+                    server_->display_->sync();
                 }
-                focusOutWrapper();
+                focusOut();
             }
         }
         if (pendingActivate_) {
@@ -200,7 +183,9 @@ WaylandIMInputContextV2::WaylandIMInputContextV2(
                     [this](int32_t rate, int32_t delay) {
                         repeatInfoCallback(rate, delay);
                     });
-                focusInWrapper();
+                repeatInfoCallback(repeatRate_, repeatDelay_);
+                focusIn();
+                server_->display_->sync();
             }
         }
     });
@@ -213,7 +198,7 @@ WaylandIMInputContextV2::WaylandIMInputContextV2(
     });
     ic_->unavailable().connect([]() { WAYLANDIM_DEBUG() << "UNAVAILABLE"; });
     timeEvent_ = server_->instance()->eventLoop().addTimeEvent(
-        CLOCK_MONOTONIC, now(CLOCK_MONOTONIC), 1,
+        CLOCK_MONOTONIC, now(CLOCK_MONOTONIC), 0,
         [this](EventSourceTime *, uint64_t) {
             repeat();
             return true;
@@ -221,11 +206,6 @@ WaylandIMInputContextV2::WaylandIMInputContextV2(
     timeEvent_->setAccuracy(1);
     timeEvent_->setEnabled(false);
     created();
-
-    if (auto *appMonitor = server->parent_->appMonitor(server->name_)) {
-        virtualICManager_ = std::make_unique<VirtualInputContextManager>(
-            &inputContextManager, this, appMonitor);
-    }
 }
 
 WaylandIMInputContextV2::~WaylandIMInputContextV2() {
@@ -234,19 +214,20 @@ WaylandIMInputContextV2::~WaylandIMInputContextV2() {
 }
 
 void WaylandIMInputContextV2::repeat() {
-    if (!realFocus()) {
+    if (!hasFocus()) {
         return;
     }
-    auto *ic = delegatedInputContext();
     KeyEvent event(
-        ic,
+        this,
         Key(repeatSym_, server_->modifiers_ | KeyState::Repeat, repeatKey_ + 8),
         false, repeatTime_);
-    sendKeyToVK(repeatTime_, event.rawKey(), WL_KEYBOARD_KEY_STATE_RELEASED);
-    if (!ic->keyEvent(event)) {
-        sendKeyToVK(repeatTime_, event.rawKey(), WL_KEYBOARD_KEY_STATE_PRESSED);
+    sendKeyToVK(repeatTime_, event.rawKey().code() - 8,
+                WL_KEYBOARD_KEY_STATE_RELEASED);
+    if (!keyEvent(event)) {
+        sendKeyToVK(repeatTime_, event.rawKey().code() - 8,
+                    WL_KEYBOARD_KEY_STATE_PRESSED);
     }
-    uint64_t interval = 1000000 / repeatRate();
+    uint64_t interval = 1000000 / repeatRate_;
     timeEvent_->setTime(timeEvent_->time() + interval);
     timeEvent_->setOneShot();
 }
@@ -275,12 +256,10 @@ void WaylandIMInputContextV2::surroundingTextCallback(const char *text,
             break;
         }
         surroundingText().setText(text, cursorByChar, anchorByChar);
-    } while (false);
-    updateSurroundingTextWrapper();
+    } while (0);
+    updateSurroundingText();
 }
-void WaylandIMInputContextV2::resetCallback() {
-    delegatedInputContext()->reset();
-}
+void WaylandIMInputContextV2::resetCallback() { reset(); }
 void WaylandIMInputContextV2::contentTypeCallback(uint32_t hint,
                                                   uint32_t purpose) {
     CapabilityFlags flags = baseFlags;
@@ -356,7 +335,7 @@ void WaylandIMInputContextV2::contentTypeCallback(uint32_t hint,
     if (purpose == ZWP_TEXT_INPUT_V3_CONTENT_PURPOSE_TERMINAL) {
         flags |= CapabilityFlag::Terminal;
     }
-    setCapabilityFlagsWrapper(flags);
+    setCapabilityFlags(flags);
 }
 
 void WaylandIMInputContextV2::keymapCallback(uint32_t format, int32_t fd,
@@ -419,6 +398,12 @@ void WaylandIMInputContextV2::keymapCallback(uint32_t format, int32_t fd,
         1 << xkb_keymap_mod_get_index(server_->keymap_.get(), "Mod4");
     server_->stateMask_.mod5_mask =
         1 << xkb_keymap_mod_get_index(server_->keymap_.get(), "Mod5");
+    server_->stateMask_.super_mask =
+        1 << xkb_keymap_mod_get_index(server_->keymap_.get(), "Super");
+    server_->stateMask_.hyper_mask =
+        1 << xkb_keymap_mod_get_index(server_->keymap_.get(), "Hyper");
+    server_->stateMask_.meta_mask =
+        1 << xkb_keymap_mod_get_index(server_->keymap_.get(), "Meta");
 
     if (keymapChanged) {
         vk_->keymap(format, scopeFD.fd(), size);
@@ -428,23 +413,21 @@ void WaylandIMInputContextV2::keymapCallback(uint32_t format, int32_t fd,
     server_->parent_->wayland()->call<IWaylandModule::reloadXkbOption>();
 }
 
-void WaylandIMInputContextV2::keyCallback(uint32_t serial, uint32_t time,
-                                          uint32_t key, uint32_t state) {
-    FCITX_UNUSED(serial);
+void WaylandIMInputContextV2::keyCallback(uint32_t, uint32_t time, uint32_t key,
+                                          uint32_t state) {
     time_ = time;
     if (!server_->state_) {
         return;
     }
 
-    if (!realFocus()) {
-        focusInWrapper();
+    if (!hasFocus()) {
+        focusIn();
     }
 
     // EVDEV OFFSET
     uint32_t code = key + 8;
 
-    auto *ic = delegatedInputContext();
-    KeyEvent event(ic,
+    KeyEvent event(this,
                    Key(static_cast<KeySym>(xkb_state_key_get_one_sym(
                            server_->state_.get(), code)),
                        server_->modifiers_, code),
@@ -454,38 +437,27 @@ void WaylandIMInputContextV2::keyCallback(uint32_t serial, uint32_t time,
         timeEvent_->setEnabled(false);
     } else if (state == WL_KEYBOARD_KEY_STATE_PRESSED &&
                xkb_keymap_key_repeats(server_->keymap_.get(), code)) {
-        if (repeatRate() > 0) {
+        if (repeatRate_) {
             repeatKey_ = key;
             repeatTime_ = time;
             repeatSym_ = event.rawKey().sym();
             // Let's trick the key event system by fake our first.
             // Remove 100 from the initial interval.
-            timeEvent_->setNextInterval(repeatDelay() * 1000 - repeatHackDelay);
+            timeEvent_->setNextInterval(repeatDelay_ * 1000 - repeatHackDelay);
             timeEvent_->setOneShot();
         }
     }
 
     WAYLANDIM_DEBUG() << event.key().toString()
                       << " IsRelease=" << event.isRelease();
-    if (!ic->keyEvent(event)) {
-        sendKeyToVK(time, event.rawKey(),
+    if (!keyEvent(event)) {
+        sendKeyToVK(time, event.rawKey().code() - 8,
                     event.isRelease() ? WL_KEYBOARD_KEY_STATE_RELEASED
                                       : WL_KEYBOARD_KEY_STATE_PRESSED);
     }
-
-    // This means our engine is being too slow, this is usually transient (e.g.
-    // cold start up due to data loading, high CPU usage etc).
-    // To avoid an undesired repetition, reset the delay the next interval so we
-    // can handle the release first.
-    if (timeEvent_->time() < now(timeEvent_->clock()) &&
-        timeEvent_->isOneShot()) {
-        WAYLANDIM_DEBUG() << "Engine handling speed can not keep up with key "
-                             "repetition rate.";
-        timeEvent_->setNextInterval(
-            std::clamp(repeatDelay() * 1000 - repeatHackDelay, 0, 1000));
-    }
+    server_->display_->flush();
 }
-void WaylandIMInputContextV2::modifiersCallback(uint32_t /*serial*/,
+void WaylandIMInputContextV2::modifiersCallback(uint32_t,
                                                 uint32_t mods_depressed,
                                                 uint32_t mods_latched,
                                                 uint32_t mods_locked,
@@ -520,14 +492,23 @@ void WaylandIMInputContextV2::modifiersCallback(uint32_t /*serial*/,
     if (mask & server_->stateMask_.mod2_mask) {
         server_->modifiers_ |= KeyState::NumLock;
     }
+    if (mask & server_->stateMask_.super_mask) {
+        server_->modifiers_ |= KeyState::Super;
+    }
     if (mask & server_->stateMask_.mod4_mask) {
         server_->modifiers_ |= KeyState::Super;
     }
+    if (mask & server_->stateMask_.hyper_mask) {
+        server_->modifiers_ |= KeyState::Hyper;
+    }
     if (mask & server_->stateMask_.mod3_mask) {
-        server_->modifiers_ |= KeyState::Mod3;
+        server_->modifiers_ |= KeyState::Hyper;
     }
     if (mask & server_->stateMask_.mod5_mask) {
         server_->modifiers_ |= KeyState::Mod5;
+    }
+    if (mask & server_->stateMask_.meta_mask) {
+        server_->modifiers_ |= KeyState::Meta;
     }
 
     if (vkReady_) {
@@ -536,38 +517,32 @@ void WaylandIMInputContextV2::modifiersCallback(uint32_t /*serial*/,
 }
 
 void WaylandIMInputContextV2::repeatInfoCallback(int32_t rate, int32_t delay) {
-    repeatInfo_ = std::make_tuple(rate, delay);
+    repeatRate_ = rate;
+    repeatDelay_ = delay;
 }
 
-void WaylandIMInputContextV2::sendKeyToVK(uint32_t time, const Key &key,
-                                          uint32_t state) const {
+void WaylandIMInputContextV2::sendKeyToVK(uint32_t time, uint32_t key,
+                                          uint32_t state) {
     if (!vkReady_) {
         return;
     }
-
-    uint32_t code = key.code() - 8;
-    if (auto text = server_->mayCommitAsText(key, state)) {
-        commitStringDelegate(this, *text);
-        return;
-    }
     // Erase old to ensure order, and released ones can the be removed.
-    pressedVKKey_.erase(code);
-    if (state == WL_KEYBOARD_KEY_STATE_PRESSED &&
-        xkb_keymap_key_repeats(server_->keymap_.get(), key.code())) {
-        pressedVKKey_[code] = time;
+    pressedVKKey_.erase(key);
+    if (state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+        pressedVKKey_[key] = time;
     }
-    vk_->key(time, code, state);
+    vk_->key(time, key, state);
+    server_->display_->flush();
 }
 
-void WaylandIMInputContextV2::forwardKeyDelegate(
-    InputContext * /*ic*/, const ForwardKeyEvent &key) const {
+void WaylandIMInputContextV2::forwardKeyImpl(const ForwardKeyEvent &key) {
     uint32_t code = 0;
     if (key.rawKey().code()) {
         code = key.rawKey().code();
-    } else if (auto *xkbState = server_->xkbState()) {
+    } else if (auto xkbState = server_->xkbState()) {
         auto *map = xkb_state_get_keymap(xkbState);
-        auto min = xkb_keymap_min_keycode(map);
-        auto max = xkb_keymap_max_keycode(map);
+        auto min = xkb_keymap_min_keycode(map),
+             max = xkb_keymap_max_keycode(map);
         for (auto keyCode = min; keyCode < max; keyCode++) {
             if (xkb_state_key_get_one_sym(xkbState, keyCode) ==
                 static_cast<uint32_t>(key.rawKey().sym())) {
@@ -576,28 +551,23 @@ void WaylandIMInputContextV2::forwardKeyDelegate(
             }
         }
     }
-
-    Key keyWithCode(key.rawKey().sym(), key.rawKey().states(), code);
-
-    sendKeyToVK(time_, keyWithCode,
+    sendKeyToVK(time_, code - 8,
                 key.isRelease() ? WL_KEYBOARD_KEY_STATE_RELEASED
                                 : WL_KEYBOARD_KEY_STATE_PRESSED);
     if (!key.isRelease()) {
-        sendKeyToVK(time_, keyWithCode, WL_KEYBOARD_KEY_STATE_RELEASED);
+        sendKeyToVK(time_, code - 8, WL_KEYBOARD_KEY_STATE_RELEASED);
     }
 }
 
-void WaylandIMInputContextV2::updatePreeditDelegate(InputContext *ic) const {
-    if (!realFocus()) {
+void WaylandIMInputContextV2::updatePreeditImpl() {
+    if (!hasFocus()) {
         return;
     }
     auto preedit =
-        server_->instance()->outputFilter(ic, ic->inputPanel().clientPreedit());
+        server_->instance()->outputFilter(this, inputPanel().clientPreedit());
 
-    int highlightStart = -1;
-    int highlightEnd = -1;
-    int start = 0;
-    int end = 0;
+    int highlightStart = -1, highlightEnd = -1;
+    int start = 0, end = 0;
     bool multipleHighlight = false;
     for (int i = 0, e = preedit.size(); i < e; i++) {
         if (!utf8::validate(preedit.stringAt(i))) {
@@ -626,18 +596,15 @@ void WaylandIMInputContextV2::updatePreeditDelegate(InputContext *ic) const {
     }
 
     if (preedit.textLength()) {
-        if (cursorStart < 0) {
-            cursorStart = cursorEnd = preedit.textLength();
-        }
         ic_->setPreeditString(preedit.toString().data(), cursorStart,
                               cursorEnd);
     }
     ic_->commit(serial_);
 }
 
-void WaylandIMInputContextV2::deleteSurroundingTextDelegate(
-    InputContext *ic, int offset, unsigned int size) const {
-    if (!realFocus()) {
+void WaylandIMInputContextV2::deleteSurroundingTextImpl(int offset,
+                                                        unsigned int size) {
+    if (!hasFocus()) {
         return;
     }
 
@@ -646,12 +613,12 @@ void WaylandIMInputContextV2::deleteSurroundingTextDelegate(
         return;
     }
 
-    size_t cursor = ic->surroundingText().cursor();
+    size_t cursor = surroundingText().cursor();
     if (static_cast<ssize_t>(cursor) + offset < 0) {
         return;
     }
 
-    const auto &text = ic->surroundingText().text();
+    const auto &text = surroundingText().text();
     auto len = utf8::length(text);
 
     size_t start = cursor + offset;
@@ -667,14 +634,6 @@ void WaylandIMInputContextV2::deleteSurroundingTextDelegate(
     ic_->deleteSurroundingText(cursorBytes - startBytes,
                                startBytes + sizeBytes - cursorBytes);
     ic_->commit(serial_);
-}
-
-int32_t WaylandIMInputContextV2::repeatRate() const {
-    return server_->repeatRate(seat_, repeatInfo_);
-}
-
-int32_t WaylandIMInputContextV2::repeatDelay() const {
-    return server_->repeatDelay(seat_, repeatInfo_);
 }
 
 } // namespace fcitx

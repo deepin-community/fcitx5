@@ -5,12 +5,15 @@
  *
  */
 #include "quickphrase.h"
+#include <fcntl.h>
 
 #include <utility>
 #include "fcitx-config/iniparser.h"
+#include "fcitx-utils/charutils.h"
 #include "fcitx-utils/i18n.h"
 #include "fcitx-utils/inputbuffer.h"
-#include "fcitx/addonfactory.h"
+#include "fcitx-utils/standardpath.h"
+#include "fcitx-utils/utf8.h"
 #include "fcitx/addonmanager.h"
 #include "fcitx/candidatelist.h"
 #include "fcitx/inputcontextmanager.h"
@@ -118,7 +121,7 @@ QuickPhrase::QuickPhrase(Instance *instance)
                 }
 
                 if (keyEvent.key().check(FcitxKey_space) &&
-                    !candidateList->empty()) {
+                    candidateList->size()) {
                     keyEvent.accept();
                     if (candidateList->cursorIndex() >= 0) {
                         candidateList->candidate(candidateList->cursorIndex())
@@ -161,7 +164,7 @@ QuickPhrase::QuickPhrase(Instance *instance)
                     }
                 }
 
-                if (!candidateList->empty() &&
+                if (candidateList->size() &&
                     keyEvent.key().checkKeyList(
                         instance_->globalConfig().defaultPrevCandidate())) {
                     keyEvent.filterAndAccept();
@@ -171,7 +174,7 @@ QuickPhrase::QuickPhrase(Instance *instance)
                     return;
                 }
 
-                if (!candidateList->empty() &&
+                if (candidateList->size() &&
                     keyEvent.key().checkKeyList(
                         instance_->globalConfig().defaultNextCandidate())) {
                     keyEvent.filterAndAccept();
@@ -221,50 +224,6 @@ QuickPhrase::QuickPhrase(Instance *instance)
                 keyEvent.accept();
                 return;
             }
-            if (keyEvent.key().check(FcitxKey_Delete)) {
-                if (state->buffer_.empty()) {
-                    state->reset(inputContext);
-                } else {
-                    if (state->buffer_.del()) {
-                        if (state->buffer_.empty()) {
-                            state->reset(inputContext);
-                        } else {
-                            updateUI(inputContext);
-                        }
-                    }
-                }
-                keyEvent.accept();
-                return;
-            }
-            if (!state->buffer_.empty()) {
-                const Key &key = keyEvent.key();
-                if (key.check(FcitxKey_Home) || key.check(FcitxKey_KP_Home)) {
-                    state->buffer_.setCursor(0);
-                    keyEvent.accept();
-                    return updateUI(inputContext);
-                }
-                if (key.check(FcitxKey_End) || key.check(FcitxKey_KP_End)) {
-                    state->buffer_.setCursor(state->buffer_.size());
-                    keyEvent.accept();
-                    return updateUI(inputContext);
-                }
-                if (key.check(FcitxKey_Left) || key.check(FcitxKey_KP_Left)) {
-                    auto cursor = state->buffer_.cursor();
-                    if (cursor > 0) {
-                        state->buffer_.setCursor(cursor - 1);
-                    }
-                    keyEvent.accept();
-                    return updateUI(inputContext);
-                }
-                if (key.check(FcitxKey_Right) || key.check(FcitxKey_KP_Right)) {
-                    auto cursor = state->buffer_.cursor();
-                    if (cursor < state->buffer_.size()) {
-                        state->buffer_.setCursor(cursor + 1);
-                    }
-                    keyEvent.accept();
-                    return updateUI(inputContext);
-                }
-            }
             if (!state->typed_ && !state->str_.empty() &&
                 state->buffer_.empty() && keyEvent.key().check(state->key_)) {
                 keyEvent.accept();
@@ -292,30 +251,6 @@ QuickPhrase::QuickPhrase(Instance *instance)
 
             updateUI(inputContext);
         }));
-    eventHandlers_.emplace_back(instance_->watchEvent(
-        EventType::InputContextInvokeAction, EventWatcherPhase::PreInputMethod,
-        [this](Event &event) {
-            auto &invokeActionEvent = static_cast<InvokeActionEvent &>(event);
-            auto *inputContext = invokeActionEvent.inputContext();
-            auto *state = inputContext->propertyFor(&factory_);
-            if (!state->enabled_) {
-                return;
-            }
-            invokeActionEvent.filter();
-            int cursor = invokeActionEvent.cursor() -
-                         static_cast<int>(state->prefix_.size());
-            if (cursor < 0 ||
-                invokeActionEvent.action() !=
-                    InvokeActionEvent::Action::LeftClick ||
-                !inputContext->capabilityFlags().test(
-                    CapabilityFlag::Preedit)) {
-                state->reset(inputContext);
-                return;
-            }
-            state->buffer_.setCursor(cursor);
-            invokeActionEvent.accept();
-            updateUI(inputContext);
-        }));
 
     reloadConfig();
 }
@@ -338,8 +273,12 @@ public:
 
             q_->updateUI(inputContext);
         } else if (action_ == QuickPhraseAction::Commit) {
-            inputContext->commitString(commit_);
             state->reset(inputContext);
+            inputContext->inputPanel().reset();
+            inputContext->updatePreedit();
+            inputContext->updateUserInterface(
+                UserInterfaceComponent::InputPanel, true);
+            inputContext->commitString(commit_);
         }
         // DoNothing and other values are also handled here.
     }
@@ -399,8 +338,6 @@ void QuickPhrase::updateUI(InputContext *inputContext) {
     inputContext->inputPanel().reset();
     if (!state->buffer_.empty()) {
         auto candidateList = std::make_unique<CommonCandidateList>();
-        candidateList->setCursorPositionAfterPaging(
-            CursorPositionAfterPaging::ResetToFirst);
         candidateList->setPageSize(instance_->globalConfig().defaultPageSize());
         QuickPhraseProvider *providers[] = {&callbackProvider_,
                                             &builtinProvider_, &spellProvider_};
@@ -449,23 +386,24 @@ void QuickPhrase::updateUI(InputContext *inputContext) {
 
         setSelectionKeys(selectionKeyAction);
         candidateList->setSelectionKey(selectionKeys_);
-        if (!candidateList->empty()) {
+        if (candidateList->size()) {
             candidateList->setGlobalCursorIndex(0);
         }
         inputContext->inputPanel().setCandidateList(std::move(candidateList));
     }
     Text preedit;
+    if (!state->prefix_.empty()) {
+        preedit.append(state->prefix_);
+    }
     const bool useClientPreedit =
         inputContext->capabilityFlags().test(CapabilityFlag::Preedit);
     TextFormatFlags format{useClientPreedit ? TextFormatFlag::Underline
                                             : TextFormatFlag::NoFlag};
-    if (!state->prefix_.empty()) {
-        preedit.append(state->prefix_, format);
-    }
+    preedit.append(state->buffer_.userInput(), format);
     if (!state->buffer_.empty()) {
-        preedit.append(state->buffer_.userInput(), format);
+        preedit.setCursor(state->prefix_.size() +
+                          state->buffer_.cursorByChar());
     }
-    preedit.setCursor(state->prefix_.size() + state->buffer_.cursorByChar());
 
     Text auxUp(_("Quick Phrase: "));
     if (!state->typed_) {
@@ -473,6 +411,7 @@ void QuickPhrase::updateUI(InputContext *inputContext) {
     }
     inputContext->inputPanel().setAuxUp(auxUp);
     if (useClientPreedit) {
+        preedit.setCursor(0);
         inputContext->inputPanel().setClientPreedit(preedit);
     } else {
         inputContext->inputPanel().setPreedit(preedit);

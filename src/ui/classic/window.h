@@ -8,6 +8,7 @@
 #define _FCITX_UI_CLASSIC_WINDOW_H_
 
 #include <cairo/cairo.h>
+#include "fcitx/userinterface.h"
 
 namespace fcitx {
 namespace classicui {

@@ -14,7 +14,6 @@
 
 #include <algorithm>
 #include <ostream>
-#include <utility>
 #include "fcitxutils_export.h"
 
 namespace fcitx {
@@ -55,12 +54,7 @@ public:
         return *this;
     }
 
-    // FIXME: remove this.
     inline Rect intersected(const Rect &rect) noexcept {
-        return std::as_const(*this).intersected(rect);
-    }
-
-    inline Rect intersected(const Rect &rect) const noexcept {
         Rect tmp;
         tmp.x1_ = std::max(x1_, rect.x1_);
         tmp.x2_ = std::min(x2_, rect.x2_);

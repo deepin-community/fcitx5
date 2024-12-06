@@ -6,13 +6,20 @@
  */
 
 #include "keyboard.h"
+#include <fcntl.h>
 #include <algorithm>
+#include <cstring>
 #include <fmt/format.h>
-#include <xkbcommon/xkbcommon.h>
+#include <libintl.h>
 #include "fcitx-config/iniparser.h"
+#include "fcitx-utils/charutils.h"
+#include "fcitx-utils/cutf8.h"
 #include "fcitx-utils/i18n.h"
+#include "fcitx-utils/log.h"
+#include "fcitx-utils/standardpath.h"
 #include "fcitx-utils/stringutils.h"
 #include "fcitx-utils/utf8.h"
+#include "fcitx/inputcontext.h"
 #include "fcitx/inputcontextmanager.h"
 #include "fcitx/inputcontextproperty.h"
 #include "fcitx/inputmethodentry.h"
@@ -26,7 +33,6 @@
 #include "spell_public.h"
 
 #ifdef ENABLE_X11
-#define FCITX_NO_XCB
 #include "xcb_public.h"
 #endif
 
@@ -160,41 +166,25 @@ KeyboardEngineState::KeyboardEngineState(KeyboardEngine *engine,
 KeyboardEngine::KeyboardEngine(Instance *instance) : instance_(instance) {
     setupDefaultLongPressConfig(longPressConfig_);
     registerDomain("xkeyboard-config", XKEYBOARDCONFIG_DATADIR "/locale");
-    std::string ruleName = DEFAULT_XKB_RULES;
-    std::string extraRuleFile;
+    std::string rule;
 #ifdef ENABLE_X11
     auto *xcb = instance_->addonManager().addon("xcb");
     if (xcb) {
         auto rules = xcb->call<IXCBModule::xkbRulesNames>("");
         if (!rules[0].empty()) {
-            if (rules[0][0] == '/') {
-                extraRuleFile = rules[0];
-                if (!stringutils::endsWith(extraRuleFile, ".xml")) {
-                    extraRuleFile = extraRuleFile + ".xml";
-                }
-            } else {
-                ruleName = rules[0];
+            rule = rules[0];
+            if (rule[0] != '/') {
+                rule = XKEYBOARDCONFIG_XKBBASE "/rules/" + rule;
             }
+            rule += ".xml";
+            ruleName_ = rule;
         }
     }
 #endif
-
-    UniqueCPtr<xkb_context, xkb_context_unref> xkbContext(
-        xkb_context_new(XKB_CONTEXT_NO_FLAGS));
-    std::vector<std::string> directories;
-    if (xkbContext) {
-        for (unsigned int i = 0,
-                          e = xkb_context_num_include_paths(xkbContext.get());
-             i < e; i++) {
-            directories.push_back(
-                xkb_context_include_path_get(xkbContext.get(), i));
-        }
-    }
-    if (directories.empty()) {
-        directories.push_back(XKEYBOARDCONFIG_XKBBASE);
-    }
-    if (!xkbRules_.read(directories, ruleName, extraRuleFile)) {
-        xkbRules_.read(directories, DEFAULT_XKB_RULES, "");
+    if (rule.empty() || !xkbRules_.read(rule)) {
+        rule = XKEYBOARDCONFIG_XKBBASE "/rules/" DEFAULT_XKB_RULES ".xml";
+        xkbRules_.read(rule);
+        ruleName_ = DEFAULT_XKB_RULES;
     }
 
     instance_->inputContextManager().registerProperty("keyboardState",
@@ -245,21 +235,11 @@ std::vector<InputMethodEntry> KeyboardEngine::listInputMethods() {
                             D_("xkeyboard-config", variantInfo.description));
             auto uniqueName = stringutils::concat(imNamePrefix, layoutInfo.name,
                                                   "-", variantInfo.name);
-
-            auto variantLabel = variantInfo.shortDescription.empty()
-                                    ? layoutInfo.name
-                                    : variantInfo.shortDescription;
-            // Certain layout use the variant name as label, if that is the
-            // case, we don't need to repeat it, otherwise put the variant in
-            // the label. E.g. Cherokee label is chr, and variant name is also
-            // chr. So "chr (chr)" would be redundant in this case.
-            if (variantLabel != variantInfo.name) {
-                variantLabel =
-                    fmt::format("{0} ({1})", variantLabel, variantInfo.name);
-            }
             result.push_back(std::move(
                 InputMethodEntry(uniqueName, description, language, "keyboard")
-                    .setLabel(variantLabel)
+                    .setLabel(variantInfo.shortDescription.empty()
+                                  ? layoutInfo.name
+                                  : variantInfo.shortDescription)
                     .setIcon("input-keyboard")
                     .setConfigurable(true)));
         }
@@ -540,8 +520,7 @@ void KeyboardEngine::resetState(InputContext *inputContext) {
     state->reset();
 }
 
-void KeyboardEngine::deactivate(const InputMethodEntry &,
-                                InputContextEvent &event) {
+void KeyboardEngine::reset(const InputMethodEntry &, InputContextEvent &event) {
     auto *inputContext = event.inputContext();
     auto *state = inputContext->propertyFor(&factory_);
     // The reason that we do not commit here is we want to force the behavior.
@@ -551,15 +530,6 @@ void KeyboardEngine::deactivate(const InputMethodEntry &,
     } else {
         state->reset();
     }
-    inputContext->inputPanel().reset();
-    inputContext->updatePreedit();
-    inputContext->updateUserInterface(UserInterfaceComponent::InputPanel);
-}
-
-void KeyboardEngine::reset(const InputMethodEntry &, InputContextEvent &event) {
-    auto *inputContext = event.inputContext();
-    auto *state = inputContext->propertyFor(&factory_);
-    state->reset();
     inputContext->inputPanel().reset();
     inputContext->updatePreedit();
     inputContext->updateUserInterface(UserInterfaceComponent::InputPanel);
@@ -675,7 +645,7 @@ void KeyboardEngineState::showHintNotification(
     }
     engine_->notifications()->call<INotifications::showTip>(
         "fcitx-keyboard-hint", _("Input Method"), "tools-check-spelling",
-        _("Completion"), message, 1000);
+        _("Completion"), message, -1);
 }
 
 bool KeyboardEngineState::handleLongPress(const KeyEvent &event) {
@@ -692,7 +662,7 @@ bool KeyboardEngineState::handleLongPress(const KeyEvent &event) {
             repeatStarted_ = true;
 
             mode_ = CandidateMode::LongPress;
-            origKeyString_ = std::move(keystr);
+            origKeyString_ = keystr;
             if (buffer_.empty()) {
                 if (inputContext->capabilityFlags().test(
                         CapabilityFlag::SurroundingText)) {

@@ -1,0 +1,2 @@
+/usr/bin/ar qc libkeyboard.a CMakeFiles/keyboard.dir/keyboard.cpp.o CMakeFiles/keyboard.dir/isocodes.cpp.o CMakeFiles/keyboard.dir/xkbrules.cpp.o CMakeFiles/keyboard.dir/xmlparser.cpp.o CMakeFiles/keyboard.dir/longpress.cpp.o CMakeFiles/keyboard.dir/compose.cpp.o
+/usr/bin/ranlib libkeyboard.a

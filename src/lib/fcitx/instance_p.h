@@ -12,10 +12,8 @@
 #include <string>
 #include <unordered_map>
 #include "fcitx-utils/event.h"
-#include "fcitx-utils/eventdispatcher.h"
 #include "fcitx-utils/handlertable.h"
 #include "fcitx-utils/misc.h"
-#include "fcitx-utils/trackableobject.h"
 #include "config.h"
 #include "inputcontextproperty.h"
 #include "inputmethodmanager.h"
@@ -110,7 +108,7 @@ struct InstanceArgument {
     static void printVersion() {
         std::cout << FCITX_VERSION_STRING << std::endl;
     }
-    void printUsage() const;
+    void printUsage();
 
     int overrideDelay = -1;
     bool tryReplace = false;
@@ -120,7 +118,6 @@ struct InstanceArgument {
     std::string uiName;
     std::vector<std::string> enableList;
     std::vector<std::string> disableList;
-    std::unordered_map<std::string, std::vector<std::string>> addonOptions_;
     std::string argv0;
 };
 
@@ -147,25 +144,18 @@ public:
 
     bool canDeactivate(InputContext *ic);
 
-    void navigateGroup(InputContext *ic, const Key &key, bool forward);
+    void navigateGroup(InputContext *ic, bool forward);
 
-    void acceptGroupChange(const Key &key, InputContext *ic);
+    void acceptGroupChange(InputContext *ic);
 
     InstanceArgument arg_;
 
     int signalPipe_ = -1;
     bool exit_ = false;
-    int exitCode_ = 0;
     bool running_ = false;
-    InputMethodMode inputMethodMode_ = isAndroid()
-                                           ? InputMethodMode::OnScreenKeyboard
-                                           : InputMethodMode::PhysicalKeyboard;
-
     EventLoop eventLoop_;
-    EventDispatcher eventDispatcher_;
     std::unique_ptr<EventSourceIO> signalPipeEvent_;
     std::unique_ptr<EventSourceTime> preloadInputMethodEvent_;
-    std::unique_ptr<EventSourceTime> zombieReaper_;
     std::unique_ptr<EventSource> exitEvent_;
     InputContextManager icManager_;
     AddonManager addonManager_;
@@ -219,17 +209,7 @@ public:
 
     std::string lastGroup_;
 
-    bool virtualKeyboardAutoShow_ = true;
-
-    bool virtualKeyboardAutoHide_ = true;
-
-    VirtualKeyboardFunctionMode virtualKeyboardFunctionMode_ =
-        VirtualKeyboardFunctionMode::Full;
-
-    bool binaryMode_ = false;
-
-    std::string lastUnFocusedProgram_;
-    TrackableObjectReference<InputContext> lastUnFocusedIc_;
+    const bool inFlatpak_ = fs::isreg("/.flatpak-info");
 };
 
 } // namespace fcitx

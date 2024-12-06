@@ -31,29 +31,31 @@ public:
     InputBuffer buffer_;
     Unicode *q_;
 
-    void reset(InputContext *inputContext) {
+    void reset(InputContext *ic) {
         mode_ = UnicodeMode::Off;
         buffer_.clear();
         buffer_.shrinkToFit();
-        inputContext->inputPanel().reset();
-        inputContext->updatePreedit();
-        inputContext->updateUserInterface(UserInterfaceComponent::InputPanel);
+        ic->inputPanel().reset();
+        ic->updatePreedit();
+        ic->updateUserInterface(UserInterfaceComponent::InputPanel);
     }
 };
 
 class UnicodeCandidateWord : public CandidateWord {
 public:
-    UnicodeCandidateWord(Unicode *q, uint32_t chr) : q_(q) {
+    UnicodeCandidateWord(Unicode *q, int c) : q_(q) {
         Text text;
-        text.append(utf8::UCS4ToUTF8(chr));
-        text.append(stringutils::concat(" ", q->data().name(chr)));
+        text.append(utf8::UCS4ToUTF8(c));
+        text.append(" ");
+        text.append(q->data().name(c));
         setText(std::move(text));
     }
 
     void select(InputContext *inputContext) const override {
-        inputContext->commitString(text().stringAt(0));
+        auto commit = text().stringAt(0);
         auto *state = inputContext->propertyFor(&q_->factory());
         state->reset(inputContext);
+        inputContext->commitString(commit);
     }
 
     Unicode *q_;
@@ -137,9 +139,8 @@ Unicode::Unicode(Instance *instance)
 Unicode::~Unicode() {}
 
 bool Unicode::trigger(InputContext *inputContext) {
-    if (!data_.load()) {
+    if (!data_.load())
         return false;
-    }
     auto *state = inputContext->propertyFor(&factory_);
     state->mode_ = UnicodeMode::Search;
     updateUI(inputContext, true);
@@ -147,9 +148,8 @@ bool Unicode::trigger(InputContext *inputContext) {
 }
 
 bool Unicode::triggerDirect(KeyEvent &keyEvent) {
-    if (!data_.load()) {
+    if (!data_.load())
         return false;
-    }
     auto *inputContext = keyEvent.inputContext();
     auto *state = inputContext->propertyFor(&factory_);
     state->mode_ = UnicodeMode::Direct;
@@ -158,7 +158,7 @@ bool Unicode::triggerDirect(KeyEvent &keyEvent) {
 }
 
 void Unicode::handleSearch(KeyEvent &keyEvent) {
-    auto *inputContext = keyEvent.inputContext();
+    auto inputContext = keyEvent.inputContext();
     auto *state = inputContext->propertyFor(&factory_);
     auto candidateList = inputContext->inputPanel().candidateList();
     if (candidateList) {
@@ -214,25 +214,24 @@ void Unicode::handleSearch(KeyEvent &keyEvent) {
                 UserInterfaceComponent::InputPanel);
             return;
         }
-
-        if (keyEvent.key().check(FcitxKey_Return) ||
-            keyEvent.key().check(FcitxKey_KP_Enter)) {
-            keyEvent.accept();
-            if (!candidateList->empty() && candidateList->cursorIndex() >= 0) {
-                candidateList->candidate(candidateList->cursorIndex())
-                    .select(inputContext);
-            }
-            return;
-        }
     }
 
     // and by pass all modifier
     if (keyEvent.key().isModifier() || keyEvent.key().hasModifier()) {
         return;
     }
-    keyEvent.accept();
     if (keyEvent.key().check(FcitxKey_Escape)) {
+        keyEvent.accept();
         state->reset(inputContext);
+        return;
+    }
+    if (keyEvent.key().check(FcitxKey_Return) ||
+        keyEvent.key().check(FcitxKey_KP_Enter)) {
+        keyEvent.accept();
+        if (candidateList->size() > 0 && candidateList->cursorIndex() >= 0) {
+            candidateList->candidate(candidateList->cursorIndex())
+                .select(inputContext);
+        }
         return;
     }
     if (keyEvent.key().check(FcitxKey_BackSpace)) {
@@ -247,6 +246,7 @@ void Unicode::handleSearch(KeyEvent &keyEvent) {
                 }
             }
         }
+        keyEvent.accept();
         return;
     }
 
@@ -256,7 +256,7 @@ void Unicode::handleSearch(KeyEvent &keyEvent) {
 
     // compose is invalid, ignore it.
     if (!compose) {
-        return;
+        return keyEvent.accept();
     }
 
     if (!compose->empty()) {
@@ -264,6 +264,7 @@ void Unicode::handleSearch(KeyEvent &keyEvent) {
     } else {
         state->buffer_.type(Key::keySymToUnicode(keyEvent.key().sym()));
     }
+    keyEvent.accept();
 
     updateUI(inputContext);
 }
@@ -286,7 +287,7 @@ bool bufferIsValid(const std::string &input, uint32_t *ret) {
 }
 
 void Unicode::handleDirect(KeyEvent &keyEvent) {
-    auto *inputContext = keyEvent.inputContext();
+    auto inputContext = keyEvent.inputContext();
     auto *state = inputContext->propertyFor(&factory_);
     keyEvent.accept();
     // by pass all modifier
@@ -360,18 +361,19 @@ void Unicode::updateUI(InputContext *inputContext, bool trigger) {
         } else {
             inputContext->inputPanel().setPreedit(preedit);
         }
+        FCITX_INFO() << preedit.toString();
     } else if (state->mode_ == UnicodeMode::Search) {
         if (!state->buffer_.empty()) {
             auto result = data_.find(state->buffer_.userInput());
             auto candidateList = std::make_unique<CommonCandidateList>();
             candidateList->setPageSize(
                 instance_->globalConfig().defaultPageSize());
-            for (auto chr : result) {
-                if (utf8::UCS4IsValid(chr)) {
-                    candidateList->append<UnicodeCandidateWord>(this, chr);
+            for (auto c : result) {
+                if (utf8::UCS4IsValid(c)) {
+                    candidateList->append<UnicodeCandidateWord>(this, c);
                 }
             }
-            if (!candidateList->empty()) {
+            if (candidateList->size()) {
                 candidateList->setGlobalCursorIndex(0);
             }
             candidateList->setSelectionKey(selectionKeys_);
@@ -414,21 +416,21 @@ void Unicode::updateUI(InputContext *inputContext, bool trigger) {
                 // Hard limit to prevent do too much lookup.
                 constexpr int limit = 20;
                 int counter = 0;
-                for (auto chr : utf8::MakeUTF8CharRange(str)) {
-                    if (!seenChar.insert(chr).second) {
+                for (auto c : utf8::MakeUTF8CharRange(str)) {
+                    if (!seenChar.insert(c).second) {
                         continue;
                     }
-                    auto name = data_.name(chr);
+                    auto name = data_.name(c);
                     std::string display;
                     if (!name.empty()) {
                         display = fmt::format("{0} U+{1:04X} {2}",
-                                              utf8::UCS4ToUTF8(chr), chr, name);
+                                              utf8::UCS4ToUTF8(c), c, name);
                     } else {
                         display = fmt::format("{0} U+{1:04X}",
-                                              utf8::UCS4ToUTF8(chr), chr);
+                                              utf8::UCS4ToUTF8(c), c);
                     }
                     candidateList->append<DisplayOnlyCandidateWord>(
-                        Text(std::move(display)));
+                        Text(display));
                     if (counter >= limit) {
                         break;
                     }
@@ -438,7 +440,7 @@ void Unicode::updateUI(InputContext *inputContext, bool trigger) {
             candidateList->setSelectionKey(KeyList(10));
             candidateList->setPageSize(
                 instance_->globalConfig().defaultPageSize());
-            if (!candidateList->empty()) {
+            if (candidateList->size()) {
                 candidateList->setGlobalCursorIndex(0);
             }
 

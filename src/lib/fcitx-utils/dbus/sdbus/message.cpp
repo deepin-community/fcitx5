@@ -11,7 +11,6 @@
 #include <atomic>
 #include <shared_mutex>
 #include <stdexcept>
-#include <asm-generic/errno-base.h>
 #include "../../misc_p.h"
 #include "../../unixfd.h"
 #include "../variant.h"
@@ -436,24 +435,23 @@ Message &Message::operator>>(Variant &variant) {
     }
     FCITX_D();
     auto type = peekType();
-    if (type.first != 'v') {
-        d->lastError_ = -EINVAL;
-        return *this;
-    }
-    if (auto helper = lookupVariantType(type.second)) {
-        if (*this >>
-            Container(Container::Type::Variant, Signature(type.second))) {
-            auto data = helper->copy(nullptr);
-            helper->deserialize(*this, data.get());
-            if (*this) {
-                variant.setRawData(std::move(data), std::move(helper));
-                *this >> ContainerEnd();
+    if (type.first == 'v') {
+        auto helper =
+            VariantTypeRegistry::defaultRegistry().lookupType(type.second);
+        if (helper) {
+            if (*this >>
+                Container(Container::Type::Variant, Signature(type.second))) {
+                auto data = helper->copy(nullptr);
+                helper->deserialize(*this, data.get());
+                if (*this) {
+                    variant.setRawData(data, helper);
+                    *this >> ContainerEnd();
+                }
             }
+            return *this;
         }
-        return *this;
-    } else {
-        d->lastError_ = sd_bus_message_skip(d->msg_, "v");
     }
+    d->lastError_ = sd_bus_message_skip(d->msg_, "v");
     return *this;
 }
 } // namespace fcitx::dbus

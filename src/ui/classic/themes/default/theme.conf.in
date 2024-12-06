@@ -9,7 +9,7 @@ ScaleWithDPI=True
 Font=Sans 10
 NormalColor=#000000
 HighlightColor=#ffffff
-PageButtonAlignment=Last Candidate
+Spacing=3
 
 [InputPanel/TextMargin]
 Left=5
@@ -24,9 +24,7 @@ Top=2
 Bottom=2
 
 [InputPanel/Background]
-Color=#ffffff
-BorderColor=#c0c0c0
-BorderWidth=2
+Image=panel.png
 
 [InputPanel/Background/Margin]
 Left=2
@@ -35,7 +33,7 @@ Top=2
 Bottom=2
 
 [InputPanel/Highlight]
-Color=#808080
+Image=highlight.png
 
 [InputPanel/Highlight/Margin]
 Left=5
@@ -62,9 +60,7 @@ Top=4
 Bottom=4
 
 [Menu/Background]
-Color=#ffffff
-BorderColor=#c0c0c0
-BorderWidth=2
+Image=panel.png
 
 [Menu/Background/Margin]
 Left=2
@@ -85,7 +81,7 @@ Image=radio.png
 Image=arrow.png
 
 [Menu/Highlight]
-Color=#808080
+Image=highlight.png
 
 [Menu/Highlight/Margin]
 Left=5
@@ -107,11 +103,3 @@ Left=5
 Right=5
 Top=5
 Bottom=5
-
-[AccentColorField]
-0=Input Panel Border
-1=Input Panel Highlight Candidate Background
-2=Input Panel Highlight
-3=Menu Border
-4=Menu Separator
-5=Menu Selected Item Background

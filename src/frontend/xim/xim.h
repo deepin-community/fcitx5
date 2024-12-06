@@ -7,18 +7,24 @@
 #ifndef _FCITX_FRONTEND_XIM_XIM_H_
 #define _FCITX_FRONTEND_XIM_XIM_H_
 
-#include <unordered_map>
 #include <xcb-imdkit/imdkit.h>
+
+#include <list>
+#include <unordered_map>
+#include <vector>
 #include "fcitx-config/iniparser.h"
+#include "fcitx-utils/event.h"
 #include "fcitx-utils/i18n.h"
 #include "fcitx/addonfactory.h"
 #include "fcitx/addoninstance.h"
 #include "fcitx/addonmanager.h"
+#include "fcitx/focusgroup.h"
 #include "fcitx/instance.h"
 #include "xcb_public.h"
 
 namespace fcitx {
 
+class XIMModule;
 class XIMServer;
 
 FCITX_CONFIGURATION(XIMConfig,

@@ -176,6 +176,7 @@ void XCBKeyboard::updateKeymap() {
     if (!context_) {
         return;
     }
+    xcb_flush(connection());
     initDefaultLayout();
 
     keymap_.reset(nullptr);
@@ -224,7 +225,7 @@ void XCBKeyboard::updateKeymap() {
 
 xcb_atom_t XCBKeyboard::xkbRulesNamesAtom() {
     if (!xkbRulesNamesAtom_) {
-        xkbRulesNamesAtom_ = conn_->atom(_XKB_RF_NAMES_PROP_ATOM, false);
+        xkbRulesNamesAtom_ = conn_->atom(_XKB_RF_NAMES_PROP_ATOM, true);
     }
     return xkbRulesNamesAtom_;
 }
@@ -513,6 +514,7 @@ bool XCBKeyboard::setLayoutByName(const std::string &layout,
 #endif
     xcb_xkb_latch_lock_state(connection(), XCB_XKB_ID_USE_CORE_KBD, 0, 0, true,
                              index, 0, false, 0);
+    xcb_flush(connection());
     return true;
 }
 
@@ -539,11 +541,6 @@ bool XCBKeyboard::handleEvent(xcb_generic_event_t *event) {
         switch (xkbEvent->any.xkbType) {
         case XCB_XKB_STATE_NOTIFY: {
             xcb_xkb_state_notify_event_t *state = &xkbEvent->state_notify;
-            FCITX_XCB_DEBUG()
-                << "XCB_XKB_STATE_NOTIFY depressed:"
-                << static_cast<unsigned int>(state->baseMods)
-                << " latched:" << static_cast<unsigned int>(state->latchedMods)
-                << " locked:" << static_cast<unsigned int>(state->lockedMods);
             xkb_state_update_mask(state_.get(), state->baseMods,
                                   state->latchedMods, state->lockedMods,
                                   state->baseGroup, state->latchedGroup,
@@ -551,12 +548,6 @@ bool XCBKeyboard::handleEvent(xcb_generic_event_t *event) {
             conn_->instance()->updateXkbStateMask(
                 conn_->focusGroup()->display(), state->baseMods,
                 state->latchedMods, state->lockedMods);
-
-            const uint32_t effective = xkb_state_serialize_mods(
-                state_.get(), XKB_STATE_MODS_EFFECTIVE);
-            auto newModifier = KeyStates(effective);
-            conn_->modifierUpdate(newModifier);
-
             return true;
         }
         case XCB_XKB_MAP_NOTIFY: {
@@ -592,7 +583,7 @@ bool XCBKeyboard::handleEvent(xcb_generic_event_t *event) {
                         if (waitingForRefresh_) {
                             waitingForRefresh_ = false;
                             if (auto path = xmodmapFile(); !path.empty()) {
-                                startProcess({"xmodmap", std::move(path)});
+                                startProcess({"xmodmap", path});
                             }
                         }
                         return true;

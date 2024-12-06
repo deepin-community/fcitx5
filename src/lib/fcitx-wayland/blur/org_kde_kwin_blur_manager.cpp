@@ -1,4 +1,5 @@
 #include "org_kde_kwin_blur_manager.h"
+#include <cassert>
 #include "org_kde_kwin_blur.h"
 #include "wl_surface.h"
 namespace fcitx::wayland {

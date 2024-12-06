@@ -33,7 +33,6 @@ set(FCITX_UTILS_DBUS_TEST
 
 set(testdbus_LIBS Pthread::Pthread)
 set(testeventdispatcher_LIBS Pthread::Pthread)
-set(testevent_LIBS Pthread::Pthread)
 
 find_program(XVFB_BIN Xvfb)
 
@@ -77,8 +76,6 @@ foreach(TESTCASE ${FCITX_CONFIG_TEST})
     add_test(NAME ${TESTCASE}
              COMMAND ${TESTCASE})
 endforeach()
-
-set(testinputcontext_LIBS Fcitx5::Module::TestFrontend Fcitx5::Module::TestIM)
 
 set(FCITX_CORE_TEST
     testinputcontext

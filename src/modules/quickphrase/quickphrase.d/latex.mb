@@ -1,4 +1,4 @@
-\backslash \\
+\backslash \
 \hat ^
 \grave `
 \tilde ~
@@ -299,8 +299,7 @@
 \boxdot ⊡
 \vdash ⊢
 \dashv ⊣
-\bot ⊥
-\top ⊤
+\bot ⊤
 \perp ⊥
 \vDash ⊧
 \models ⊨

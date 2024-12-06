@@ -14,6 +14,7 @@
 #include "fcitx-utils/stringutils.h"
 #include "fcitx-utils/utf8.h"
 #include "fcitx/addonfactory.h"
+#include "config.h"
 
 namespace fcitx {
 
@@ -74,8 +75,7 @@ public:
         }
 
         try {
-            const auto *cur = data.data();
-            const auto *end = data.data() + data.size();
+            const auto *cur = data.data(), *end = data.data() + data.size();
             uint32_t nEmoji = readInt32(&cur, end);
             for (uint32_t i = 0; i < nEmoji; i++) {
                 std::string_view emoji = readString(&cur, end);

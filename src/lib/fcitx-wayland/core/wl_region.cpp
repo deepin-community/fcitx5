@@ -1,4 +1,5 @@
 #include "wl_region.h"
+#include <cassert>
 namespace fcitx::wayland {
 WlRegion::WlRegion(wl_region *data)
     : version_(wl_region_get_version(data)), data_(data) {

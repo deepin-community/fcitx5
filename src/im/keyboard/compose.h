@@ -8,6 +8,8 @@
 #define _FCITX_IM_KEYBOARD_COMPOSE_H_
 
 #include <deque>
+#include <fcitx-utils/keysym.h>
+#include <fcitx/inputcontext.h>
 #include <fcitx/instance.h>
 
 namespace fcitx {

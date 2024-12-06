@@ -9,11 +9,11 @@
 
 #include <memory>
 #include <fcitx-utils/connectableobject.h>
+#include <fcitx-utils/handlertable.h>
 #include <fcitx-utils/macros.h>
 #include <fcitx/event.h>
 #include <fcitx/globalconfig.h>
 #include <fcitx/text.h>
-#include "fcitx-utils/eventdispatcher.h"
 #include "fcitxcore_export.h"
 
 #define FCITX_INVALID_COMPOSE_RESULT 0xffffffff
@@ -21,6 +21,7 @@
 namespace fcitx {
 
 class InputContext;
+class KeyEvent;
 class InstancePrivate;
 class EventLoop;
 class AddonManager;
@@ -32,12 +33,7 @@ class UserInterfaceManager;
 class GlobalConfig;
 class FocusGroup;
 
-using EventHandler = std::function<void(Event &event)>;
-
-/**
- * The function mode of virtual keyboard.
- */
-enum class VirtualKeyboardFunctionMode : uint32_t { Full = 1, Limited = 2 };
+typedef std::function<void(Event &event)> EventHandler;
 
 /**
  * The event handling phase of event pipeline.
@@ -155,15 +151,6 @@ public:
     /// Get the fcitx event loop.
     EventLoop &eventLoop();
 
-    /**
-     * Return a shared event dispatcher that is already attached to instance's
-     * event loop.
-     *
-     * @return shared event dispatcher.
-     * @since 5.1.9
-     */
-    EventDispatcher &eventDispatcher();
-
     /// Get the addon manager.
     AddonManager &addonManager();
 
@@ -275,7 +262,7 @@ public:
     /// Reset the compose state.
     void resetCompose(InputContext *inputContext);
 
-    /// Check whether input context is composing or not.
+    /// Check whether input contex is composing or not.
     bool isComposing(InputContext *inputContext);
 
     /**
@@ -330,9 +317,6 @@ public:
 
     /// Exit the fcitx event loop
     void exit();
-
-    /// Exit the fcitx event loop with an exit code.
-    void exit(int exitCode);
 
     /// Restart fcitx instance, this should only be used within a regular Fcitx
     /// server, not within embedded mode.
@@ -395,13 +379,7 @@ public:
     void setCurrentInputMethod(InputContext *ic, const std::string &imName,
                                bool local);
 
-    /*
-     * Enumerate input method group
-     *
-     * This function has different behavior comparing to
-     * InputMethodManager::enumerateGroup Do not use this..
-     */
-    FCITXCORE_DEPRECATED
+    /// Enumerate input method group
     bool enumerateGroup(bool forward);
 
     /// Enumerate input method with in current group
@@ -433,9 +411,6 @@ public:
     /// Update xkb state mask for given display
     void updateXkbStateMask(const std::string &display, uint32_t depressed_mods,
                             uint32_t latched_mods, uint32_t locked_mods);
-
-    /// Clear xkb state mask for given display
-    void clearXkbStateMask(const std::string &display);
 
     /**
      * Show a small popup with input popup window with current input method
@@ -493,61 +468,10 @@ public:
     bool isRunning() const;
 
     /**
-     * The current global input method mode.
-     *
-     * It may affect the user interface and behavior of certain key binding.
-     * @since 5.1.0
-     */
-    InputMethodMode inputMethodMode() const;
-
-    /**
-     * Set the current global input method mode.
-     *
-     * @see InputMethodMode
-     * @see InputMethodModeChanged
-     * @since 5.1.0
-     */
-    void setInputMethodMode(InputMethodMode mode);
-
-    /**
      * Whether restart is requested.
      * @since 5.0.18
      */
     bool isRestartRequested() const;
-
-    bool virtualKeyboardAutoShow() const;
-
-    void setVirtualKeyboardAutoShow(bool autoShow);
-
-    bool virtualKeyboardAutoHide() const;
-
-    void setVirtualKeyboardAutoHide(bool autoHide);
-
-    VirtualKeyboardFunctionMode virtualKeyboardFunctionMode() const;
-
-    void setVirtualKeyboardFunctionMode(VirtualKeyboardFunctionMode mode);
-
-    /**
-     * Set if this instance is running as fcitx5 binary.
-     *
-     * This will affect return value of Instance::canRestart.
-     *
-     * @see Instance::canRestart
-     * @since 5.1.6
-     */
-    void setBinaryMode();
-
-    /**
-     * Check if fcitx 5 can safely restart by itself.
-     *
-     * When the existing fcitx 5 instance returns false, fcitx5 -r, or
-     * Instance::restart will just be no-op.
-     *
-     * @return whether it is safe for fcitx to restart on its own.
-     * @see AddonInstance::setCanRestart
-     * @since 5.1.6
-     */
-    bool canRestart() const;
 
 protected:
     // For testing purpose

@@ -11,7 +11,6 @@
 #include <thread>
 #include <fcitx-utils/event.h>
 #include <fcitx-utils/eventdispatcher.h>
-#include <fcitx-utils/trackableobject.h>
 #include <xcb/xcb.h>
 #include "xcb_public.h"
 
@@ -19,7 +18,7 @@ namespace fcitx {
 
 class XCBConnection;
 
-class XCBEventReader : public TrackableObject<XCBEventReader> {
+class XCBEventReader {
 public:
     XCBEventReader(XCBConnection *conn);
     ~XCBEventReader();
@@ -38,12 +37,11 @@ private:
     void run();
     bool onIOEvent(IOEventFlags flags);
     XCBConnection *conn_;
-    EventDispatcher &dispatcherToMain_;
+    EventDispatcher dispatcherToMain_;
     EventDispatcher dispatcherToWorker_;
     bool hadError_ = false;
     std::unique_ptr<EventSource> deferEvent_;
     std::unique_ptr<EventSource> wakeEvent_;
-    std::unique_ptr<EventSource> postEvent_;
     std::unique_ptr<std::thread> thread_;
     std::mutex mutex_;
     std::list<UniqueCPtr<xcb_generic_event_t>> events_;

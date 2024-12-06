@@ -7,12 +7,14 @@
 #ifndef _FCITX_WAYLAND_CORE_DISPLAY_H_
 #define _FCITX_WAYLAND_CORE_DISPLAY_H_
 
+#include <algorithm>
 #include <list>
 #include <memory>
 #include <set>
 #include <string>
 #include <tuple>
 #include <unordered_map>
+#include <wayland-client.h>
 #include "fcitx-utils/signals.h"
 #include "outputinformation.h"
 #include "wl_registry.h"
@@ -21,6 +23,7 @@ namespace fcitx {
 namespace wayland {
 
 class WlOutput;
+class WlCallback;
 
 class GlobalsFactoryBase {
 public:
@@ -57,6 +60,7 @@ public:
     operator wl_display *() { return display_.get(); }
 
     void roundtrip();
+    void sync();
     void flush();
     void run();
 
@@ -74,11 +78,8 @@ public:
         std::vector<std::shared_ptr<T>> results;
         for (uint32_t item : items) {
             auto iter = globals_.find(item);
-            // This should always be true.
-            if (iter != globals_.end()) {
-                results.push_back(std::static_pointer_cast<T>(
-                    std::get<std::shared_ptr<void>>(iter->second)));
-            }
+            results.push_back(std::static_pointer_cast<T>(
+                std::get<std::shared_ptr<void>>(iter->second)));
         }
 
         return results;
@@ -143,6 +144,7 @@ private:
                                             std::shared_ptr<void>>>
         globals_;
     std::list<fcitx::Connection> conns_;
+    std::list<std::unique_ptr<WlCallback>> callbacks_;
     std::unordered_map<WlOutput *, OutputInfomation> outputInfo_;
 };
 } // namespace wayland

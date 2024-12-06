@@ -9,11 +9,9 @@
 #include "standardpath.h"
 #include "stringutils.h"
 
-namespace fcitx {
-
-void setupTestingEnvironment(const std::string &testBinaryDir,
-                             const std::vector<std::string> &addonDirs,
-                             const std::vector<std::string> &dataDirs) {
+void fcitx::setupTestingEnvironment(const std::string &testBinaryDir,
+                                    const std::vector<std::string> &addonDirs,
+                                    const std::vector<std::string> &dataDirs) {
     // Skip resolution with fcitxPath
     setenv("SKIP_FCITX_PATH", "1", 1);
     setenv("SKIP_FCITX_USER_PATH", "1", 1);
@@ -55,5 +53,3 @@ void setupTestingEnvironment(const std::string &testBinaryDir,
     fullDataDirs.push_back(StandardPath::fcitxPath("pkgdatadir", "testing"));
     setenv("FCITX_DATA_DIRS", stringutils::join(fullDataDirs, ":").data(), 1);
 }
-
-} // namespace fcitx

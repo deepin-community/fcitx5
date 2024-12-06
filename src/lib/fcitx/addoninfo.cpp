@@ -6,19 +6,7 @@
  */
 
 #include "addoninfo.h"
-
-#include <memory>
-#include <string>
-#include <tuple>
-#include <utility>
-#include <vector>
 #include "fcitx-config/configuration.h"
-#include "fcitx-config/option.h"
-#include "fcitx-config/rawconfig.h"
-#include "fcitx-utils/i18nstring.h"
-#include "fcitx-utils/macros.h"
-#include "fcitx-utils/semver.h"
-#include "fcitx-utils/stringutils.h"
 namespace fcitx {
 
 FCITX_CONFIGURATION(
@@ -35,9 +23,7 @@ FCITX_CONFIGURATION(
     Option<std::vector<std::string>> optionalDependencies{
         this, "OptionalDependencies", "Optional Dependencies"};
     Option<bool> onDemand{this, "OnDemand", "Load only on request", false};
-    Option<int> uiPriority{this, "UIPriority", "User interface priority", 0};
-    Option<UIType> uiType{this, "UIType", "User interface type",
-                          UIType::PhyscialKeyboard};)
+    Option<int> uiPriority{this, "UIPriority", "User interface priority", 0};)
 
 FCITX_CONFIGURATION(AddonConfig,
                     Option<AddonConfigBase> addon{this, "Addon", "Addon"};)
@@ -69,7 +55,7 @@ void parseDependencies(const std::vector<std::string> &data,
 
 class AddonInfoPrivate : public AddonConfig {
 public:
-    AddonInfoPrivate(std::string name) : uniqueName_(std::move(name)) {}
+    AddonInfoPrivate(const std::string &name) : uniqueName_(name) {}
 
     bool valid_ = false;
     std::string uniqueName_;
@@ -152,11 +138,6 @@ bool AddonInfo::onDemand() const {
 int AddonInfo::uiPriority() const {
     FCITX_D();
     return d->addon->uiPriority.value();
-}
-
-UIType AddonInfo::uiType() const {
-    FCITX_D();
-    return d->addon->uiType.value();
 }
 
 void AddonInfo::load(const RawConfig &config) {

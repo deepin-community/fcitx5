@@ -1,4 +1,5 @@
 #include "zwp_input_method_manager_v2.h"
+#include <cassert>
 #include "wl_seat.h"
 #include "zwp_input_method_v2.h"
 namespace fcitx::wayland {

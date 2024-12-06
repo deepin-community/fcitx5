@@ -6,7 +6,6 @@
  */
 
 #include <unordered_set>
-#include <utility>
 #include "../../log.h"
 #include "../../stringutils.h"
 #include "../objectvtable.h"
@@ -50,7 +49,8 @@ const std::string &ObjectVTableBasePrivate::getXml(ObjectVTableBase *q) {
             p->xml_ +=
                 stringutils::concat("<signal name=\"", sig->name(), "\">");
             for (auto &type : splitDBusSignature(sig->signature())) {
-                p->xml_ += stringutils::concat("<arg type=\"", type, "\"/>");
+                p->xml_ += stringutils::concat("<arg direction=\"in\" type=\"",
+                                               type, "\"/>");
             }
             p->xml_ += "</signal>";
         }
@@ -114,9 +114,7 @@ ObjectVTableProperty *ObjectVTableBase::findProperty(const std::string &name) {
 
 void ObjectVTableBase::releaseSlot() { setSlot(nullptr); }
 
-Bus *ObjectVTableBase::bus() { return std::as_const(*this).bus(); }
-
-Bus *ObjectVTableBase::bus() const {
+Bus *ObjectVTableBase::bus() {
     FCITX_D();
     if (d->slot_) {
         if (auto *bus = d->slot_->bus_.get()) {

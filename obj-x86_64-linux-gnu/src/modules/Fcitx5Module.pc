@@ -1,0 +1,11 @@
+prefix=/usr
+exec_prefix=${prefix}
+libdir=/usr/lib/x86_64-linux-gnu
+includedir=/usr/include/Fcitx5/Module
+
+Name: Fcitx5Module
+Description: Fcitx Public Module Library
+Version: 5.0.21
+Requires: Fcitx5Core
+Cflags: -I${includedir}
+

@@ -9,7 +9,10 @@
 
 #include <memory>
 #include <fcitx/addonmanager.h>
+#include "fcitx-config/configuration.h"
+#include "fcitx-config/iniparser.h"
 #include "fcitx-utils/dbus/servicewatcher.h"
+#include "fcitx-utils/i18n.h"
 #include "fcitx/addoninstance.h"
 #include "fcitx/instance.h"
 #include "dbus_public.h"
@@ -38,7 +41,6 @@ public:
     watch(NotificationItemCallback callback);
     void newIcon();
     FCITX_ADDON_DEPENDENCY_LOADER(classicui, instance_->addonManager());
-    DBusMenu *menu() { return menu_.get(); }
 
 private:
     FCITX_ADDON_DEPENDENCY_LOADER(dbus, instance_->addonManager());

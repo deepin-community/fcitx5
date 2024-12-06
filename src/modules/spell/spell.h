@@ -40,6 +40,7 @@ FCITX_CONFIGURATION(SpellConfig,
                                        SpellProvider::Custom,
                                        SpellProvider::Enchant}};);
 
+class Spell;
 class SpellBackend;
 
 class Spell final : public AddonInstance {

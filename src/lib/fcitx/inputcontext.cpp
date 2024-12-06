@@ -8,16 +8,14 @@
 #include "inputcontext.h"
 #include <cassert>
 #include <chrono>
+#include <exception>
 #include <regex>
-#include <stdexcept>
-#include <string>
-#include "fcitx-utils/utf8.h"
+#include "fcitx-utils/event.h"
 #include "focusgroup.h"
 #include "inputcontext_p.h"
 #include "inputcontextmanager.h"
 #include "instance.h"
 #include "misc_p.h"
-#include "userinterfacemanager.h"
 
 namespace fcitx {
 
@@ -76,8 +74,6 @@ void InputContext::created() {
     FCITX_D();
     d->emplaceEvent<InputContextCreatedEvent>(this);
 }
-
-std::string_view InputContext::frontendName() const { return frontend(); }
 
 void InputContext::destroy() {
     FCITX_D();
@@ -146,48 +142,6 @@ void InputContext::updateProperty(const InputContextPropertyFactory *factory) {
         return;
     }
     d->manager_.propagateProperty(*this, factory);
-}
-
-bool InputContext::isVirtualKeyboardVisible() const {
-    FCITX_D();
-    if (auto *instance = d->manager_.instance()) {
-        return instance->userInterfaceManager().isVirtualKeyboardVisible();
-    }
-    return false;
-}
-
-void InputContext::showVirtualKeyboard() const {
-    FCITX_D();
-    if (auto *instance = d->manager_.instance()) {
-        return instance->userInterfaceManager().showVirtualKeyboard();
-    }
-}
-
-void InputContext::hideVirtualKeyboard() const {
-    FCITX_D();
-    if (auto *instance = d->manager_.instance()) {
-        return instance->userInterfaceManager().hideVirtualKeyboard();
-    }
-}
-
-bool InputContext::clientControlVirtualkeyboardShow() const {
-    FCITX_D();
-    return d->clientControlVirtualkeyboardShow_;
-}
-
-void InputContext::setClientControlVirtualkeyboardShow(bool show) {
-    FCITX_D();
-    d->clientControlVirtualkeyboardShow_ = show;
-}
-
-bool InputContext::clientControlVirtualkeyboardHide() const {
-    FCITX_D();
-    return d->clientControlVirtualkeyboardHide_;
-}
-
-void InputContext::setClientControlVirtualkeyboardHide(bool hide) {
-    FCITX_D();
-    d->clientControlVirtualkeyboardHide_ = hide;
 }
 
 CapabilityFlags calculateFlags(CapabilityFlags flag, bool isPreeditEnabled) {
@@ -326,23 +280,6 @@ bool InputContext::keyEvent(KeyEvent &event) {
     return result;
 }
 
-bool InputContext::virtualKeyboardEvent(VirtualKeyboardEvent &event) {
-    FCITX_D();
-    RETURN_IF_HAS_NO_FOCUS(false);
-    decltype(std::chrono::steady_clock::now()) start;
-    // Don't query time if we don't want log.
-    if (::keyTrace().checkLogLevel(LogLevel::Debug)) {
-        start = std::chrono::steady_clock::now();
-    }
-    auto result = d->postEvent(event);
-    FCITX_KEYTRACE() << "VirtualKeyboardEvent handling time: "
-                     << std::chrono::duration_cast<std::chrono::milliseconds>(
-                            std::chrono::steady_clock::now() - start)
-                            .count()
-                     << "ms result:" << result;
-    return result;
-}
-
 void InputContext::invokeAction(InvokeActionEvent &event) {
     FCITX_D();
     RETURN_IF_HAS_NO_FOCUS();
@@ -390,27 +327,6 @@ bool InputContext::hasPendingEvents() const {
     return !d->blockedEvents_.empty();
 }
 
-bool InputContext::hasPendingEventsStrictOrder() const {
-    FCITX_D();
-    if (d->blockedEvents_.empty()) {
-        return false;
-    }
-
-    // Check we only have update preedit.
-    if (std::any_of(d->blockedEvents_.begin(), d->blockedEvents_.end(),
-                    [](const auto &event) {
-                        return event->type() !=
-                               EventType::InputContextUpdatePreedit;
-                    })) {
-        return true;
-    }
-
-    // Check whether the preedit is non-empty.
-    // If key event may produce anything, it still may trigger the clear
-    // preedit. In that case, preedit order does matter.
-    return !inputPanel().clientPreedit().toString().empty();
-}
-
 void InputContext::commitString(const std::string &text) {
     FCITX_D();
     if (auto *instance = d->manager_.instance()) {
@@ -418,22 +334,6 @@ void InputContext::commitString(const std::string &text) {
         d->pushEvent<CommitStringEvent>(std::move(newString), this);
     } else {
         d->pushEvent<CommitStringEvent>(text, this);
-    }
-}
-
-void InputContext::commitStringWithCursor(const std::string &text,
-                                          size_t cursor) {
-    FCITX_D();
-    if (cursor > utf8::length(text)) {
-        throw std::invalid_argument(text);
-    }
-
-    if (auto *instance = d->manager_.instance()) {
-        auto newString = instance->commitFilter(this, text);
-        d->pushEvent<CommitStringWithCursorEvent>(std::move(newString), cursor,
-                                                  this);
-    } else {
-        d->pushEvent<CommitStringWithCursorEvent>(text, cursor, this);
     }
 }
 
@@ -451,12 +351,6 @@ void InputContext::updatePreedit() {
     if (!capabilityFlags().test(CapabilityFlag::Preedit)) {
         return;
     }
-
-    const bool preeditIsEmpty = inputPanel().clientPreedit().empty();
-    if (preeditIsEmpty && d->lastPreeditUpdateIsEmpty_) {
-        return;
-    }
-    d->lastPreeditUpdateIsEmpty_ = preeditIsEmpty;
     d->pushEvent<UpdatePreeditEvent>(this);
 }
 
@@ -471,24 +365,12 @@ InputPanel &InputContext::inputPanel() {
     return d->inputPanel_;
 }
 
-const InputPanel &InputContext::inputPanel() const {
-    FCITX_D();
-    return d->inputPanel_;
-}
-
 StatusArea &InputContext::statusArea() {
     FCITX_D();
     return d->statusArea_;
 }
 
-const StatusArea &InputContext::statusArea() const {
-    FCITX_D();
-    return d->statusArea_;
-}
-
 void InputContext::updateClientSideUIImpl() {}
-
-InputContextV2::~InputContextV2() = default;
 
 InputContextEventBlocker::InputContextEventBlocker(InputContext *inputContext)
     : inputContext_(inputContext->watch()) {

@@ -8,6 +8,7 @@
 #include "config.h"
 
 #include <pwd.h>
+#include <sys/types.h>
 #include <fstream>
 #include <set>
 #include <sstream>
@@ -179,46 +180,6 @@ public:
             return {group->defaultLayout(), vec};
         }
         return {"", {}};
-    }
-
-    std::tuple<
-        std::string, std::string, std::string, DBusVariantMap,
-        std::vector<DBusStruct<std::string, std::string, std::string,
-                               std::string, std::string, std::string,
-                               std::string, bool, std::string, DBusVariantMap>>>
-    fullInputMethodGroupInfo(const std::string &inputMethodGroupName) {
-        std::vector<DBusStruct<std::string, std::string, std::string,
-                               std::string, std::string, std::string,
-                               std::string, bool, std::string, DBusVariantMap>>
-            inputMethodEntries;
-
-        const auto &inputMethodManager = instance_->inputMethodManager();
-        const auto &groupName = !inputMethodGroupName.empty()
-                                    ? inputMethodGroupName
-                                    : inputMethodManager.currentGroup().name();
-        const auto *group = inputMethodManager.group(groupName);
-        if (group == nullptr) {
-            return {"", "", "", {}, {}};
-        }
-
-        for (const auto &item : group->inputMethodList()) {
-            const auto *entry = inputMethodManager.entry(item.name());
-            if (entry == nullptr) {
-                continue;
-            }
-
-            inputMethodEntries.emplace_back(std::forward_as_tuple(
-                entry->uniqueName(), entry->name(), entry->nativeName(),
-                entry->icon(), entry->label(), entry->languageCode(),
-                entry->addon(), entry->isConfigurable(), item.layout(),
-                DBusVariantMap()));
-        }
-
-        return {groupName,
-                group->defaultInputMethod(),
-                group->defaultLayout(),
-                {},
-                inputMethodEntries};
     }
 
     std::vector<DBusStruct<std::string, std::string, std::string, std::string,
@@ -553,16 +514,7 @@ public:
     void openX11Connection(const std::string &name) {
 #ifdef ENABLE_X11
         if (auto *xcb = module_->xcb()) {
-            if (xcb->call<IXCBModule::exists>(name)) {
-                throw dbus::MethodCallError(
-                    "org.freedesktop.DBus.Error.InvalidArgs",
-                    "X11 connection already exists.");
-            }
-            if (!xcb->call<IXCBModule::openConnectionChecked>(name)) {
-                throw dbus::MethodCallError(
-                    "org.freedesktop.DBus.Error.InvalidArgs",
-                    "Failed to create X11 connection.");
-            }
+            xcb->call<IXCBModule::openConnection>(name);
             return;
         }
 #else
@@ -607,24 +559,6 @@ public:
                                     "Wayland addon is not available.");
     }
 
-    void reopenWaylandConnectionSocket(const std::string &name, UnixFD &fd) {
-#ifdef WAYLAND_FOUND
-        if (auto *wayland = module_->wayland()) {
-            if (!wayland->call<IWaylandModule::reopenConnectionSocket>(
-                    name, fd.release())) {
-                throw dbus::MethodCallError(
-                    "org.freedesktop.DBus.Error.InvalidArgs",
-                    "Failed to create wayland connection.");
-            }
-            return;
-        }
-#else
-        FCITX_UNUSED(fd);
-#endif
-        throw dbus::MethodCallError("org.freedesktop.DBus.Error.InvalidArgs",
-                                    "Wayland addon is not available.");
-    }
-
     std::string debugInfo() {
         std::stringstream ss;
         instance_->inputContextManager().foreachGroup([&ss](FocusGroup *group) {
@@ -636,9 +570,8 @@ public:
                     ss << fmt::format("{:02x}", static_cast<int>(v));
                 }
                 ss << "] program:" << ic->program()
-                   << " frontend:" << ic->frontendName() << " cap:"
-                   << fmt::format("{:x}",
-                                  static_cast<uint64_t>(ic->capabilityFlags()))
+                   << " frontend:" << ic->frontend()
+                   << " cap:" << fmt::format("{:x}", ic->capabilityFlags())
                    << " focus:" << ic->hasFocus() << std::endl;
                 return true;
             });
@@ -649,7 +582,7 @@ public:
             if (ic->focusGroup()) {
                 return true;
             }
-            if (ic->frontendName() == "dummy") {
+            if (std::string_view(ic->frontend()) == "dummy") {
                 return true;
             }
             ss << "  IC [";
@@ -657,8 +590,8 @@ public:
                 ss << fmt::format("{:02x}", static_cast<int>(v));
             }
             ss << "] program:" << ic->program()
-               << " frontend:" << ic->frontendName()
-               << " focus:" << ic->hasFocus() << std::endl;
+               << " frontend:" << ic->frontend() << " focus:" << ic->hasFocus()
+               << std::endl;
             return true;
         });
         return ss.str();
@@ -674,12 +607,6 @@ public:
     }
 
     bool checkUpdate() { return instance_->checkUpdate(); }
-
-    bool canRestart() { return instance_->canRestart(); }
-
-    void save() { return instance_->save(); }
-
-    void setLogRule(const std::string &rule) { Log::setLogRule(rule); }
 
 private:
     DBusModule *module_;
@@ -703,9 +630,6 @@ private:
                                "s", "");
     FCITX_OBJECT_VTABLE_METHOD(currentInputMethodGroup,
                                "CurrentInputMethodGroup", "", "s");
-    FCITX_OBJECT_VTABLE_METHOD(fullInputMethodGroupInfo,
-                               "FullInputMethodGroupInfo", "s",
-                               "sssa{sv}a(sssssssbsa{sv})");
     FCITX_OBJECT_VTABLE_METHOD(availableInputMethods, "AvailableInputMethods",
                                "", "a(ssssssb)");
     FCITX_OBJECT_VTABLE_METHOD(inputMethodGroupInfo, "InputMethodGroupInfo",
@@ -742,14 +666,9 @@ private:
                                "s", "");
     FCITX_OBJECT_VTABLE_METHOD(openWaylandConnectionSocket,
                                "OpenWaylandConnectionSocket", "h", "");
-    FCITX_OBJECT_VTABLE_METHOD(reopenWaylandConnectionSocket,
-                               "ReopenWaylandConnectionSocket", "sh", "");
     FCITX_OBJECT_VTABLE_METHOD(debugInfo, "DebugInfo", "", "s");
     FCITX_OBJECT_VTABLE_METHOD(refresh, "Refresh", "", "");
     FCITX_OBJECT_VTABLE_METHOD(checkUpdate, "CheckUpdate", "", "b");
-    FCITX_OBJECT_VTABLE_METHOD(save, "Save", "", "");
-    FCITX_OBJECT_VTABLE_METHOD(setLogRule, "SetLogRule", "s", "");
-    FCITX_OBJECT_VTABLE_METHOD(canRestart, "CanRestart", "", "b");
 };
 
 DBusModule::DBusModule(Instance *instance)
@@ -757,9 +676,7 @@ DBusModule::DBusModule(Instance *instance)
       serviceWatcher_(std::make_unique<dbus::ServiceWatcher>(*bus_)) {
     bus_->attachEventLoop(&instance->eventLoop());
     auto uniqueName = bus_->uniqueName();
-    Flags<RequestNameFlag> requestFlag = instance->canRestart()
-                                             ? RequestNameFlag::AllowReplacement
-                                             : RequestNameFlag::None;
+    Flags<RequestNameFlag> requestFlag = RequestNameFlag::AllowReplacement;
     if (instance_->willTryReplace()) {
         requestFlag |= RequestNameFlag::ReplaceExisting;
     }
@@ -784,11 +701,9 @@ DBusModule::DBusModule(Instance *instance)
         });
 
     selfWatcher_ = serviceWatcher_->watchService(
-        FCITX_DBUS_SERVICE, [uniqueName, instance](const std::string &service,
-                                                   const std::string &oldName,
-                                                   const std::string &newName) {
-            FCITX_INFO() << "Service name change: " << service << " " << oldName
-                         << " " << newName;
+        FCITX_DBUS_SERVICE,
+        [uniqueName, instance](const std::string &, const std::string &,
+                               const std::string &newName) {
             if (newName != uniqueName) {
                 instance->exit();
             }

@@ -7,6 +7,9 @@
  */
 
 #include "spell-enchant.h"
+#include <dlfcn.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <stdexcept>
 #include <enchant.h>

@@ -7,16 +7,16 @@
 #ifndef _FCITX_UTILS_ICONTHEME_H_
 #define _FCITX_UTILS_ICONTHEME_H_
 
+#include <cstdlib>
 #include <memory>
 #include <fcitx-config/enum.h>
 #include <fcitx-config/rawconfig.h>
 #include <fcitx-utils/i18nstring.h>
 #include <fcitx-utils/macros.h>
-#include <fcitx-utils/misc.h>
 #include <fcitx-utils/standardpath.h>
 #include "fcitxcore_export.h"
 
-/// \addtogroup FcitxCore
+/// \addtogroup FcitxUtils
 /// \{
 /// \file
 /// \brief XDG icon specification helper.
@@ -85,8 +85,7 @@ public:
     FCITX_DECLARE_READ_ONLY_PROPERTY(std::string, example);
 
     /// Rename fcitx-* icon to org.fcitx.Fcitx5.fcitx-* if in flatpak
-    static std::string iconName(const std::string &icon,
-                                bool inFlatpak = isInFlatpak());
+    static std::string iconName(const std::string &icon, bool inFlatpak);
 
 private:
     IconTheme(const std::string &name, IconTheme *parent,

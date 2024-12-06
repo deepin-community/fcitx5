@@ -57,11 +57,6 @@ VariantTypeRegistry &VariantTypeRegistry::defaultRegistry() {
     return registry;
 }
 
-std::shared_ptr<VariantHelperBase>
-lookupVariantType(const std::string &signature) {
-    return VariantTypeRegistry::defaultRegistry().lookupType(signature);
-}
-
 void Variant::writeToMessage(dbus::Message &msg) const {
     helper_->serialize(msg, data_.get());
 }

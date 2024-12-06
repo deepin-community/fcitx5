@@ -1,0 +1,10 @@
+prefix=/usr
+exec_prefix=${prefix}
+libdir=/usr/lib/x86_64-linux-gnu
+includedir=/usr/include/Fcitx5/Utils
+
+Name: Fcitx5Utils
+Description: Fcitx Utils Library
+Version: 5.0.21
+Cflags: -I${includedir}
+Libs: -L${libdir} -lFcitx5Utils
