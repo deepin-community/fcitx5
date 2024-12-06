@@ -348,14 +348,13 @@ ThemeImage::ThemeImage(const std::string &name, const ActionImageConfig &cfg) {
 void ThemeImage::drawTextIcon(cairo_surface_t *surface,
                               const std::string &rawLabel, uint32_t size,
                               const ClassicUIConfig &config) {
-
     auto [label, textWidth] = extractTextForLabel(rawLabel);
     auto *cr = cairo_create(surface);
     cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
     cairoSetSourceColor(cr, Color("#00000000"));
     cairo_paint(cr);
 
-    int pixelSize = size * 0.75 * (textWidth >= 3 ? (2.0 / textWidth) : 1.0);
+    int pixelSize = size * 0.7 * (textWidth >= 3 ? (2.0 / textWidth) : 1.0);
     if (pixelSize < 0) {
         pixelSize = 1;
     }
@@ -865,7 +864,7 @@ void Theme::populateColor(std::optional<Color> accent) {
     inputPanelBackground_ = *inputPanel->background->color;
     inputPanelBorder_ = *inputPanel->background->borderColor;
     inputPanelHighlightCandidateBackground_ = *inputPanel->highlight->color;
-    inputPanelHighlightCandidateBorder_ = *inputPanel->background->borderColor;
+    inputPanelHighlightCandidateBorder_ = *inputPanel->highlight->borderColor;
     inputPanelHighlight_ = *inputPanel->highlightBackgroundColor;
     inputPanelText_ = *inputPanel->normalColor;
     inputPanelHighlightText_ = *inputPanel->highlightColor;
@@ -874,7 +873,7 @@ void Theme::populateColor(std::optional<Color> accent) {
     menuBackground_ = *menu->background->color;
     menuBorder_ = *menu->background->borderColor;
     menuSelectedItemBackground_ = *menu->highlight->color;
-    menuSelectedItemBorder_ = *menu->background->borderColor;
+    menuSelectedItemBorder_ = *menu->highlight->borderColor;
     menuSeparator_ = *menu->separator->color;
     menuText_ = *menu->normalColor;
     menuSelectedItemText_ = *menu->highlightTextColor;

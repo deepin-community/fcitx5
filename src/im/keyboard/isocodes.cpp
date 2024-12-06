@@ -7,8 +7,10 @@
 
 #include "isocodes.h"
 #include <cstring>
+#include <string>
 #include <json-c/json.h>
 #include "fcitx-utils/metastring.h"
+#include "fcitx-utils/misc.h"
 
 namespace fcitx {
 
@@ -112,7 +114,8 @@ public:
         if (!alpha2 || json_object_get_type(alpha2) != json_type_string) {
             return;
         }
-        std::string alpha_2_code, name;
+        std::string alpha_2_code;
+        std::string name;
         name.assign(json_object_get_string(nameObj),
                     json_object_get_string_len(nameObj));
         alpha_2_code.assign(json_object_get_string(alpha2),
