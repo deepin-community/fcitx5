@@ -1,3 +1,10 @@
+fcitx5 (5.1.11-2deepin1) unstable; urgency=medium
+
+  * New upstream release.
+  * Remove useless patch. 
+
+ -- xiangzelong <xiangzelong@deepin.org>  Fri, 06 Dec 2024 17:18:39 +0800
+
 fcitx5 (5.1.11-2) unstable; urgency=medium
 
   [ Pino Toscano ]
