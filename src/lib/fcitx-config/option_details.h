@@ -7,10 +7,6 @@
 #ifndef _FCITX_CONFIG_OPTION_DETAILS_H_
 #define _FCITX_CONFIG_OPTION_DETAILS_H_
 
-#include <string>
-#include <fcitx-config/rawconfig.h>
-#include "fcitxconfig_export.h"
-
 namespace fcitx {
 
 class Configuration;
@@ -54,20 +50,14 @@ public:
     virtual void syncDefaultValueToCurrent() = 0;
 };
 
-class FCITXCONFIG_EXPORT OptionBaseV3 : public OptionBaseV2 {
-public:
-    using OptionBaseV2::OptionBaseV2;
-    ~OptionBaseV3() override;
-};
-
 template <typename T>
 struct RemoveVector {
-    using type = T;
+    typedef T type;
 };
 
 template <typename T>
 struct RemoveVector<std::vector<T>> {
-    using type = typename RemoveVector<T>::type;
+    typedef typename RemoveVector<T>::type type;
 };
 
 template <typename T>

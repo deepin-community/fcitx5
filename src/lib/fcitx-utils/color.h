@@ -8,8 +8,8 @@
 #ifndef _FCITX_UTILS_COLOR_H_
 #define _FCITX_UTILS_COLOR_H_
 
-#include <ostream>
 #include <string>
+#include <type_traits>
 #include <fcitx-utils/macros.h>
 #include "fcitxutils_export.h"
 
@@ -20,7 +20,7 @@
 
 namespace fcitx {
 struct FCITXUTILS_EXPORT ColorParseException : public std::exception {
-    const char *what() const noexcept override { return "Color parse error"; }
+    virtual const char *what() const noexcept { return "Color parse error"; }
 };
 
 /// \brief Color class for handling color.
@@ -37,11 +37,6 @@ public:
     std::string toString() const;
 
     bool operator==(const Color &other) const;
-    // FIXME: remove this
-    bool operator!=(const Color &other) {
-        return !operator==(other);
-    } // NOLINT(readability-make-member-function-const)
-    bool operator!=(const Color &other) const { return !operator==(other); }
 
     void setFromString(const char *s);
     inline void setFromString(const std::string &s) {
@@ -74,9 +69,6 @@ private:
     unsigned short blue_;
     unsigned short alpha_;
 };
-
-FCITXUTILS_EXPORT std::ostream &operator<<(std::ostream &os, const Color &c);
-
 } // namespace fcitx
 
 #endif // _FCITX_UTILS_COLOR_H_

@@ -1,0 +1,10 @@
+[Addon]
+Name=IBus Frontend
+Type=SharedLibrary
+Library=libibusfrontend
+Category=Frontend
+Version=5.0.21
+
+[Addon/Dependencies]
+0=dbus
+

@@ -7,6 +7,7 @@
 #ifndef _FCITX_UTILS_ELEMENT_H_
 #define _FCITX_UTILS_ELEMENT_H_
 
+#include <unordered_set>
 #include <fcitx-utils/connectableobject.h>
 #include "fcitxutils_export.h"
 
@@ -23,7 +24,7 @@ class ElementPrivate;
 class FCITXUTILS_EXPORT Element : public ConnectableObject {
 public:
     Element();
-    ~Element() override;
+    ~Element();
 
     /// \brief Enable query between different elements.
     bool isChild(const Element *element) const;

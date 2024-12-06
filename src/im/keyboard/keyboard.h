@@ -26,6 +26,8 @@
 
 namespace fcitx {
 
+class Instance;
+
 enum class ChooseModifier { NoModifier, Alt, Control, Super };
 FCITX_CONFIG_ENUM_NAME_WITH_I18N(ChooseModifier, N_("None"), N_("Alt"),
                                  N_("Control"), N_("Super"));
@@ -133,6 +135,8 @@ struct KeyboardEngineState : public InputContextProperty {
     bool updateBuffer(std::string_view chr);
 };
 
+class KeyboardEnginePrivate;
+
 class KeyboardEngine final : public InputMethodEngineV3 {
 public:
     KeyboardEngine(Instance *instance);
@@ -156,8 +160,6 @@ public:
 
     void reset(const InputMethodEntry &entry,
                InputContextEvent &event) override;
-    void deactivate(const InputMethodEntry &entry,
-                    InputContextEvent &event) override;
 
     void invokeActionImpl(const fcitx::InputMethodEntry &entry,
                           fcitx::InvokeActionEvent &event) override;
@@ -196,10 +198,13 @@ private:
     void initQuickPhrase();
 
     Instance *instance_;
+    AddonInstance *spell_ = nullptr;
+    AddonInstance *notifications_ = nullptr;
     KeyboardEngineConfig config_;
     LongPressConfig longPressConfig_;
     std::unordered_map<std::string, std::vector<std::string>> longPressData_;
     XkbRules xkbRules_;
+    std::string ruleName_;
     KeyStates selectionModifier_;
     KeyList selectionKeys_;
     std::unique_ptr<EventSource> deferEvent_;

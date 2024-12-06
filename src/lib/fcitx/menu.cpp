@@ -6,6 +6,7 @@
  */
 
 #include "menu.h"
+#include <algorithm>
 
 namespace fcitx {
 

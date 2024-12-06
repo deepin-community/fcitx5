@@ -1,0 +1,9 @@
+[Addon]
+Name=Input method selector
+Comment=Select specific input method via keyboard
+Category=Module
+Version=5.0.21
+Library=libimselector
+Type=SharedLibrary
+OnDemand=False
+Configurable=True

@@ -1,0 +1,10 @@
+[Addon]
+Name=DBus Frontend
+Type=SharedLibrary
+Library=libdbusfrontend
+Category=Frontend
+Version=5.0.21
+
+[Addon/Dependencies]
+0=dbus
+

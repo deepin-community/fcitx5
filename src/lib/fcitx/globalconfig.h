@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <vector>
+#include <fcitx-config/configuration.h>
 #include <fcitx-config/rawconfig.h>
 #include <fcitx-utils/key.h>
 #include <fcitx-utils/macros.h>
@@ -36,16 +37,6 @@ public:
     const KeyList &togglePreeditKeys() const;
 
     bool activeByDefault() const;
-
-    /**
-     * Reset active state to the value of activeByDefault on Focus In.
-     *
-     * @see activeByDefault
-     * @return the reset policy, no for disable, all for always reset, program
-     * for only reset on program changes.
-     * @since 5.1.8
-     */
-    PropertyPropagatePolicy resetStateWhenFocusIn() const;
     bool showInputMethodInformation() const;
     bool showInputMethodInformationWhenFocusIn() const;
     bool compactInputMethodInformation() const;
@@ -84,30 +75,6 @@ public:
      * @since 5.0.14
      */
     const std::string &customXkbOption() const;
-
-    /**
-     * Allow use input method in password field.
-     *
-     * @return whether allow use input method in password field.
-     * @since 5.1.2
-     */
-    bool allowInputMethodForPassword() const;
-
-    /**
-     * Show preedit when typing in password field.
-     *
-     * @return whether show preedit in password field.
-     * @since 5.1.2
-     */
-    bool showPreeditForPassword() const;
-
-    /**
-     * Number of minutes that fcitx will automatically save user data.
-     *
-     * @return the period of auto save
-     * @since 5.1.2
-     */
-    int autoSavePeriod() const;
 
     const std::vector<std::string> &enabledAddons() const;
     const std::vector<std::string> &disabledAddons() const;

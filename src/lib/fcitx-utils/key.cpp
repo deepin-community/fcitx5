@@ -48,45 +48,10 @@ std::unordered_map<KeySym, const char *, EnumHash> makeLookupKeyNameMap() {
         {FcitxKey_Up, NC_("Key name", "Up")},
         {FcitxKey_Right, NC_("Key name", "Right")},
         {FcitxKey_Down, NC_("Key name", "Down")},
-        {FcitxKey_Page_Up, NC_("Key name", "Page Up")},
-        {FcitxKey_Page_Down, NC_("Key name", "Page Down")},
+        {FcitxKey_Page_Up, NC_("Key name", "PgUp")},
+        {FcitxKey_Page_Down, NC_("Key name", "PgDown")},
         {FcitxKey_Caps_Lock, NC_("Key name", "CapsLock")},
         {FcitxKey_Num_Lock, NC_("Key name", "NumLock")},
-        {FcitxKey_KP_Space, NC_("Key name", "Keypad Space")},
-        {FcitxKey_KP_Tab, NC_("Key name", "Keypad Tab")},
-        {FcitxKey_KP_Enter, NC_("Key name", "Keypad Enter")},
-        {FcitxKey_KP_F1, NC_("Key name", "Keypad F1")},
-        {FcitxKey_KP_F2, NC_("Key name", "Keypad F2")},
-        {FcitxKey_KP_F3, NC_("Key name", "Keypad F3")},
-        {FcitxKey_KP_F4, NC_("Key name", "Keypad F4")},
-        {FcitxKey_KP_Home, NC_("Key name", "Keypad Home")},
-        {FcitxKey_KP_Left, NC_("Key name", "Keypad Left")},
-        {FcitxKey_KP_Up, NC_("Key name", "Keypad Up")},
-        {FcitxKey_KP_Right, NC_("Key name", "Keypad Right")},
-        {FcitxKey_KP_Down, NC_("Key name", "Keypad Down")},
-        {FcitxKey_KP_Page_Up, NC_("Key name", "Keypad Page Up")},
-        {FcitxKey_KP_Page_Down, NC_("Key name", "Keypad Page Down")},
-        {FcitxKey_KP_End, NC_("Key name", "Keypad End")},
-        {FcitxKey_KP_Begin, NC_("Key name", "Keypad Begin")},
-        {FcitxKey_KP_Insert, NC_("Key name", "Keypad Insert")},
-        {FcitxKey_KP_Delete, NC_("Key name", "Keypad Delete")},
-        {FcitxKey_KP_Equal, NC_("Key name", "Keypad =")},
-        {FcitxKey_KP_Multiply, NC_("Key name", "Keypad *")},
-        {FcitxKey_KP_Add, NC_("Key name", "Keypad +")},
-        {FcitxKey_KP_Separator, NC_("Key name", "Keypad ,")},
-        {FcitxKey_KP_Subtract, NC_("Key name", "Keypad -")},
-        {FcitxKey_KP_Decimal, NC_("Key name", "Keypad .")},
-        {FcitxKey_KP_Divide, NC_("Key name", "Keypad /")},
-        {FcitxKey_KP_0, NC_("Key name", "Keypad 0")},
-        {FcitxKey_KP_1, NC_("Key name", "Keypad 1")},
-        {FcitxKey_KP_2, NC_("Key name", "Keypad 2")},
-        {FcitxKey_KP_3, NC_("Key name", "Keypad 3")},
-        {FcitxKey_KP_4, NC_("Key name", "Keypad 4")},
-        {FcitxKey_KP_5, NC_("Key name", "Keypad 5")},
-        {FcitxKey_KP_6, NC_("Key name", "Keypad 6")},
-        {FcitxKey_KP_7, NC_("Key name", "Keypad 7")},
-        {FcitxKey_KP_8, NC_("Key name", "Keypad 8")},
-        {FcitxKey_KP_9, NC_("Key name", "Keypad 9")},
         {FcitxKey_Scroll_Lock, NC_("Key name", "ScrollLock")},
         {FcitxKey_Menu, NC_("Key name", "Menu")},
         {FcitxKey_Help, NC_("Key name", "Help")},
@@ -266,7 +231,6 @@ std::unordered_map<KeySym, const char *, EnumHash> makeLookupKeyNameMap() {
         {FcitxKey_TouchpadToggle, NC_("Key name", "Touchpad Toggle")},
         {FcitxKey_TouchpadOn, NC_("Key name", "Touchpad On")},
         {FcitxKey_TouchpadOff, NC_("Key name", "Touchpad Off")},
-        {FcitxKey_VoidSymbol, NC_("Key name", "Void Symbol")},
     };
     std::unordered_map<KeySym, const char *, EnumHash> result;
     for (const auto &item : keyname) {
@@ -348,11 +312,11 @@ bool Key::isReleaseOfModifier(const Key &key) const {
         keys.emplace_back(FcitxKey_Shift_L, states);
         keys.emplace_back(FcitxKey_Shift_R, states);
     }
-    if ((key.states() & KeyState::Super) || (key.states() & KeyState::Super2)) {
+    if (key.states() & KeyState::Super) {
         keys.emplace_back(FcitxKey_Super_L, states);
         keys.emplace_back(FcitxKey_Super_R, states);
     }
-    if ((key.states() & KeyState::Super) || (key.states() & KeyState::Hyper2)) {
+    if (key.states() & KeyState::Mod3) {
         keys.emplace_back(FcitxKey_Hyper_L, states);
         keys.emplace_back(FcitxKey_Hyper_R, states);
     }
@@ -363,17 +327,10 @@ bool Key::isReleaseOfModifier(const Key &key) const {
 bool Key::check(const Key &key) const {
     auto states = states_ & KeyStates({KeyState::Ctrl_Alt_Shift,
                                        KeyState::Super, KeyState::Mod3});
-    if (states_.test(KeyState::Super2)) {
-        states |= KeyState::Super;
-    }
 
     // key is keycode based, do key code based check.
     if (key.code()) {
         return key.states_ == states && key.code_ == code_;
-    }
-
-    if (key.sym() == FcitxKey_None || key.sym() == FcitxKey_VoidSymbol) {
-        return false;
     }
 
     if (isModifier()) {
@@ -466,18 +423,11 @@ bool Key::isKeyPad() const {
 
 bool Key::hasModifier() const { return !!(states_ & KeyState::SimpleMask); }
 
-bool Key::isVirtual() const { return states_.test(KeyState::Virtual); }
-
 Key Key::normalize() const {
     Key key(*this);
     /* key state != 0 */
-    key.states_ =
-        key.states_ & KeyStates({KeyState::Ctrl_Alt_Shift, KeyState::Super,
-                                 KeyState::Mod3, KeyState::Super2});
-    if (key.states_.test(KeyState::Super2)) {
-        key.states_ = key.states_.unset(KeyState::Super2);
-        key.states_ |= KeyState::Super;
-    }
+    key.states_ = key.states_ & KeyStates({KeyState::Ctrl_Alt_Shift,
+                                           KeyState::Super, KeyState::Mod3});
     if (key.states_) {
         if (key.states_ != KeyState::Shift && Key(key.sym_).isLAZ()) {
             key.sym_ = static_cast<KeySym>(key.sym_ + FcitxKey_A - FcitxKey_a);
@@ -544,26 +494,22 @@ std::string Key::toString(KeyStringFormat format) const {
     }
 
 #define _APPEND_MODIFIER_STRING(STR, VALUE)                                    \
-    if (states & VALUE) {                                                      \
+    if (states & KeyState::VALUE) {                                            \
         str += STR;                                                            \
         str += "+";                                                            \
     }
     if (format == KeyStringFormat::Portable) {
-        _APPEND_MODIFIER_STRING("Control", KeyState::Ctrl)
-        _APPEND_MODIFIER_STRING("Alt", KeyState::Alt)
-        _APPEND_MODIFIER_STRING("Shift", KeyState::Shift)
-        _APPEND_MODIFIER_STRING("Super",
-                                (KeyStates{KeyState::Super, KeyState::Super2}))
-        _APPEND_MODIFIER_STRING("Hyper",
-                                (KeyStates{KeyState::Hyper, KeyState::Hyper2}))
+        _APPEND_MODIFIER_STRING("Control", Ctrl)
+        _APPEND_MODIFIER_STRING("Alt", Alt)
+        _APPEND_MODIFIER_STRING("Shift", Shift)
+        _APPEND_MODIFIER_STRING("Super", Super)
+        _APPEND_MODIFIER_STRING("Hyper", Mod3)
     } else {
-        _APPEND_MODIFIER_STRING(C_("Key name", "Control"), KeyState::Ctrl)
-        _APPEND_MODIFIER_STRING(C_("Key name", "Alt"), KeyState::Alt)
-        _APPEND_MODIFIER_STRING(C_("Key name", "Shift"), KeyState::Shift)
-        _APPEND_MODIFIER_STRING(C_("Key name", "Super"),
-                                (KeyStates{KeyState::Super, KeyState::Super2}))
-        _APPEND_MODIFIER_STRING(C_("Key name", "Hyper"),
-                                (KeyStates{KeyState::Hyper, KeyState::Hyper2}))
+        _APPEND_MODIFIER_STRING(C_("Key name", "Control"), Ctrl)
+        _APPEND_MODIFIER_STRING(C_("Key name", "Alt"), Alt)
+        _APPEND_MODIFIER_STRING(C_("Key name", "Shift"), Shift)
+        _APPEND_MODIFIER_STRING(C_("Key name", "Super"), Super)
+        _APPEND_MODIFIER_STRING(C_("Key name", "Hyper"), Mod3)
     }
 
 #undef _APPEND_MODIFIER_STRING
@@ -587,9 +533,10 @@ KeyStates Key::keySymToStates(KeySym sym) {
         return KeyState::Shift;
     case FcitxKey_Super_L:
     case FcitxKey_Super_R:
+        return KeyState::Super;
     case FcitxKey_Hyper_L:
     case FcitxKey_Hyper_R:
-        return KeyState::Super;
+        return KeyState::Mod3;
     default:
         return KeyStates();
     }
@@ -663,41 +610,28 @@ std::string Key::keySymToString(KeySym sym, KeyStringFormat format) {
 }
 
 KeySym Key::keySymFromUnicode(uint32_t unicode) {
-    const auto &tab = unicode_to_keysym_tab();
     int min = 0;
-    int max = tab.size() - 1;
+    int max = sizeof(gdk_unicode_to_keysym_tab) /
+                  sizeof(gdk_unicode_to_keysym_tab[0]) -
+              1;
     int mid;
 
-    /* first check for Latin-1 characters (1:1 mapping) */
+    /* First check for Latin-1 characters (1:1 mapping) */
     if ((unicode >= 0x0020 && unicode <= 0x007e) ||
-        (unicode >= 0x00a0 && unicode <= 0x00ff))
+        (unicode >= 0x00a0 && unicode <= 0x00ff)) {
         return static_cast<KeySym>(unicode);
-
-    /* special keysyms */
-    if ((unicode >= (FcitxKey_BackSpace & 0x7f) &&
-         unicode <= (FcitxKey_Clear & 0x7f)) ||
-        unicode == (FcitxKey_Return & 0x7f) ||
-        unicode == (FcitxKey_Escape & 0x7f))
-        return static_cast<KeySym>(unicode | 0xff00);
-    if (unicode == (FcitxKey_Delete & 0x7f))
-        return FcitxKey_Delete;
-
-    /* Unicode non-symbols and code points outside Unicode planes */
-    if ((unicode >= 0xd800 && unicode <= 0xdfff) ||
-        (unicode >= 0xfdd0 && unicode <= 0xfdef) || unicode > 0x10ffff ||
-        (unicode & 0xfffe) == 0xfffe)
-        return FcitxKey_None;
+    }
 
     /* Binary search in table */
     while (max >= min) {
         mid = (min + max) / 2;
-        if (tab[mid].ucs < unicode) {
+        if (gdk_unicode_to_keysym_tab[mid].ucs < unicode) {
             min = mid + 1;
-        } else if (tab[mid].ucs > unicode) {
+        } else if (gdk_unicode_to_keysym_tab[mid].ucs > unicode) {
             max = mid - 1;
         } else {
             /* found it */
-            return static_cast<KeySym>(tab[mid].keysym);
+            return static_cast<KeySym>(gdk_unicode_to_keysym_tab[mid].keysym);
         }
     }
 
@@ -710,62 +644,32 @@ KeySym Key::keySymFromUnicode(uint32_t unicode) {
 
 uint32_t Key::keySymToUnicode(KeySym sym) {
     int min = 0;
-    int max =
-        sizeof(keysym_to_unicode_tab) / sizeof(keysym_to_unicode_tab[0]) - 1;
+    int max = sizeof(gdk_keysym_to_unicode_tab) /
+                  sizeof(gdk_keysym_to_unicode_tab[0]) -
+              1;
     int mid;
 
-    /* first check for Latin-1 characters (1:1 mapping) */
+    /* First check for Latin-1 characters (1:1 mapping) */
     if ((sym >= 0x0020 && sym <= 0x007e) || (sym >= 0x00a0 && sym <= 0x00ff)) {
         return sym;
     }
 
-    /* patch encoding botch */
-    if (sym == FcitxKey_KP_Space) {
-        return FcitxKey_space & 0x7f;
-    }
-
-    /* special syms */
-    if ((sym >= FcitxKey_BackSpace && sym <= FcitxKey_Clear) ||
-        (sym >= FcitxKey_KP_Multiply && sym <= FcitxKey_KP_9) ||
-        sym == FcitxKey_Return || sym == FcitxKey_Escape ||
-        sym == FcitxKey_Delete || sym == FcitxKey_KP_Tab ||
-        sym == FcitxKey_KP_Enter || sym == FcitxKey_KP_Equal) {
-        return sym & 0x7f;
-    }
-
-    /* also check for directly encoded Unicode codepoints */
-
-    /* Exclude surrogates: they are invalid in UTF-32.
-     * See https://www.unicode.org/versions/Unicode15.0.0/ch03.pdf#G28875
-     * for further details.
+    /* Also check for directly encoded 24-bit UCS characters:
      */
-    if (0x0100d800 <= sym && sym <= 0x0100dfff) {
-        return 0;
-    }
-    /*
-     * In theory, this is supposed to start from 0x100100, such that the ASCII
-     * range, which is already covered by 0x00-0xff, can't be encoded in two
-     * ways. However, changing this after a couple of decades probably won't
-     * go well, so it stays as it is.
-     */
-    if (0x01000000 <= sym && sym <= 0x0110ffff) {
-        const uint32_t code = sym - 0x01000000;
-        if (utf8::UCS4IsValid(code)) {
-            return code;
-        }
-        return 0;
+    if ((sym & 0xff000000) == 0x01000000) {
+        return sym & 0x00ffffff;
     }
 
     /* binary search in table */
     while (max >= min) {
         mid = (min + max) / 2;
-        if (keysym_to_unicode_tab[mid].keysym < sym) {
+        if (gdk_keysym_to_unicode_tab[mid].keysym < sym) {
             min = mid + 1;
-        } else if (keysym_to_unicode_tab[mid].keysym > sym) {
+        } else if (gdk_keysym_to_unicode_tab[mid].keysym > sym) {
             max = mid - 1;
         } else {
             /* found it */
-            return keysym_to_unicode_tab[mid].ucs;
+            return gdk_keysym_to_unicode_tab[mid].ucs;
         }
     }
 
@@ -774,11 +678,7 @@ uint32_t Key::keySymToUnicode(KeySym sym) {
 }
 
 std::string Key::keySymToUTF8(KeySym sym) {
-    auto code = keySymToUnicode(sym);
-    if (!utf8::UCS4IsValid(code)) {
-        return "";
-    }
-    return utf8::UCS4ToUTF8(code);
+    return utf8::UCS4ToUTF8(keySymToUnicode(sym));
 }
 
 std::vector<Key> Key::keyListFromString(const std::string &str) {

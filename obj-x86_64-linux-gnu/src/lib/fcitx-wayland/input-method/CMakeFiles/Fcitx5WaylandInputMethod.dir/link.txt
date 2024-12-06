@@ -1,0 +1,2 @@
+/usr/bin/ar qc libFcitx5WaylandInputMethod.a CMakeFiles/Fcitx5WaylandInputMethod.dir/zwp_input_method_context_v1.cpp.o CMakeFiles/Fcitx5WaylandInputMethod.dir/zwp_input_method_v1.cpp.o CMakeFiles/Fcitx5WaylandInputMethod.dir/zwp_input_panel_surface_v1.cpp.o CMakeFiles/Fcitx5WaylandInputMethod.dir/zwp_input_panel_v1.cpp.o "CMakeFiles/Fcitx5WaylandInputMethod.dir/wayland-input-method-unstable-v1-protocol.c.o"
+/usr/bin/ranlib libFcitx5WaylandInputMethod.a

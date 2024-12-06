@@ -33,7 +33,7 @@ public:
     cairo_surface_t *cairoSurface() const { return surface_.get(); }
     WlBuffer *buffer() const { return buffer_.get(); }
 
-    bool attachToSurface(WlSurface *surface, int scale);
+    void attachToSurface(WlSurface *surface, int scale);
 
     auto &rendered() { return rendered_; }
 

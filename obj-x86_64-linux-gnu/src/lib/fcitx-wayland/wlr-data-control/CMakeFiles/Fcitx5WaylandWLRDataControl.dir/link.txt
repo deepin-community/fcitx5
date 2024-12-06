@@ -1,0 +1,2 @@
+/usr/bin/ar qc libFcitx5WaylandWLRDataControl.a CMakeFiles/Fcitx5WaylandWLRDataControl.dir/zwlr_data_control_device_v1.cpp.o CMakeFiles/Fcitx5WaylandWLRDataControl.dir/zwlr_data_control_manager_v1.cpp.o CMakeFiles/Fcitx5WaylandWLRDataControl.dir/zwlr_data_control_offer_v1.cpp.o CMakeFiles/Fcitx5WaylandWLRDataControl.dir/zwlr_data_control_source_v1.cpp.o "CMakeFiles/Fcitx5WaylandWLRDataControl.dir/wayland-wlr-data-control-unstable-v1-protocol.c.o"
+/usr/bin/ranlib libFcitx5WaylandWLRDataControl.a

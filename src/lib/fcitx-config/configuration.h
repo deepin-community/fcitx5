@@ -7,14 +7,11 @@
 #ifndef _FCITX_CONFIG_CONFIGURATION_H_
 #define _FCITX_CONFIG_CONFIGURATION_H_
 
-#include <memory>
-#include <string>
-#include <vector>
 #include <fcitx-config/option.h>
-#include <fcitx-config/optiontypename.h>
-#include <fcitx-config/rawconfig.h>
 #include <fcitx-utils/macros.h>
 #include "fcitxconfig_export.h"
+
+#include <memory>
 
 #define FCITX_CONFIGURATION_EXTEND(NAME, SUBCLASS, ...)                        \
     class NAME;                                                                \
@@ -61,7 +58,7 @@ public:
     void load(const RawConfig &config, bool partial = false);
     void save(RawConfig &config) const;
     void dumpDescription(RawConfig &config) const;
-    FCITX_NODISCARD virtual const char *typeName() const = 0;
+    virtual const char *typeName() const = 0;
 
     /**
      * Set default value to current value.

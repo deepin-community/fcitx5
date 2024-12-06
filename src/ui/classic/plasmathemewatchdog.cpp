@@ -5,22 +5,11 @@
  *
  */
 #include "plasmathemewatchdog.h"
-#include <fcntl.h>
-#include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <cassert>
-#include <cerrno>
-#include <csignal>
-#include <cstdint>
-#include <functional>
 #include <stdexcept>
-#include <string>
-#include <utility>
 #include "fcitx-utils/event.h"
-#include "fcitx-utils/fs.h"
-#include "fcitx-utils/standardpath.h"
-#include "fcitx-utils/unixfd.h"
+#include "fcitx-utils/misc_p.h"
 #include "common.h"
 
 #if defined(__FreeBSD__)
@@ -29,17 +18,8 @@
 #include <sys/prctl.h>
 #endif
 
-namespace fcitx::classicui {
-
-#define PLASMA_THEME_GENERATOR "fcitx5-plasma-theme-generator";
-
-bool PlasmaThemeWatchdog::isAvailable() {
-    static const std::string binaryName = PLASMA_THEME_GENERATOR;
-    return StandardPath::hasExecutable(binaryName);
-}
-
-PlasmaThemeWatchdog::PlasmaThemeWatchdog(EventLoop *event,
-                                         std::function<void()> callback)
+fcitx::classicui::PlasmaThemeWatchdog::PlasmaThemeWatchdog(
+    EventLoop *event, std::function<void()> callback)
     : callback_(std::move(callback)) {
     int pipefd[2];
     int ret = ::pipe(pipefd);
@@ -58,27 +38,6 @@ PlasmaThemeWatchdog::PlasmaThemeWatchdog(EventLoop *event,
 #elif defined(__linux__)
         prctl(PR_SET_PDEATHSIG, SIGKILL);
 #endif
-        // Redirect stdin to /dev/null.
-        UnixFD fd = UnixFD::own(open("/dev/null", O_RDWR | O_CLOEXEC));
-
-        if (!fd.isValid()) {
-            _exit(1);
-        }
-
-        if (fd.fd() < 3) {
-            UnixFD copyFd(fd.fd(), 3);
-            if (!copyFd.isValid()) {
-                _exit(1);
-            }
-            fd = std::move(copyFd);
-        }
-        assert(fd.fd() >= 3);
-        if (dup2(fd.fd(), STDIN_FILENO) < 0) {
-            _exit(1);
-        }
-        fd.reset();
-
-        signal(SIGINT, SIG_IGN);
         char arg0[] = PLASMA_THEME_GENERATOR;
         char arg1[] = "--fd";
         std::string value = std::to_string(pipefd[1]);
@@ -89,54 +48,32 @@ PlasmaThemeWatchdog::PlasmaThemeWatchdog(EventLoop *event,
         close(pipefd[1]);
         monitorFD_.give(pipefd[0]);
         generator_ = pid;
-        running_ = true;
         ioEvent_ = event->addIOEvent(
             monitorFD_.fd(),
             {IOEventFlag::In, IOEventFlag::Err, IOEventFlag::Hup},
             [this, event](EventSourceIO *, int fd, IOEventFlags flags) {
-                if (flags.testAny(
-                        IOEventFlags{IOEventFlag::Err, IOEventFlag::Hup})) {
+                if ((flags & IOEventFlag::Err) || (flags & IOEventFlag::Hup)) {
                     cleanup();
                     return true;
                 }
-                if (!flags.test(IOEventFlag::In)) {
-                    return true;
-                }
-                ssize_t result = 0;
-                do {
+                if (flags & IOEventFlag::In) {
                     uint8_t dummy;
-                    result = fs::safeRead(fd, &dummy, sizeof(dummy));
-                } while (result > 0);
-                // Check if pipe EOF, or other errors.
-                if (result == 0 || (result < 0 && errno != EAGAIN)) {
-                    cleanup();
-                    return true;
+                    while (fs::safeRead(fd, &dummy, sizeof(dummy)) > 0) {
+                    }
+                    timerEvent_ = event->addTimeEvent(
+                        CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 1000000, 0,
+                        [this](EventSourceTime *, uint64_t) {
+                            callback_();
+                            return true;
+                        });
                 }
-                timerEvent_ = event->addTimeEvent(
-                    CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 1000000, 0,
-                    [this](EventSourceTime *, uint64_t) {
-                        callback_();
-                        return true;
-                    });
                 return true;
             });
     }
 }
-PlasmaThemeWatchdog::~PlasmaThemeWatchdog() {
-    destruct_ = true;
-    cleanup();
-}
+fcitx::classicui::PlasmaThemeWatchdog::~PlasmaThemeWatchdog() { cleanup(); }
 
-void PlasmaThemeWatchdog::cleanup() {
-    running_ = false;
-    CLASSICUI_INFO() << "Cleanup Plasma Theme generator.";
-    if (!destruct_) {
-        // For certain distribution, it is possible that
-        // fcitx5-plasma-theme-generator command presents, but not usable since
-        // plasma is set to be an optional dependency to fcitx5-configtool. If
-        // that happens, we need to notify to reload the theme.
-        callback_();
-    }
+void fcitx::classicui::PlasmaThemeWatchdog::cleanup() {
     if (generator_ == 0) {
         return;
     }
@@ -149,5 +86,3 @@ void PlasmaThemeWatchdog::cleanup() {
     generator_ = 0;
     ioEvent_.reset();
 }
-
-} // namespace fcitx::classicui

@@ -172,37 +172,24 @@ public:
      * @since 5.0.11
      */
     void invokeAction(const InputMethodEntry &entry, InvokeActionEvent &event);
-
-    /**
-     * Process virtual keyboard event
-     *
-     * @param entry input method entry
-     * @param event virtual keyboard event
-     * @since 5.1.0
-     */
-    void virtualKeyboardEvent(const InputMethodEntry &entry,
-                              VirtualKeyboardEvent &VirtualKeyboardEvent);
 };
 
 class FCITXCORE_EXPORT InputMethodEngineV2 : public InputMethodEngine {
 public:
     virtual std::string subModeIconImpl(const InputMethodEntry &,
-                                        InputContext &);
+                                        InputContext &) {
+        return {};
+    }
     virtual std::string subModeLabelImpl(const InputMethodEntry &,
-                                         InputContext &);
+                                         InputContext &) {
+        return {};
+    }
 };
 
 class FCITXCORE_EXPORT InputMethodEngineV3 : public InputMethodEngineV2 {
 public:
     virtual void invokeActionImpl(const InputMethodEntry &entry,
                                   InvokeActionEvent &event);
-};
-
-class FCITXCORE_EXPORT InputMethodEngineV4 : public InputMethodEngineV3 {
-public:
-    virtual void
-    virtualKeyboardEventImpl(const InputMethodEntry &entry,
-                             VirtualKeyboardEvent &VirtualKeyboardEvent) = 0;
 };
 
 } // namespace fcitx

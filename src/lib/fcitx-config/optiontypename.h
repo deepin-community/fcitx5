@@ -8,12 +8,9 @@
 #define _FCITX_CONFIG_TYPENAME_H_
 
 #include <string>
-#include <type_traits>
-#include <vector>
 #include <fcitx-utils/color.h>
 #include <fcitx-utils/i18nstring.h>
 #include <fcitx-utils/key.h>
-#include <fcitx-utils/macros.h>
 #include <fcitx-utils/semver.h>
 
 namespace fcitx {
@@ -45,7 +42,8 @@ struct OptionTypeName<std::vector<T>> {
 };
 
 template <typename T>
-struct OptionTypeName<T, std::enable_if_t<std::is_enum_v<T>>> {
+struct OptionTypeName<T,
+                      typename std::enable_if<std::is_enum<T>::value>::type> {
     static std::string get() { return "Enum"; }
 };
 } // namespace fcitx

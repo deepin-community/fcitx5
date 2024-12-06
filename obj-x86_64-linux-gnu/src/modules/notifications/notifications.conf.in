@@ -1,0 +1,12 @@
+[Addon]
+Name=Notification
+Comment=Freedesktop.org Notification Support
+Type=SharedLibrary
+Library=libnotifications
+Category=Module
+Version=5.0.21
+OnDemand=True
+Configurable=True
+
+[Addon/Dependencies]
+0=dbus

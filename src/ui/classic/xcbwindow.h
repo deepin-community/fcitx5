@@ -30,8 +30,6 @@ public:
 
     virtual bool filterEvent(xcb_generic_event_t *event) = 0;
 
-    xcb_window_t wid() const { return wid_; }
-
 protected:
     XCBUI *ui_;
     xcb_window_t wid_ = 0;

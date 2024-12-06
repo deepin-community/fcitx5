@@ -15,7 +15,7 @@
 #include <tuple>
 #include <type_traits>
 #include <vector>
-#include <fcitx-utils/dbus/message_details.h> // IWYU pragma: export
+#include <fcitx-utils/dbus/message_details.h>
 #include <fcitx-utils/log.h>
 #include <fcitx-utils/macros.h>
 #include <fcitx-utils/metastring.h>
@@ -497,14 +497,9 @@ public:
             signature;
         if (*this >>
             Container(Container::Type::Array, Signature(signature::data()))) {
-            t.clear();
-            while (!end()) {
-                T temp;
-                if (*this >> temp) {
-                    t.push_back(temp);
-                } else {
-                    break;
-                }
+            T temp;
+            while (!end() && *this >> temp) {
+                t.push_back(temp);
             }
             *this >> ContainerEnd();
         }

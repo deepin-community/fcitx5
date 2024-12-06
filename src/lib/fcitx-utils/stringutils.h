@@ -22,7 +22,8 @@
 #include "fcitxutils_export.h"
 #include "stringutils_details.h"
 
-namespace fcitx::stringutils {
+namespace fcitx {
+namespace stringutils {
 
 /// \brief Check if a string starts with a prefix.
 FCITXUTILS_EXPORT bool startsWith(std::string_view str,
@@ -182,6 +183,7 @@ unescapeForValue(std::string_view str);
  */
 FCITXUTILS_EXPORT std::string escapeForValue(std::string_view str);
 
-} // namespace fcitx::stringutils
+} // namespace stringutils
+} // namespace fcitx
 
 #endif // _FCITX_UTILS_STRINGUTILS_H_

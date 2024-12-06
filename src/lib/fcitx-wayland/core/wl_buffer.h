@@ -1,5 +1,6 @@
 #ifndef WL_BUFFER
 #define WL_BUFFER
+#include <memory>
 #include <wayland-client.h>
 #include "fcitx-utils/signals.h"
 namespace fcitx::wayland {

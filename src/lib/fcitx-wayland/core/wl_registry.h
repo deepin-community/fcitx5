@@ -1,5 +1,6 @@
 #ifndef WL_REGISTRY
 #define WL_REGISTRY
+#include <memory>
 #include <wayland-client.h>
 #include "fcitx-utils/signals.h"
 namespace fcitx::wayland {

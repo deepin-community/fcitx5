@@ -7,13 +7,14 @@
 #ifndef _FCITX_UI_KIMPANEL_KIMPANEL_H_
 #define _FCITX_UI_KIMPANEL_KIMPANEL_H_
 
-#include "fcitx-config/configuration.h"
-#include "fcitx-config/iniparser.h"
+#include "fcitx-utils/dbus/bus.h"
 #include "fcitx-utils/dbus/servicewatcher.h"
-#include "fcitx-utils/i18n.h"
+#include "fcitx-utils/event.h"
+#include "fcitx-utils/fs.h"
 #include "fcitx/addonfactory.h"
 #include "fcitx/addoninstance.h"
 #include "fcitx/addonmanager.h"
+#include "fcitx/focusgroup.h"
 #include "fcitx/icontheme.h"
 #include "fcitx/instance.h"
 #include "fcitx/userinterface.h"
@@ -23,22 +24,12 @@ namespace fcitx {
 class KimpanelProxy;
 class Action;
 
-FCITX_CONFIGURATION(KimpanelConfig,
-                    Option<bool> preferTextIcon{this, "PreferTextIcon",
-                                                _("Prefer Text Icon"), false};);
-
 class Kimpanel : public UserInterface {
 public:
     Kimpanel(Instance *instance);
     ~Kimpanel();
 
     Instance *instance() { return instance_; }
-    const Configuration *getConfig() const override;
-    void setConfig(const RawConfig &config) override {
-        config_.load(config, true);
-        safeSaveAsIni(config_, "conf/kimpanel.conf");
-    }
-    auto &config() const { return config_; }
     void suspend() override;
     void resume() override;
     bool available() override { return available_; }
@@ -46,7 +37,6 @@ public:
                 InputContext *inputContext) override;
     void updateInputPanel(InputContext *inputContext);
     void updateCurrentInputMethod(InputContext *ic);
-    void reloadConfig() override;
 
     void msgV1Handler(dbus::Message &msg);
     void msgV2Handler(dbus::Message &msg);
@@ -58,9 +48,11 @@ public:
 private:
     void setAvailable(bool available);
 
+    std::string iconName(const std::string &icon) {
+        return IconTheme::iconName(icon, inFlatpak_);
+    }
+
     FCITX_ADDON_DEPENDENCY_LOADER(dbus, instance_->addonManager());
-    FCITX_ADDON_DEPENDENCY_LOADER(classicui, instance_->addonManager());
-    FCITX_ADDON_DEPENDENCY_LOADER(xcb, instance_->addonManager());
 
     Instance *instance_;
     dbus::Bus *bus_;
@@ -76,7 +68,7 @@ private:
     std::unique_ptr<dbus::Slot> relativeQuery_;
     bool hasRelative_ = false;
     bool hasRelativeV2_ = false;
-    KimpanelConfig config_;
+    const bool inFlatpak_ = fs::isreg("/.flatpak-info");
 };
 } // namespace fcitx
 

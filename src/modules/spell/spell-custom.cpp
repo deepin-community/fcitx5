@@ -7,6 +7,7 @@
  */
 
 #include "spell-custom.h"
+#include "fcitx-utils/cutf8.h"
 #include "spell-custom-dict.h"
 
 fcitx::SpellCustom::SpellCustom(fcitx::Spell *spell)

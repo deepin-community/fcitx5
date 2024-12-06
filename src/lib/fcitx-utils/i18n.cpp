@@ -9,6 +9,7 @@
 #include <string>
 #include <unordered_set>
 #include <libintl.h>
+#include "fcitxutils_export.h"
 #include "log.h"
 #include "standardpath.h"
 
@@ -38,15 +39,18 @@ private:
 
 static GettextManager gettextManager;
 
-std::string translate(const std::string &s) { return translate(s.c_str()); }
+FCITXUTILS_EXPORT std::string translate(const std::string &s) {
+    return translate(s.c_str());
+}
 
-const char *translate(const char *s) { return ::gettext(s); }
+FCITXUTILS_EXPORT const char *translate(const char *s) { return ::gettext(s); }
 
-std::string translateCtx(const char *ctx, const std::string &s) {
+FCITXUTILS_EXPORT std::string translateCtx(const char *ctx,
+                                           const std::string &s) {
     return translateCtx(ctx, s.c_str());
 }
 
-const char *translateCtx(const char *ctx, const char *s) {
+FCITXUTILS_EXPORT const char *translateCtx(const char *ctx, const char *s) {
     auto str = stringutils::concat(ctx, "\004", s);
     const auto *p = str.c_str();
     const auto *result = ::gettext(str.c_str());
@@ -56,22 +60,24 @@ const char *translateCtx(const char *ctx, const char *s) {
     return result;
 }
 
-std::string translateDomain(const char *domain, const std::string &s) {
+FCITXUTILS_EXPORT std::string translateDomain(const char *domain,
+                                              const std::string &s) {
     return translateDomain(domain, s.c_str());
 }
 
-const char *translateDomain(const char *domain, const char *s) {
+FCITXUTILS_EXPORT const char *translateDomain(const char *domain,
+                                              const char *s) {
     gettextManager.addDomain(domain);
     return ::dgettext(domain, s);
 }
 
-std::string translateDomainCtx(const char *domain, const char *ctx,
-                               const std::string &s) {
+FCITXUTILS_EXPORT std::string
+translateDomainCtx(const char *domain, const char *ctx, const std::string &s) {
     return translateDomainCtx(domain, ctx, s.c_str());
 }
 
-const char *translateDomainCtx(const char *domain, const char *ctx,
-                               const char *s) {
+FCITXUTILS_EXPORT const char *
+translateDomainCtx(const char *domain, const char *ctx, const char *s) {
     gettextManager.addDomain(domain);
     auto str = stringutils::concat(ctx, "\004", s);
     const auto *p = str.c_str();
@@ -82,7 +88,7 @@ const char *translateDomainCtx(const char *domain, const char *ctx,
     return result;
 }
 
-void registerDomain(const char *domain, const char *dir) {
+FCITXUTILS_EXPORT void registerDomain(const char *domain, const char *dir) {
     gettextManager.addDomain(domain, dir);
 }
 } // namespace fcitx

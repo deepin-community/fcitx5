@@ -23,7 +23,6 @@ set(FCITX_CORE_SOURCES
     statusarea.cpp
     inputpanel.cpp
     candidatelist.cpp
-    candidateaction.cpp
     icontheme.cpp
     inputmethodengine.cpp
     )
@@ -39,7 +38,6 @@ set(FCITX_CORE_HEADERS
     inputcontextproperty.h
     inputpanel.h
     candidatelist.h
-    candidateaction.h
     focusgroup.h
     surroundingtext.h
     addonloader.h
@@ -88,7 +86,7 @@ configure_file(Fcitx5Core.pc.in ${CMAKE_CURRENT_BINARY_DIR}/Fcitx5Core.pc @ONLY)
 install(TARGETS Fcitx5Core EXPORT Fcitx5CoreTargets LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/Fcitx5Core.pc
   DESTINATION "${CMAKE_INSTALL_LIBDATADIR}/pkgconfig")
-install(FILES ${FCITX_CORE_HEADERS} DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/Fcitx5/Core/fcitx" COMPONENT header)
+install(FILES ${FCITX_CORE_HEADERS} DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/Fcitx5/Core/fcitx")
 
 add_library(Fcitx5::Core ALIAS Fcitx5Core)
 

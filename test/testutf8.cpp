@@ -70,14 +70,6 @@ int main() {
         FCITX_ASSERT(iter.view() == expectCharStr[i]);
     }
 
-    auto rangeView = fcitx::utf8::MakeUTF8StringViewRange(str);
-    i = 0;
-    for (auto iter = std::begin(rangeView), end = std::end(rangeView);
-         iter != end; ++iter, ++i) {
-        FCITX_ASSERT(iter->size() == expectLength[i]);
-        FCITX_ASSERT(*iter == expectCharStr[i]);
-    }
-
     FCITX_ASSERT(fcitx::utf8::getLastChar(str) == 0xa);
 
     std::string invalidStr = "\xe4\xff";
@@ -92,10 +84,6 @@ int main() {
                  fcitx::utf8::INVALID_LENGTH);
 
     FCITX_ASSERT(counter == 7);
-
-    FCITX_ASSERT(fcitx::utf8::UCS4IsValid(0xfdd7));
-    FCITX_ASSERT(fcitx::utf8::UCS4IsValid(0xffff));
-    FCITX_ASSERT(!fcitx::utf8::UCS4IsValid(0x200000));
 
     return 0;
 }

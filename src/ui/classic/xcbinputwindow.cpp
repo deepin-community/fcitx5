@@ -6,6 +6,7 @@
  */
 
 #include "xcbinputwindow.h"
+#include <pango/pangocairo.h>
 #include <xcb/xcb_aux.h>
 #include <xcb/xcb_icccm.h>
 #include "fcitx-utils/rect.h"
@@ -15,7 +16,7 @@ namespace fcitx::classicui {
 XCBInputWindow::XCBInputWindow(XCBUI *ui)
     : XCBWindow(ui), InputWindow(ui->parent()),
       atomBlur_(ui_->parent()->xcb()->call<IXCBModule::atom>(
-          ui_->displayName(), "_KDE_NET_WM_BLUR_BEHIND_REGION", false)) {}
+          ui_->name(), "_KDE_NET_WM_BLUR_BEHIND_REGION", false)) {}
 
 void XCBInputWindow::postCreateWindow() {
     if (ui_->ewmh()->_NET_WM_WINDOW_TYPE_POPUP_MENU &&
@@ -75,7 +76,7 @@ void XCBInputWindow::updatePosition(InputContext *inputContext) {
     }
 
     if (closestScreen) {
-        int newX;
+        int newX, newY;
 
         if (x < closestScreen->left()) {
             newX = closestScreen->left();
@@ -83,32 +84,23 @@ void XCBInputWindow::updatePosition(InputContext *inputContext) {
             newX = x;
         }
 
-        if ((newX + static_cast<int>(actualWidth)) > closestScreen->right()) {
-            newX = closestScreen->right() - actualWidth;
-        }
-
-        int newY;
         if (y < closestScreen->top()) {
             newY = closestScreen->top();
         } else {
             newY = y + (h ? h : (10 * ((dpi_ < 0 ? 96.0 : dpi_) / 96.0)));
         }
 
-        // Try flip y.
+        if ((newX + static_cast<int>(actualWidth)) > closestScreen->right()) {
+            newX = closestScreen->right() - actualWidth;
+        }
+
         if ((newY + static_cast<int>(actualHeight)) > closestScreen->bottom()) {
             if (newY > closestScreen->bottom()) {
                 newY = closestScreen->bottom() - actualHeight - 40;
             } else { /* better position the window */
                 newY = newY - actualHeight - ((h == 0) ? 40 : h);
             }
-
-            // If after flip, top is out of the screen, we still prefer the top
-            // edge to be always with in screen.
-            if (newY < closestScreen->top()) {
-                newY = closestScreen->top();
-            }
         }
-
         x = newX;
         y = newY;
     }
@@ -125,6 +117,7 @@ void XCBInputWindow::updatePosition(InputContext *inputContext) {
                              XCB_CONFIG_WINDOW_STACK_MODE |
                                  XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y,
                              &wc);
+    xcb_flush(ui_->connection());
 }
 
 void XCBInputWindow::updateDPI(InputContext *inputContext) {
@@ -146,6 +139,7 @@ void XCBInputWindow::update(InputContext *inputContext) {
     if (!visible()) {
         if (oldVisible) {
             xcb_unmap_window(ui_->connection(), wid_);
+            xcb_flush(ui_->connection());
         }
         return;
     }
@@ -191,8 +185,9 @@ void XCBInputWindow::update(InputContext *inputContext) {
     updatePosition(inputContext);
     if (!oldVisible) {
         xcb_map_window(ui_->connection(), wid_);
+        xcb_flush(ui_->connection());
     }
-    paint(c, width, height, /*scale=*/1.0);
+    paint(c, width, height);
     cairo_destroy(c);
     render();
 }
@@ -253,7 +248,7 @@ void XCBInputWindow::repaint() {
     }
     if (auto *surface = prerender()) {
         cairo_t *c = cairo_create(surface);
-        paint(c, width(), height(), /*scale=*/1.0);
+        paint(c, width(), height());
         cairo_destroy(c);
         render();
     }

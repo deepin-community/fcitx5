@@ -8,21 +8,16 @@
 #define _FCITX_CANDIDATELIST_H_
 
 #include <fcitx-utils/key.h>
-#include <fcitx-utils/macros.h>
-#include <fcitx/candidateaction.h>
 #include <fcitx/text.h>
-#include "fcitxcore_export.h"
 
 namespace fcitx {
 
 class InputContext;
+class CandidateList;
 class PageableCandidateList;
 class BulkCandidateList;
 class ModifiableCandidateList;
 class CursorMovableCandidateList;
-class CursorModifiableCandidateList;
-class BulkCursorCandidateList;
-class ActionableCandidateList;
 
 class CandidateListPrivate;
 
@@ -52,28 +47,12 @@ public:
     bool isPlaceHolder() const;
     bool hasCustomLabel() const;
     const Text &customLabel() const;
-    /**
-     * Return comment corresponding to the candidate.
-     *
-     * @return value of comment.
-     * @since 5.1.9
-     */
-    const Text &comment() const;
-    /**
-     * Return text with comment.
-     *
-     * @param separator separator between text and comment.
-     * @return value of comment.
-     * @since 5.1.9
-     */
-    Text textWithComment(std::string separator = " ") const;
 
 protected:
     void setText(Text text);
     void setPlaceHolder(bool placeHolder);
     void resetCustomLabel();
     void setCustomLabel(Text text);
-    void setComment(Text comment);
 
 private:
     std::unique_ptr<CandidateWordPrivate> d_ptr;
@@ -98,18 +77,12 @@ public:
     BulkCandidateList *toBulk() const;
     ModifiableCandidateList *toModifiable() const;
     CursorMovableCandidateList *toCursorMovable() const;
-    CursorModifiableCandidateList *toCursorModifiable() const;
-    BulkCursorCandidateList *toBulkCursor() const;
-    ActionableCandidateList *toActionable() const;
 
 protected:
     void setPageable(PageableCandidateList *list);
     void setBulk(BulkCandidateList *list);
     void setModifiable(ModifiableCandidateList *list);
     void setCursorMovable(CursorMovableCandidateList *list);
-    void setCursorModifiable(CursorModifiableCandidateList *list);
-    void setBulkCursor(BulkCursorCandidateList *list);
-    void setActionable(ActionableCandidateList *list);
 
 private:
     std::unique_ptr<CandidateListPrivate> d_ptr;
@@ -139,24 +112,10 @@ public:
     virtual void nextCandidate() = 0;
 };
 
-class FCITXCORE_EXPORT CursorModifiableCandidateList {
-public:
-    virtual void setCursorIndex(int index) = 0;
-};
-
 // useful for virtual keyboard
 class FCITXCORE_EXPORT BulkCandidateList {
 public:
-    /**
-     * If idx is out of range, it may raise exception. Catching the exception is
-     * useful to iterate over all candidate list for candidate list has no total
-     * size.
-     */
     virtual const CandidateWord &candidateFromAll(int idx) const = 0;
-    /**
-     * It's possible for this function to return -1 if the implement has no
-     * clear number how many candidates are available.
-     */
     virtual int totalSize() const = 0;
 };
 
@@ -185,41 +144,6 @@ public:
     DisplayOnlyCandidateWord(Text text) : CandidateWord(std::move(text)) {}
 
     void select(InputContext *) const override {}
-};
-
-class FCITXCORE_EXPORT BulkCursorCandidateList {
-public:
-    virtual int globalCursorIndex() const = 0;
-    virtual void setGlobalCursorIndex(int index) = 0;
-};
-
-/**
- * Interface for trigger actions on candidates.
- *
- * @since 5.1.10
- */
-class FCITXCORE_EXPORT ActionableCandidateList {
-public:
-    virtual ~ActionableCandidateList();
-
-    /**
-     * Check whether this candidate has action.
-     *
-     * This function should be fast and guarantee that candidateActions return a
-     * not empty vector.
-     */
-    virtual bool hasAction(const CandidateWord &candidate) const = 0;
-
-    /**
-     * Return a list of actions.
-     */
-    virtual std::vector<CandidateAction>
-    candidateActions(const CandidateWord &candidate) const = 0;
-
-    /**
-     * Trigger the action based on the index returned from candidateActions.
-     */
-    virtual void triggerAction(const CandidateWord &candidate, int id) = 0;
 };
 
 class DisplayOnlyCandidateListPrivate;
@@ -296,14 +220,6 @@ public:
      */
     int globalCursorIndex() const;
 
-    /**
-     * Set cursor index on current page.
-     *
-     * @param index index on current page;
-     * @since 5.1.9
-     */
-    void setCursorIndex(int index);
-
     // CandidateList
     const fcitx::Text &label(int idx) const override;
     const CandidateWord &candidate(int idx) const override;
@@ -342,13 +258,6 @@ public:
     void setCursorIncludeUnselected(bool);
     void setCursorKeepInSamePage(bool);
     void setCursorPositionAfterPaging(CursorPositionAfterPaging afterPaging);
-
-    /**
-     * Set an optional implemenation of actionable candidate list
-     *
-     * @since 5.1.10
-     */
-    void setActionableImpl(std::unique_ptr<ActionableCandidateList> actionable);
 
 private:
     void fixAfterUpdate();

@@ -7,13 +7,7 @@
 #include "iniparser.h"
 #include <fcntl.h>
 #include <cstdio>
-#include <functional>
-#include <string>
-#include <string_view>
-#include "fcitx-config/rawconfig.h"
 #include "fcitx-utils/fs.h"
-#include "fcitx-utils/macros.h"
-#include "fcitx-utils/misc.h"
 #include "fcitx-utils/standardpath.h"
 #include "fcitx-utils/stringutils.h"
 #include "fcitx-utils/unixfd.h"
@@ -48,20 +42,26 @@ bool writeAsIni(const RawConfig &config, int fd) {
 }
 
 void readFromIni(RawConfig &config, FILE *fin) {
-    std::string currentGroup;
+    std::string lineBuf, currentGroup;
 
     UniqueCPtr<char> clineBuf;
     size_t bufSize = 0;
     unsigned int line = 0;
     while (getline(clineBuf, &bufSize, fin) >= 0) {
         line++;
-        std::string_view lineBuf = stringutils::trimView(clineBuf.get());
-        if (lineBuf.empty() || lineBuf.front() == '#') {
+        lineBuf = clineBuf.get();
+        auto pair = stringutils::trimInplace(lineBuf);
+        std::string::size_type start = pair.first, end = pair.second;
+        if (start == end || lineBuf[start] == '#') {
             continue;
         }
 
-        if (lineBuf.front() == '[' && lineBuf.back() == ']') {
-            currentGroup = lineBuf.substr(1, lineBuf.size() - 2);
+        lineBuf.resize(end);
+
+        std::string::size_type equalPos;
+
+        if (lineBuf[start] == '[' && lineBuf[end - 1] == ']') {
+            currentGroup = lineBuf.substr(start + 1, end - start - 2);
             config.visitItemsOnPath(
                 [line](RawConfig &config, const std::string &) {
                     if (!config.lineNumber()) {
@@ -69,9 +69,9 @@ void readFromIni(RawConfig &config, FILE *fin) {
                     }
                 },
                 currentGroup);
-        } else if (std::string::size_type equalPos = lineBuf.find_first_of('=');
-                   equalPos != std::string::npos) {
-            auto name = lineBuf.substr(0, equalPos);
+        } else if ((equalPos = lineBuf.find_first_of('=', start)) !=
+                   std::string::npos) {
+            auto name = lineBuf.substr(start, equalPos - start);
             auto valueStart = equalPos + 1;
 
             auto value = stringutils::unescapeForValue(
@@ -87,7 +87,7 @@ void readFromIni(RawConfig &config, FILE *fin) {
                 s += name;
                 subConfig = config.get(s, true);
             } else {
-                subConfig = config.get(std::string(name), true);
+                subConfig = config.get(name, true);
             }
             subConfig->setValue(*value);
             subConfig->setLineNumber(line);
@@ -95,7 +95,7 @@ void readFromIni(RawConfig &config, FILE *fin) {
     }
 }
 
-bool writeAsIni(const RawConfig &config, FILE *fout) {
+bool writeAsIni(const RawConfig &root, FILE *fout) {
     std::function<bool(const RawConfig &, const std::string &path)> callback;
 
     callback = [fout, &callback](const RawConfig &config,
@@ -122,12 +122,13 @@ bool writeAsIni(const RawConfig &config, FILE *fout) {
                     return true;
                 },
                 "", false, path);
-            if (!values.empty()) {
+            auto valueString = values;
+            if (!valueString.empty()) {
                 if (!path.empty()) {
                     FCITX_RETURN_IF(fprintf(fout, "[%s]\n", path.c_str()) < 0,
                                     false);
                 }
-                FCITX_RETURN_IF(fprintf(fout, "%s\n", values.c_str()) < 0,
+                FCITX_RETURN_IF(fprintf(fout, "%s\n", valueString.c_str()) < 0,
                                 false);
             }
         }
@@ -135,7 +136,7 @@ bool writeAsIni(const RawConfig &config, FILE *fout) {
         return true;
     };
 
-    return callback(config, "");
+    return callback(root, "");
 }
 
 void readAsIni(RawConfig &rawConfig, const std::string &path) {

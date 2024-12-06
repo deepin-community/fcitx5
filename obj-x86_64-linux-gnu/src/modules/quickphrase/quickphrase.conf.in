@@ -1,0 +1,14 @@
+[Addon]
+Name=Quick Phrase
+Type=SharedLibrary
+Library=libquickphrase
+Category=Module
+Version=5.0.21
+OnDemand=False
+Configurable=True
+
+[Dependencies]
+0=core:5.0.21
+
+[OptionalDependencies]
+0=spell

@@ -7,50 +7,25 @@
 
 #include "ibusfrontend.h"
 #include <fcntl.h>
+#include <signal.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <cerrno>
-#include <csignal>
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <memory>
-#include <optional>
-#include <set>
-#include <string>
-#include <tuple>
-#include <utility>
-#include <vector>
-#include <fmt/core.h>
+#include <fstream>
+#include <mutex>
 #include <fmt/format.h>
 #include "fcitx-config/iniparser.h"
-#include "fcitx-config/rawconfig.h"
-#include "fcitx-utils/capabilityflags.h"
-#include "fcitx-utils/dbus/bus.h"
 #include "fcitx-utils/dbus/message.h"
 #include "fcitx-utils/dbus/objectvtable.h"
 #include "fcitx-utils/dbus/servicewatcher.h"
 #include "fcitx-utils/dbus/variant.h"
-#include "fcitx-utils/event.h"
-#include "fcitx-utils/flags.h"
-#include "fcitx-utils/handlertable.h"
-#include "fcitx-utils/key.h"
 #include "fcitx-utils/log.h"
-#include "fcitx-utils/macros.h"
-#include "fcitx-utils/misc.h"
-#include "fcitx-utils/rect.h"
+#include "fcitx-utils/metastring.h"
 #include "fcitx-utils/standardpath.h"
 #include "fcitx-utils/stringutils.h"
-#include "fcitx-utils/textformatflags.h"
 #include "fcitx-utils/utf8.h"
 #include "fcitx-utils/uuid_p.h"
-#include "fcitx/addonfactory.h"
-#include "fcitx/addoninstance.h"
-#include "fcitx/event.h"
 #include "fcitx/inputcontext.h"
-#include "fcitx/inputpanel.h"
 #include "fcitx/instance.h"
 #include "fcitx/misc_p.h"
 #include "dbus_public.h"
@@ -70,6 +45,11 @@ FCITX_DEFINE_LOG_CATEGORY(ibus, "ibus")
 namespace fcitx {
 
 namespace {
+
+bool isInFlatpak() {
+    static bool inFlatpak = fs::isreg("/.flatpak-info");
+    return inFlatpak;
+}
 
 std::string getSocketPath(bool isWayland) {
     auto *path = getenv("IBUS_ADDRESS_FILE");
@@ -114,10 +94,9 @@ std::string getSocketPath(bool isWayland) {
                             hostname, "-", displaynumber));
 }
 
-std::string getFullSocketPath(const StandardPath &standardPath,
-                              bool isWayland) {
+std::string getFullSocketPath(bool isWayland) {
     return stringutils::joinPath(
-        standardPath.userDirectory(StandardPath::Type::Config),
+        StandardPath::global().userDirectory(StandardPath::Type::Config),
         getSocketPath(isWayland));
 }
 
@@ -156,8 +135,8 @@ std::pair<std::string, pid_t> getAddress(const std::string &socketPath) {
 }
 
 pid_t runIBusExit() {
-    pid_t child_pid = fork();
-    if (child_pid == -1) {
+    pid_t child_pid;
+    if ((child_pid = fork()) == -1) {
         perror("fork");
         return -1;
     }
@@ -267,6 +246,11 @@ public:
                            }
                        })),
           name_(sender) {
+        processKeyEventMethod.setClosureFunction(
+            [this](dbus::Message message, const dbus::ObjectMethod &method) {
+                InputContextEventBlocker blocker(this);
+                return method(std::move(message));
+            });
         im->bus()->addObjectVTable(path().path(),
                                    IBUS_INPUTCONTEXT_DBUS_INTERFACE, *this);
         im->bus()->addObjectVTable(path().path(), IBUS_SERVICE_DBUS_INTERFACE,
@@ -274,7 +258,7 @@ public:
         created();
     }
 
-    ~IBusInputContext() override { InputContext::destroy(); }
+    ~IBusInputContext() { InputContext::destroy(); }
 
     const char *frontend() const override { return "ibus"; }
 
@@ -433,11 +417,8 @@ public:
     void enable() {}
     void disable() {}
     static bool isEnabled() { return true; }
-    void propertyActivate(const std::string &name, int32_t state) {
-        FCITX_UNUSED(name);
-        FCITX_UNUSED(state);
-    }
-    void setEngine(const std::string &engine) { FCITX_UNUSED(engine); }
+    void propertyActivate(const std::string &, int32_t) {}
+    void setEngine(const std::string &) {}
     static dbus::Variant getEngine() { return dbus::Variant(0); }
     void setSurroundingText(const dbus::Variant &text, uint32_t cursor,
                             uint32_t anchor) {
@@ -538,7 +519,7 @@ private:
 
 #define CASE_PURPOSE(_PURPOSE, _CAPABILITY)                                    \
     case _PURPOSE:                                                             \
-        flag |= (_CAPABILITY);                                                 \
+        flag |= _CAPABILITY;                                                   \
         break;
 
         switch (purpose) {
@@ -574,8 +555,8 @@ private:
         };
 
 #define CHECK_HINTS(_HINTS, _CAPABILITY)                                       \
-    if (hints & (_HINTS)) {                                                    \
-        flag |= (_CAPABILITY);                                                 \
+    if (hints & _HINTS) {                                                      \
+        flag |= _CAPABILITY;                                                   \
     }
 
         CHECK_HINTS(GTK_INPUT_HINT_SPELLCHECK,
@@ -611,29 +592,12 @@ private:
             clientCommitPreedit_ = std::get<0>(value);
         }),
         dbus::PropertyOption::Hidden);
-    FCITX_OBJECT_VTABLE_WRITABLE_PROPERTY(
-        effectivePostProcessKeyEvent, "EffectivePostProcessKeyEvent", "(b)",
-        ([this]() -> dbus::DBusStruct<bool> {
-            return {effectivePostProcessKeyEvent_};
-        }),
-        ([this](dbus::DBusStruct<bool> value) {
-            effectivePostProcessKeyEvent_ = std::get<0>(value);
-        }),
-        dbus::PropertyOption::Hidden);
-    FCITX_OBJECT_VTABLE_PROPERTY(
-        postProcessKeyEvent, "PostProcessKeyEvent", "(a(yv))",
-        ([]() -> dbus::DBusStruct<
-                  std::vector<dbus::DBusStruct<uint8_t, dbus::Variant>>> {
-            return {};
-        }),
-        dbus::PropertyOption::Hidden);
 
     dbus::ObjectPath path_;
     IBusFrontend *im_;
     std::unique_ptr<HandlerTableEntry<dbus::ServiceWatcherCallback>> handler_;
     std::string name_;
     bool clientCommitPreedit_ = false;
-    bool effectivePostProcessKeyEvent_ = false;
 
     IBusService service_{this};
 };
@@ -654,13 +618,13 @@ IBusFrontend::createInputContext(const std::string & /* unused */) {
     return ic->path();
 }
 
-std::set<std::string> allSocketPaths(const StandardPath &standardPath) {
+std::set<std::string> allSocketPaths() {
     std::set<std::string> paths;
     if (isInFlatpak()) {
         // Flatpak always use DISPLAY=:99, which means we will need to guess
         // what files are available.
-        auto map = standardPath.locateWithFilter(
-            StandardPath::Type::Config, "ibus/bus",
+        auto map = StandardPath::global().multiOpenFilter(
+            StandardPath::Type::Config, "ibus/bus", O_RDONLY,
             [](const std::string &path, const std::string &, bool user) {
                 if (!user) {
                     return false;
@@ -669,14 +633,14 @@ std::set<std::string> allSocketPaths(const StandardPath &standardPath) {
             });
 
         for (const auto &item : map) {
-            paths.insert(item.second);
+            paths.insert(item.second.path());
         }
 
         // Make the guess that display is 0, it is the most common value that
         // people would have.
         if (paths.empty()) {
-            auto configHome =
-                standardPath.userDirectory(StandardPath::Type::Config);
+            auto configHome = StandardPath::global().userDirectory(
+                StandardPath::Type::Config);
             if (!configHome.empty()) {
                 paths.insert(stringutils::joinPath(
                     configHome, "ibus/bus",
@@ -684,20 +648,20 @@ std::set<std::string> allSocketPaths(const StandardPath &standardPath) {
             }
         }
     } else {
-        if (auto path = getFullSocketPath(standardPath, false); !path.empty()) {
+        if (auto path = getFullSocketPath(false); !path.empty()) {
             paths.insert(std::move(path));
         }
     }
 
     // Also add wayland.
-    if (auto path = getFullSocketPath(standardPath, true); !path.empty()) {
+    if (auto path = getFullSocketPath(true); !path.empty()) {
         paths.insert(std::move(path));
     }
     return paths;
 }
 
 IBusFrontendModule::IBusFrontendModule(Instance *instance)
-    : instance_(instance), socketPaths_(allSocketPaths(standardPath_)) {
+    : instance_(instance), socketPaths_(allSocketPaths()) {
     dbus::VariantTypeRegistry::defaultRegistry().registerType<IBusText>();
     dbus::VariantTypeRegistry::defaultRegistry().registerType<IBusAttribute>();
     dbus::VariantTypeRegistry::defaultRegistry().registerType<IBusAttrList>();
@@ -731,15 +695,7 @@ IBusFrontendModule::IBusFrontendModule(Instance *instance)
         FCITX_IBUS_WARN() << "Can not get portal ibus name right now.";
     }
 
-    // Add some delay for the initial check, since xcb may trigger a ibus
-    // restart on GNOME.
-    timeEvent_ = instance->eventLoop().addTimeEvent(
-        CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 1000000, 0,
-        [this](EventSourceTime *, uint64_t) {
-            replaceIBus(/*recheck=*/true);
-            return true;
-        });
-    ;
+    replaceIBus(/*recheck=*/true);
 }
 
 IBusFrontendModule::~IBusFrontendModule() {
@@ -747,17 +703,17 @@ IBusFrontendModule::~IBusFrontendModule() {
         portalBus_->releaseName(IBUS_PORTAL_DBUS_SERVICE);
     }
 
-    if (addressWrote_.empty() || socketPaths_.empty()) {
+    if (addressWrote_.empty()) {
         return;
     }
-    // Writeback an empty invalid address file.
-    RawConfig config;
-    config.setValueByPath("IBUS_ADDRESS", "");
-    config.setValueByPath("IBUS_DAEMON_PID", "");
     for (const auto &path : socketPaths_) {
         auto address = getAddress(path);
         if (address.first == addressWrote_ && address.second == pidWrote_) {
-            standardPath_.safeSave(
+            // Writeback an empty invalid address file.
+            RawConfig config;
+            config.setValueByPath("IBUS_ADDRESS", "");
+            config.setValueByPath("IBUS_DAEMON_PID", "");
+            StandardPath::global().safeSave(
                 StandardPath::Type::Config, path,
                 [&config](int fd) { return writeAsIni(config, fd); });
         }
@@ -847,13 +803,13 @@ void IBusFrontendModule::replaceIBus(bool recheck) {
             return;
         }
     } else if (auto optionalAddress = readIBusInfo(socketPaths_)) {
+        auto address = *optionalAddress;
         auto pid = runIBusExit();
         if (pid > 0) {
             FCITX_IBUS_DEBUG() << "Running ibus exit.";
             timeEvent_ = instance()->eventLoop().addTimeEvent(
                 CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 1000000, 0,
-                [this, pid, address = std::move(*optionalAddress),
-                 recheck](EventSourceTime *, uint64_t) {
+                [this, pid, address, recheck](EventSourceTime *, uint64_t) {
                     int stat = -1;
                     pid_t ret;
                     while ((ret = waitpid(pid, &stat, WNOHANG)) <= 0) {
@@ -909,9 +865,10 @@ void IBusFrontendModule::becomeIBus(bool recheck) {
     auto address = bus()->address();
     if (isInFlatpak()) {
         if (address.find("/run/flatpak/bus") != std::string::npos) {
-            auto userBus = stringutils::joinPath(
-                standardPath_.userDirectory(StandardPath::Type::Runtime),
-                "bus");
+            auto userBus =
+                stringutils::joinPath(StandardPath::global().userDirectory(
+                                          StandardPath::Type::Runtime),
+                                      "bus");
 
             struct stat statbuf;
 
@@ -946,14 +903,14 @@ void IBusFrontendModule::becomeIBus(bool recheck) {
 
     FCITX_IBUS_DEBUG() << "Writing ibus daemon info.";
     for (const auto &path : socketPaths_) {
-        if (!standardPath_.safeSave(
+        if (!StandardPath::global().safeSave(
                 StandardPath::Type::Config, path,
                 [&config](int fd) { return writeAsIni(config, fd); })) {
             return;
         }
     }
 
-    addressWrote_ = std::move(address);
+    addressWrote_ = address;
     pidWrote_ = pidToWrite;
 
     if (!recheck) {

@@ -27,9 +27,9 @@ public:
 
     std::string toString() const;
 
-    bool isNumeric() const noexcept;
-    uint32_t numericId() const noexcept;
-    const std::string &id() const noexcept;
+    bool isNumeric() const;
+    uint32_t numericId() const;
+    const std::string &id() const;
 
     int compare(const PreReleaseId &other) const noexcept;
 

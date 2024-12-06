@@ -10,8 +10,9 @@
 #include <memory>
 #include <string>
 #include <unordered_set>
-#include <vector>
 #include <fcitx-utils/macros.h>
+#include <fcitx-utils/semver.h>
+#include <fcitx/addoninfo.h>
 #include <fcitx/addonloader.h>
 #include "fcitxcore_export.h"
 
@@ -55,7 +56,7 @@ public:
      * Register addon loader, including static and shared library loader.
      *
      * This function usually need to be called before any other function call to
-     * addon manager.
+     * adddon manager.
      *
      * @param registry static addon registry that can be used to set a list of
      * built-in addons.
@@ -119,26 +120,6 @@ public:
     AddonInstance *addon(const std::string &name, bool load = false);
 
     /**
-     * Get the currently loaded addon instance.
-     *
-     * This is same as AddonManager::addon(name, false), but allow to be used
-     * with a constant AddonManager.
-     *
-     * @param name of addon.
-     * @return instance of addon, null if not found.
-     * @since 5.1.6
-     */
-    AddonInstance *lookupAddon(const std::string &name) const;
-
-    /**
-     * Return the loaded addon name in the order of they were loaded.
-     *
-     * @return the name of loaded addons.
-     * @since 5.1.6
-     */
-    const std::vector<std::string> &loadedAddonNames() const;
-
-    /**
      * Get addon information for given addon.
      *
      * @param name name of addon.
@@ -185,26 +166,6 @@ public:
      * @since 5.0.6
      */
     bool checkUpdate() const;
-
-    /**
-     * Set addon parameters that may be used during addon construction.
-     *
-     * This is usually passed from command line flags --option or -o.
-     *
-     * @param options map from addon name to a set of string values
-     * @since 5.1.7
-     */
-    void setAddonOptions(
-        std::unordered_map<std::string, std::vector<std::string>> options);
-
-    /**
-     * Query addon options that set with setAddonOptions for given addon.
-     *
-     * @param name addon name
-     * @return Options for given addon
-     * @since 5.1.7
-     */
-    std::vector<std::string> addonOptions(const std::string &name);
 
 private:
     void setInstance(Instance *instance);

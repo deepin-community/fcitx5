@@ -26,7 +26,8 @@ set(FCITX_WAYLAND_CORE_SOURCES
 
 add_library(Fcitx5WaylandCore STATIC ${FCITX_WAYLAND_CORE_SOURCES})
 set_target_properties(Fcitx5WaylandCore PROPERTIES
-  POSITION_INDEPENDENT_CODE ON
+  COMPILE_FLAGS "-fPIC"
+  LINK_FLAGS "-Wl,--no-undefined"
   )
 target_include_directories(Fcitx5WaylandCore PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR};${CMAKE_CURRENT_SOURCE_DIR}/..;${CMAKE_CURRENT_BINARY_DIR}>")

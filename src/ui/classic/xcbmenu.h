@@ -7,6 +7,7 @@
 #ifndef _FCITX_UI_CLASSIC_XCBMENU_H_
 #define _FCITX_UI_CLASSIC_XCBMENU_H_
 
+#include <pango/pango.h>
 #include "fcitx/menu.h"
 #include "common.h"
 #include "xcbwindow.h"
@@ -31,13 +32,11 @@ struct MenuItem {
     int subMenuX_ = 0, subMenuY_ = 0;
 };
 
-enum class ConstrainAdjustment { Slide, Flip };
-
 class XCBMenu : public XCBWindow, public TrackableObject<XCBMenu> {
 public:
     XCBMenu(XCBUI *ui, MenuPool *pool, Menu *menu);
     ~XCBMenu();
-    void show(Rect rect, ConstrainAdjustment adjustY);
+    void show(Rect rect);
 
     // Hide menu itself.
     void hide();
@@ -50,8 +49,6 @@ public:
 
     // Hide all of its child.
     void hideChilds();
-
-    void hideAll();
 
     // Raise the menu.
     void raise();
@@ -68,15 +65,12 @@ public:
     bool childHasMouse() const;
 
 private:
-    void handleButtonPress(int eventX, int eventY);
-    void handleMotionNotify(int eventX, int eventY);
-    XCBMenu *childByPosition(int rootX, int rootY);
-
     void hideTillMenuHasMouseOrTopLevelHelper();
     InputContext *lastRelevantIc();
     void update();
     void setHoveredIndex(int idx);
     void setChild(XCBMenu *child);
+    void setFocus();
     void updateDPI(int x, int y);
     std::pair<MenuItem *, Action *> actionAt(size_t index);
 

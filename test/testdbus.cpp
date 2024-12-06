@@ -5,6 +5,7 @@
  *
  */
 
+#include <stdexcept>
 #include <thread>
 #include "fcitx-utils/dbus/bus.h"
 #include "fcitx-utils/dbus/variant.h"
@@ -16,10 +17,7 @@ using namespace fcitx;
 
 class TestObject : public ObjectVTable<TestObject> {
     void test1() {}
-    std::string test2(int32_t i) {
-        FCITX_INFO() << "test2 called";
-        return std::to_string(i);
-    }
+    std::string test2(int32_t i) { return std::to_string(i); }
     std::tuple<int32_t, uint32_t> test3(int32_t i) {
         std::vector<DBusStruct<std::string, int>> data;
         data.emplace_back(std::make_tuple(std::to_string(i), i));
@@ -28,14 +26,12 @@ class TestObject : public ObjectVTable<TestObject> {
         return std::make_tuple(i - 1, i + 1);
     }
     bool testError() {
-        FCITX_INFO() << "testError called";
         throw MethodCallError("org.freedesktop.DBus.Error.FileNotFound",
                               "File not found");
     }
     Variant test4(const Variant &v) {
         Variant result;
         auto *msg = currentMessage();
-        FCITX_INFO() << "test4 called";
         FCITX_INFO() << v;
         msg->rewind();
         auto type = msg->peekType();
@@ -99,20 +95,18 @@ void client() {
     std::unique_ptr<EventSourceTime> s(loop.addTimeEvent(
         CLOCK_MONOTONIC, now(CLOCK_MONOTONIC), 0,
         [&clientBus](EventSource *, uint64_t) {
-            FCITX_INFO() << "Client sends Introspect";
             auto msg = clientBus.createMethodCall(
                 TEST_SERVICE, "/test", "org.freedesktop.DBus.Introspectable",
                 "Introspect");
             auto reply = msg.call(0);
             std::string s;
             reply >> s;
-            FCITX_INFO() << "Introspect reply: " << s;
+            FCITX_INFO() << s;
             return false;
         }));
     std::unique_ptr<EventSourceTime> s2(loop.addTimeEvent(
         CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 100000, 0,
         [&clientBus](EventSource *, uint64_t) {
-            FCITX_INFO() << "Client sends test2";
             auto msg = clientBus.createMethodCall(TEST_SERVICE, "/test",
                                                   TEST_INTERFACE, "test2");
             msg << 2;
@@ -121,29 +115,25 @@ void client() {
             FCITX_ASSERT(reply.signature() == "s");
             std::string ret;
             reply >> ret;
-            FCITX_INFO() << "test2 reply: " << ret;
             FCITX_ASSERT(ret == "2");
             return false;
         }));
     std::unique_ptr<EventSourceTime> s3(loop.addTimeEvent(
         CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 200000, 0,
         [&clientBus](EventSource *, uint64_t) {
-            FCITX_INFO() << "Client sends testError";
             auto msg = clientBus.createMethodCall(TEST_SERVICE, "/test",
                                                   TEST_INTERFACE, "testError");
-            auto reply = msg.call(10000000);
+            auto reply = msg.call(0);
             FCITX_ASSERT(reply.type() == MessageType::Error);
             FCITX_ASSERT(reply.errorName() ==
-                         "org.freedesktop.DBus.Error.FileNotFound")
-                << reply.errorMessage();
-            FCITX_ASSERT(reply.errorMessage() == "File not found")
-                << reply.errorMessage();
+                         "org.freedesktop.DBus.Error.FileNotFound");
+            FCITX_ASSERT(reply.errorMessage() == "File not found");
             return false;
         }));
     std::unique_ptr<EventSourceTime> s4(loop.addTimeEvent(
         CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 300000, 0,
         [&clientBus](EventSource *, uint64_t) {
-            FCITX_INFO() << "Client sends test4";
+            FCITX_INFO() << "test4";
             auto msg = clientBus.createMethodCall(TEST_SERVICE, "/test",
                                                   TEST_INTERFACE, "test4");
             msg << Variant(123);
@@ -162,7 +152,6 @@ void client() {
         [&clientBus](EventSource *, uint64_t) {
             auto msg = clientBus.createMethodCall(TEST_SERVICE, "/test",
                                                   TEST_INTERFACE, "test5");
-            FCITX_INFO() << "Client sends test5";
             std::vector<DictEntry<std::string, std::string>> v;
             v.emplace_back("abc", "def");
             v.emplace_back("a", "defg");
@@ -195,7 +184,7 @@ void client() {
             return false;
         }));
     std::unique_ptr<EventSourceTime> s7(
-        loop.addTimeEvent(CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 600000, 0,
+        loop.addTimeEvent(CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 400000, 0,
                           [&clientBus](EventSource *, uint64_t) {
                               FCITX_INFO() << "testProperty";
                               auto msg = clientBus.createMethodCall(
@@ -221,7 +210,6 @@ int main() {
     }
     EventLoop loop;
     bus.attachEventLoop(&loop);
-    FCITX_ASSERT(&loop == bus.eventLoop());
     if (!bus.requestName(TEST_SERVICE, {RequestNameFlag::AllowReplacement,
                                         RequestNameFlag::ReplaceExisting})) {
         return 1;
@@ -229,7 +217,7 @@ int main() {
     TestObject obj;
     FCITX_ASSERT(bus.addObjectVTable("/test", TEST_INTERFACE, obj));
     std::unique_ptr<EventSourceTime> s(loop.addTimeEvent(
-        CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 2000000, 0,
+        CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 1000000, 0,
         [&bus, &loop](EventSource *, uint64_t) {
             auto msg = bus.createMethodCall(
                 "org.freedesktop.DBus", "/org/freedesktop/DBus",
@@ -240,33 +228,6 @@ int main() {
             loop.exit();
             return false;
         }));
-
-    {
-        MatchRule rule(TEST_SERVICE, "", TEST_INTERFACE, "testSignal");
-        FCITX_ASSERT(
-            rule.rule() ==
-            "type='signal',sender='org.fcitx.Fcitx.TestDBus',interface='org."
-            "fcitx.Fcitx.TestDBus.Interface',member='testSignal'")
-            << rule.rule();
-    }
-    {
-        MatchRule rule(MessageType::MethodCall, TEST_SERVICE, "",
-                       TEST_INTERFACE, "testSignal", "", {"abc"}, true);
-        FCITX_ASSERT(rule.rule() ==
-                     "type='method_call',sender='org.fcitx.Fcitx.TestDBus',"
-                     "path='org.fcitx.Fcitx.TestDBus.Interface',interface='"
-                     "testSignal',arg0='abc',eavesdrop='true'")
-            << rule.rule();
-    }
-    {
-        MatchRule rule(MessageType::Reply, TEST_SERVICE, "", TEST_INTERFACE,
-                       "testSignal", "Test", {"abc"}, true);
-        FCITX_ASSERT(rule.rule() ==
-                     "type='method_return',sender='org.fcitx.Fcitx.TestDBus',"
-                     "path='org.fcitx.Fcitx.TestDBus.Interface',interface='"
-                     "testSignal',member='Test',arg0='abc',eavesdrop='true'")
-            << rule.rule();
-    }
 
     std::thread thread(client);
 

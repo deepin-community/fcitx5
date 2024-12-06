@@ -7,7 +7,6 @@
 #ifndef _FCITX_UI_CLASSIC_WAYLANDINPUTWINDOW_H_
 #define _FCITX_UI_CLASSIC_WAYLANDINPUTWINDOW_H_
 
-#include <memory>
 #include "inputwindow.h"
 #include "org_kde_kwin_blur.h"
 #include "org_kde_kwin_blur_manager.h"
@@ -29,7 +28,6 @@ public:
     void update(InputContext *ic);
     void repaint();
     void setBlurManager(std::shared_ptr<wayland::OrgKdeKwinBlurManager> blur);
-    void updateScale();
 
 private:
     void updateBlur();

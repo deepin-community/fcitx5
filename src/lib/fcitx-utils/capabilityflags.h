@@ -49,25 +49,25 @@ enum class CapabilityFlag : uint64_t {
     // 25 ~ 31 are reserved for fcitx 4 compatibility.
 
     // New addition in fcitx 5.
-    Terminal = (1ULL << 32),
-    Date = (1ULL << 33),
-    Time = (1ULL << 34),
-    Multiline = (1ULL << 35),
-    Sensitive = (1ULL << 36),
-    KeyEventOrderFix = (1ULL << 37),
+    Terminal = (1ull << 32),
+    Date = (1ull << 33),
+    Time = (1ull << 34),
+    Multiline = (1ull << 35),
+    Sensitive = (1ull << 36),
+    KeyEventOrderFix = (1ull << 37),
     /**
      * Whether client will set KeyState::Repeat on the key event.
      *
      * @see KeyState::Repeat
      * @since 5.0.4
      */
-    ReportKeyRepeat = (1ULL << 38),
+    ReportKeyRepeat = (1ull << 38),
     /**
      * @brief Whether client display input panel by itself.
      *
      * @since 5.0.5
      */
-    ClientSideInputPanel = (1ULL << 39),
+    ClientSideInputPanel = (1ull << 39),
 
     /**
      * Whether client request input method to be disabled.
@@ -76,18 +76,12 @@ enum class CapabilityFlag : uint64_t {
      *
      * @since 5.0.20
      */
-    Disable = (1ULL << 40),
-
-    /**
-     * Whether client support commit string with cursor location.
-     * @since 5.1.2
-     */
-    CommitStringWithCursor = (1ULL << 41),
+    Disable = (1ull << 40),
 
     PasswordOrSensitive = Password | Sensitive,
 };
 
-using CapabilityFlags = Flags<CapabilityFlag>;
+typedef Flags<CapabilityFlag> CapabilityFlags;
 } // namespace fcitx
 
 #endif // _FCITX_UTILS_CAPABILITYFLAGS_H_

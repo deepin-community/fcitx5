@@ -16,7 +16,6 @@
 #include <fcitx/inputpanel.h>
 #include <fcitx/instance.h>
 #include <fcitx/statusarea.h>
-#include "fcitx/event.h"
 
 namespace fcitx {
 
@@ -114,17 +113,6 @@ public:
             }
             break;
         }
-        case EventType::InputContextCommitStringWithCursor: {
-            auto &event = static_cast<CommitStringWithCursorEvent &>(icEvent);
-            if (!postEvent(event)) {
-                if (auto v2 = dynamic_cast<InputContextV2 *>(q)) {
-                    v2->commitStringWithCursorImpl(event.text(),
-                                                   event.cursor());
-                } else {
-                    q->commitStringImpl(event.text());
-                }
-            }
-        }
         default:
             break;
         }
@@ -149,8 +137,6 @@ public:
     InputPanel inputPanel_;
     StatusArea statusArea_;
     bool hasFocus_ = false;
-    bool clientControlVirtualkeyboardShow_ = false;
-    bool clientControlVirtualkeyboardHide_ = false;
     std::string program_;
     CapabilityFlags capabilityFlags_;
     bool isPreeditEnabled_ = true;
@@ -166,7 +152,6 @@ public:
 
     std::list<std::unique_ptr<InputContextEvent>> blockedEvents_;
     bool blockEventToClient_ = false;
-    bool lastPreeditUpdateIsEmpty_ = true;
 };
 } // namespace fcitx
 

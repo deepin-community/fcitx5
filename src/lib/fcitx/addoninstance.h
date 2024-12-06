@@ -9,10 +9,12 @@
 
 #include <functional>
 #include <memory>
+#include <type_traits>
+#include <unordered_map>
 #include <fcitx-config/configuration.h>
+#include <fcitx-utils/library.h>
 #include <fcitx-utils/metastring.h>
-#include <fcitx/addoninfo.h>
-#include <fcitx/addoninstance_details.h> // IWYU pragma: export
+#include <fcitx/addoninstance_details.h>
 #include "fcitxcore_export.h"
 
 /// \addtogroup FcitxCore
@@ -21,8 +23,6 @@
 /// \brief Addon For fcitx.
 
 namespace fcitx {
-
-class AddonManagerPrivate;
 
 /// \brief Base class for any addon in fcitx.
 /// To implement addon in fcitx, you will need to create a sub class for this
@@ -69,8 +69,6 @@ class AddonManagerPrivate;
 /// addon->call<fcitx::IDummyAddon::addOne>(7);
 /// \endcode
 class FCITXCORE_EXPORT AddonInstance {
-    friend class AddonManagerPrivate;
-
 public:
     AddonInstance();
     virtual ~AddonInstance();
@@ -100,8 +98,7 @@ public:
         return erasureAdaptor->callback(std::forward<Args>(args)...);
     }
     template <typename MetaSignatureString, typename... Args>
-    AddonFunctionSignatureReturnType<MetaSignatureString>
-    callWithMetaString(Args &&...args) {
+    auto callWithMetaString(Args &&...args) {
         return callWithSignature<
             AddonFunctionSignatureType<MetaSignatureString>>(
             MetaSignatureString::data(), std::forward<Args>(args)...);
@@ -109,47 +106,13 @@ public:
 
     /// Call an exported function for this addon.
     template <typename MetaType, typename... Args>
-    AddonFunctionSignatureReturnType<typename MetaType::Name>
-    call(Args &&...args) {
+    auto call(Args &&...args) {
         return callWithSignature<typename MetaType::Signature>(
             MetaType::Name::data(), std::forward<Args>(args)...);
     }
 
     void registerCallback(const std::string &name,
                           AddonFunctionAdaptorBase *adaptor);
-
-    const AddonInfo *addonInfo() const;
-
-    /**
-     * Check if this addon can safely restart.
-     *
-     * When the existing fcitx 5 instance returns false, fcitx5 -r, or
-     * Instance::restart will just be no-op.
-     *
-     * @return whether it is safe for fcitx to restart on its own.
-     * @see AddonInstance::setCanRestart
-     * @since 5.1.6
-     */
-    bool canRestart() const;
-
-protected:
-    /**
-     * Set if this addon can safely restart.
-     *
-     * In certain cases, it is not a good idea to allow restart fcitx 5.
-     * Otherwise fcitx will lose permission. For example, when fcitx is
-     * launching with WAYLAND_SOCKET. In that case, user is recommended to use
-     * other way to restart fcitx.
-     *
-     * The value will be false be default, but it will default to true when
-     * running as fcitx5 binary. After initialize addon, addon may change it
-     * back to false, for example, wayland module.
-     *
-     * @param canRestart Whether fcitx is allowed to restart on its own.
-     * @see Instance::restart
-     * @since 5.1.6
-     */
-    void setCanRestart(bool canRestart);
 
 private:
     AddonFunctionAdaptorBase *findCall(const std::string &name);
@@ -178,10 +141,10 @@ private:
         &CLASS::FUNCTION)) FUNCTION##Adaptor{#CLASS "::" #FUNCTION, this,      \
                                              &CLASS::FUNCTION};                \
     static_assert(                                                             \
-        std::is_same_v<decltype(::fcitx::MakeAddonFunctionAdaptor(             \
-                           &CLASS::FUNCTION))::Signature,                      \
-                       ::fcitx::AddonFunctionSignatureType<                    \
-                           fcitxMakeMetaString(#CLASS "::" #FUNCTION)>>,       \
+        std::is_same<decltype(::fcitx::MakeAddonFunctionAdaptor(               \
+                         &CLASS::FUNCTION))::Signature,                        \
+                     ::fcitx::AddonFunctionSignatureType<fcitxMakeMetaString(  \
+                         #CLASS "::" #FUNCTION)>>::value,                      \
         "Signature doesn't match");
 
 #define FCITX_ADDON_FACTORY(ClassName)                                         \

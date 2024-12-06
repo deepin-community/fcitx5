@@ -5,7 +5,6 @@
  *
  */
 #include "inputmethodengine.h"
-#include <stdexcept>
 #include "inputcontext.h"
 #include "inputpanel.h"
 
@@ -27,22 +26,6 @@ std::string InputMethodEngine::subModeLabel(const InputMethodEntry &entry,
     return {};
 }
 
-void InputMethodEngine::virtualKeyboardEvent(
-    const InputMethodEntry &entry, VirtualKeyboardEvent &virtualKeyboardEvent) {
-    if (auto *this4 = dynamic_cast<InputMethodEngineV4 *>(this)) {
-        this4->virtualKeyboardEventImpl(entry, virtualKeyboardEvent);
-    } else if (auto virtualKeyEvent = virtualKeyboardEvent.toKeyEvent()) {
-        keyEvent(entry, *virtualKeyEvent);
-        // TODO: revisit the default action.
-        if (virtualKeyEvent->accepted()) {
-            virtualKeyboardEvent.accept();
-        } else if (!virtualKeyboardEvent.text().empty()) {
-            virtualKeyboardEvent.inputContext()->commitString(
-                virtualKeyboardEvent.text());
-        }
-    }
-}
-
 void defaultInvokeActionBehavior(InvokeActionEvent &event) {
     auto ic = event.inputContext();
     auto commit = ic->inputPanel().clientPreedit().toStringForCommit();
@@ -62,25 +45,10 @@ void InputMethodEngine::invokeAction(const InputMethodEntry &entry,
     defaultInvokeActionBehavior(event);
 }
 
-std::string InputMethodEngineV2::subModeIconImpl(const InputMethodEntry &,
-                                                 InputContext &) {
-    return {};
-}
-
-std::string InputMethodEngineV2::subModeLabelImpl(const InputMethodEntry &,
-                                                  InputContext &) {
-    return {};
-}
-
 void InputMethodEngineV3::invokeActionImpl(const InputMethodEntry &entry,
                                            InvokeActionEvent &event) {
     FCITX_UNUSED(entry);
     defaultInvokeActionBehavior(event);
-}
-
-void InputMethodEngineV4::virtualKeyboardEventImpl(const InputMethodEntry &,
-                                                   VirtualKeyboardEvent &) {
-    throw std::logic_error("Not implemented virtualKeyboardEventImpl");
 }
 
 } // namespace fcitx

@@ -1,0 +1,12 @@
+[Addon]
+Name=Status Notifier
+Comment=DBus based new Freedesktop.org tray icon
+Type=SharedLibrary
+Library=libnotificationitem
+Category=Module
+Version=5.0.21
+OnDemand=True
+
+[Addon/Dependencies]
+0=dbus
+

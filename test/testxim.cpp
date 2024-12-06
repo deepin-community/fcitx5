@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
  */
+#include <atomic>
 #include <condition_variable>
 #include <cstdarg>
 #include <future>
@@ -16,6 +17,7 @@
 #include "fcitx-utils/eventdispatcher.h"
 #include "fcitx-utils/testing.h"
 #include "fcitx/addonmanager.h"
+#include "fcitx/inputmethodmanager.h"
 #include "fcitx/instance.h"
 #include "testdir.h"
 
@@ -69,7 +71,7 @@ public:
             bool found = false;
             instance_->inputContextManager().foreach(
                 [&found](InputContext *ic) {
-                    if (ic->frontendName() == "xim") {
+                    if (ic->frontend() == std::string_view("xim")) {
                         ic->commitString(commitText);
                         found = true;
                     }

@@ -47,11 +47,11 @@ struct XkbOptionGroupInfo {
     bool exclusive;
 };
 
+struct XkbRulesParseState;
 class XkbRules {
 public:
     friend struct XkbRulesParseState;
-    bool read(const std::vector<std::string> &directories,
-              const std::string &name, const std::string &extraFile);
+    bool read(const std::string &fileName);
 #ifdef _TEST_XKBRULES
     void dump();
 #endif

@@ -5,6 +5,7 @@
  *
  */
 #include "dbusmenu.h"
+#include "fcitx-utils/log.h"
 #include "fcitx/action.h"
 #include "fcitx/inputcontext.h"
 #include "fcitx/inputmethodentry.h"
@@ -48,9 +49,6 @@ DBusMenu::~DBusMenu() = default;
 
 void DBusMenu::event(int32_t id, const std::string &type, const dbus::Variant &,
                      uint32_t) {
-    if (id == 0 && type == "opened") {
-        sendEventToTopLevel_ = true;
-    }
     // If top level menu is closed, reset the ic info.
     if (id == 0 && type == "closed") {
         lastRelevantIc_.unwatch();
@@ -190,11 +188,8 @@ void DBusMenu::fillLayoutItem(
             appendSubItem(subLayoutItems, BII_Separator2, depth, propertyNames);
         }
         appendSubItem(subLayoutItems, BII_Configure, depth, propertyNames);
-        if (parent_->instance()->canRestart()) {
-            appendSubItem(subLayoutItems, BII_Restart, depth, propertyNames);
-        }
-        if (parent_->instance()->canRestart() &&
-            getDesktopType() != DesktopType::DEEPIN) {
+        appendSubItem(subLayoutItems, BII_Restart, depth, propertyNames);
+        if (getDesktopType() != DesktopType::DEEPIN) {
             appendSubItem(subLayoutItems, BII_Exit, depth, propertyNames);
         }
     } else if (id == BII_InputMethodGroup) {
@@ -283,22 +278,19 @@ void DBusMenu::fillLayoutProperties(
                        dbus::Variant(entry->name()));
         if (!entry->icon().empty()) {
             appendProperty(properties, propertyNames, "icon-name",
-                           dbus::Variant(IconTheme::iconName(entry->icon())));
+                           dbus::Variant(iconName(entry->icon())));
         }
-        appendProperty(properties, propertyNames, "toggle-type",
-                       dbus::Variant("radio"));
 
-        auto *ic = lastRelevantIc();
-        if (!ic) {
-            ic = parent_->instance()->mostRecentInputContext();
+        if (auto *ic = lastRelevantIc()) {
+            appendProperty(properties, propertyNames, "toggle-type",
+                           dbus::Variant("radio"));
+            // We can use pointer comparision here.
+            appendProperty(
+                properties, propertyNames, "toggle-state",
+                dbus::Variant(parent_->instance()->inputMethodEntry(ic) == entry
+                                  ? 1
+                                  : 0));
         }
-        // We can use pointer comparision here.
-        appendProperty(
-            properties, propertyNames, "toggle-state",
-            dbus::Variant(
-                (ic && parent_->instance()->inputMethodEntry(ic) == entry)
-                    ? 1
-                    : 0));
     } else if (id >= BII_InputMethodGroupStart &&
                id <= BII_InputMethodGroupEnd) {
         size_t idx = id - BII_InputMethodGroupStart;
@@ -316,36 +308,28 @@ void DBusMenu::fillLayoutProperties(
                                                                        : 0));
     } else {
         id -= builtInIds;
-        auto *ic = lastRelevantIc();
-        if (!ic) {
-            return;
-        }
-        auto *action =
-            parent_->instance()->userInterfaceManager().lookupActionById(id);
-        if (!action) {
-            return;
-        }
-        if (action->isSeparator()) {
-            appendProperty(properties, propertyNames, "type",
-                           dbus::Variant("separator"));
-            return;
-        }
+        if (auto *ic = lastRelevantIc()) {
+            if (auto *action = parent_->instance()
+                                   ->userInterfaceManager()
+                                   .lookupActionById(id)) {
+                appendProperty(properties, propertyNames, "label",
+                               dbus::Variant(action->shortText(ic)));
+                appendProperty(properties, propertyNames, "icon-name",
+                               dbus::Variant(iconName(action->icon(ic))));
+                if (action->isCheckable()) {
+                    appendProperty(properties, propertyNames, "toggle-type",
+                                   dbus::Variant("radio"));
+                    bool checked = action->isChecked(ic);
 
-        appendProperty(properties, propertyNames, "label",
-                       dbus::Variant(action->shortText(ic)));
-        appendProperty(properties, propertyNames, "icon-name",
-                       dbus::Variant(IconTheme::iconName(action->icon(ic))));
-        if (action->isCheckable()) {
-            appendProperty(properties, propertyNames, "toggle-type",
-                           dbus::Variant("radio"));
-            bool checked = action->isChecked(ic);
-
-            appendProperty(properties, propertyNames, "toggle-state",
-                           dbus::Variant(checked ? 1 : 0));
-        }
-        if (action->menu()) {
-            appendProperty(properties, propertyNames, "children-display",
-                           dbus::Variant("submenu"));
+                    appendProperty(properties, propertyNames, "toggle-state",
+                                   dbus::Variant(checked ? 1 : 0));
+                }
+                if (action->menu()) {
+                    appendProperty(properties, propertyNames,
+                                   "children-display",
+                                   dbus::Variant("submenu"));
+                }
+            }
         }
     }
 }
@@ -392,24 +376,14 @@ bool DBusMenu::aboutToShow(int32_t id) {
     return requestedMenus_.count(id) == 0;
 }
 
-void DBusMenu::updateMenu(InputContext *icNeedUpdate) {
+void DBusMenu::updateMenu() {
     if (isRegistered()) {
         ++revision_;
-        if (!sendEventToTopLevel_) {
-            if (auto *ic = parent_->instance()->mostRecentInputContext()) {
-                lastRelevantIc_ = ic->watch();
-            }
+        if (auto *ic = parent_->instance()->mostRecentInputContext()) {
+            lastRelevantIc_ = ic->watch();
         }
-
-        if (!icNeedUpdate || icNeedUpdate == lastRelevantIc_.get()) {
-            layoutUpdated(revision_, 0);
-        }
+        layoutUpdated(revision_, 0);
     }
-}
-
-void DBusMenu::reset() {
-    releaseSlot();
-    sendEventToTopLevel_ = false;
 }
 
 } // namespace fcitx

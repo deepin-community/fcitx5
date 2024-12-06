@@ -1,4 +1,5 @@
 #include "zwp_input_panel_surface_v1.h"
+#include <cassert>
 #include "wl_output.h"
 namespace fcitx::wayland {
 ZwpInputPanelSurfaceV1::ZwpInputPanelSurfaceV1(zwp_input_panel_surface_v1 *data)

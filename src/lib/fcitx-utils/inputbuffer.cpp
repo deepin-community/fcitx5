@@ -5,8 +5,10 @@
  *
  */
 #include "inputbuffer.h"
+#include <exception>
+#include <functional>
+#include <numeric>
 #include <stdexcept>
-#include <string_view>
 #include <vector>
 #include "fcitx-utils/utf8.h"
 
@@ -71,27 +73,33 @@ const std::string &InputBuffer::userInput() const {
 
 bool InputBuffer::typeImpl(const char *s, size_t length) {
     FCITX_D();
-    std::string_view view(s, length);
-    auto utf8Length = fcitx::utf8::lengthValidated(view);
+    auto utf8Length = fcitx::utf8::lengthValidated(s, s + length);
     if (utf8Length == fcitx::utf8::INVALID_LENGTH) {
         throw std::invalid_argument("Invalid UTF-8 string");
     }
-    if (d->isAsciiOnly() && utf8Length != view.size()) {
+    if (d->isAsciiOnly() && utf8Length != length) {
         throw std::invalid_argument(
             "ascii only buffer only accept ascii only string");
     }
     if (d->maxSize_ && (utf8Length + size() > d->maxSize_)) {
         return false;
     }
-    d->input_.insert(std::next(d->input_.begin(), cursorByChar()), view.begin(),
-                     view.end());
+    d->input_.insert(std::next(d->input_.begin(), cursorByChar()), s,
+                     s + length);
     if (!d->isAsciiOnly()) {
+        const auto *iter = s;
+        auto func = [&iter]() {
+            const auto *next = fcitx::utf8::nextChar(iter);
+            auto diff = std::distance(iter, next);
+            iter = next;
+            return diff;
+        };
+
         auto pos = d->cursor_;
-        for (auto chrView : utf8::MakeUTF8StringViewRange(view)) {
-            d->sz_.insert(std::next(d->sz_.begin(), pos), chrView.size());
+        while (iter < s + length) {
+            d->sz_.insert(std::next(d->sz_.begin(), pos), func());
             pos++;
         }
-
         d->acc_.resize(d->sz_.size() + 1);
         auto newDirty = d->cursor_ > 0 ? d->cursor_ - 1 : 0;
         if (d->accDirty_ > newDirty) {
@@ -193,11 +201,6 @@ std::pair<size_t, size_t> InputBuffer::rangeAt(size_t i) const {
     return {d->acc_[i], d->acc_[i] + d->sz_[i]};
 }
 
-std::string_view InputBuffer::viewAt(size_t i) const {
-    auto [start, end] = rangeAt(i);
-    return std::string_view(userInput()).substr(start, end - start);
-}
-
 uint32_t InputBuffer::charAt(size_t i) const {
     FCITX_D();
     if (i >= size()) {
@@ -208,7 +211,7 @@ uint32_t InputBuffer::charAt(size_t i) const {
     }
     d->ensureAccTill(i);
     return utf8::getChar(d->input_.begin() + d->acc_[i],
-                         d->input_.begin() + d->acc_[i] + d->sz_[i]);
+                         d->input_.begin() + d->sz_[i]);
 }
 
 size_t InputBuffer::sizeAt(size_t i) const {

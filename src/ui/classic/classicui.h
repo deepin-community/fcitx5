@@ -7,21 +7,21 @@
 #ifndef _FCITX_UI_CLASSIC_CLASSICUI_H_
 #define _FCITX_UI_CLASSIC_CLASSICUI_H_
 
-#include <memory>
 #include "config.h"
 
 #include "fcitx-config/configuration.h"
 #include "fcitx-config/iniparser.h"
-#include "fcitx-config/option.h"
+#include "fcitx-utils/event.h"
 #include "fcitx-utils/i18n.h"
+#include "fcitx-utils/log.h"
 #include "fcitx/addonfactory.h"
 #include "fcitx/addoninstance.h"
 #include "fcitx/addonmanager.h"
+#include "fcitx/focusgroup.h"
 #include "fcitx/instance.h"
 #include "fcitx/userinterface.h"
 #include "classicui_public.h"
 #include "plasmathemewatchdog.h"
-#include "portalsettingmonitor.h"
 #include "theme.h"
 #ifdef ENABLE_X11
 #include "xcb_public.h"
@@ -29,21 +29,12 @@
 #ifdef WAYLAND_FOUND
 #include "wayland_public.h"
 #endif
-#ifdef ENABLE_DBUS
-#include "fcitx-utils/dbus/bus.h"
-#endif
 
 namespace fcitx {
 namespace classicui {
 
-inline constexpr std::string_view PlasmaThemeName = "plasma";
-
 class UIInterface {
 public:
-    UIInterface(std::string name) : name_(std::move(name)) {}
-
-    const std::string &name() const { return name_; }
-
     virtual ~UIInterface() {}
     virtual void update(UserInterfaceComponent component,
                         InputContext *inputContext) = 0;
@@ -52,9 +43,6 @@ public:
     virtual void suspend() = 0;
     virtual void resume() {}
     virtual void setEnableTray(bool) = 0;
-
-private:
-    const std::string name_;
 };
 
 struct NotEmpty {
@@ -76,7 +64,7 @@ struct ThemeAnnotation : public EnumAnnotation {
                                   themes_[i].first);
             config.setValueByPath("EnumI18n/" + std::to_string(i),
                                   themes_[i].second);
-            if (themes_[i].first != PlasmaThemeName || !plasmaTheme_) {
+            if (themes_[i].first != "plasma" || !plasmaTheme_) {
                 config.setValueByPath(
                     "SubConfigPath/" + std::to_string(i),
                     stringutils::concat("fcitx://config/addon/classicui/theme/",
@@ -109,6 +97,8 @@ FCITX_CONFIGURATION(
     ClassicUIConfig,
     Option<bool> verticalCandidateList{this, "Vertical Candidate List",
                                        _("Vertical Candidate List"), false};
+    Option<bool> perScreenDPI{this, "PerScreenDPI", _("Use Per Screen DPI"),
+                              true};
     Option<bool> useWheelForPaging{
         this, "WheelForPaging", _("Use mouse wheel to go to prev or next page"),
         true};
@@ -139,7 +129,7 @@ FCITX_CONFIGURATION(
     OptionWithAnnotation<bool, ToolTipAnnotation>
         useInputMethodLanguageToDisplayText{
             this,
-            "UseInputMethodLanguageToDisplayText",
+            "UseInputMethodLangaugeToDisplayText",
             _("Use input method language to display text"),
             true,
             {},
@@ -150,24 +140,6 @@ FCITX_CONFIGURATION(
     Option<std::string, NotEmpty, DefaultMarshaller<std::string>,
            ThemeAnnotation>
         theme{this, "Theme", _("Theme"), "default"};
-    Option<std::string, NotEmpty, DefaultMarshaller<std::string>,
-           ThemeAnnotation>
-        themeDark{this, "DarkTheme", _("Dark Theme"), "default-dark"};
-    Option<bool> useDarkTheme{this, "UseDarkTheme",
-                              _("Follow system light/dark color scheme"),
-                              false};
-    Option<bool> useAccentColor{
-        this, "UseAccentColor",
-        _("Follow system accent color if it is supported by theme and desktop"),
-        true};
-    OptionWithAnnotation<bool, ToolTipAnnotation> perScreenDPI{
-        this,
-        "PerScreenDPI",
-        _("Use Per Screen DPI on X11"),
-        false,
-        {},
-        {},
-        {_("This option will be always disabled on XWayland.")}};
     Option<int, IntConstrain, DefaultMarshaller<int>, ToolTipAnnotation>
         forceWaylandDPI{
             this,
@@ -179,16 +151,7 @@ FCITX_CONFIGURATION(
             {_("Normally Wayland uses 96 as font DPI in combinition with the "
                "screen scale factor. This option allows you to override the "
                "font DPI. If the value is 0, it means this option is "
-               "disabled.")}};
-
-    OptionWithAnnotation<bool, ToolTipAnnotation> fractionalScale{
-        this,
-        "EnableFractionalScale",
-        _("Enable fractional scale under Wayland"),
-        true,
-        {},
-        {},
-        {_("This option require support from wayland compositor.")}};);
+               "disabled.")}};);
 
 class ClassicUI final : public UserInterface {
 public:
@@ -198,7 +161,6 @@ public:
     FCITX_ADDON_DEPENDENCY_LOADER(xcb, instance_->addonManager());
     FCITX_ADDON_DEPENDENCY_LOADER(wayland, instance_->addonManager());
     FCITX_ADDON_DEPENDENCY_LOADER(waylandim, instance_->addonManager());
-    FCITX_ADDON_DEPENDENCY_LOADER(dbus, instance_->addonManager());
     Instance *instance() const { return instance_; }
     const Configuration *getConfig() const override;
     void setConfig(const RawConfig &config) override {
@@ -248,17 +210,8 @@ private:
         waylandClosedCallback_;
 #endif
 
-    std::unique_ptr<EventSource> deferedReloadTheme_;
-#ifdef ENABLE_DBUS
-    std::unique_ptr<PortalSettingMonitor> settingMonitor_;
-    std::unique_ptr<PortalSettingEntry> darkModeEntry_;
-    std::unique_ptr<PortalSettingEntry> accentColorEntry_;
-#endif
-
     std::vector<std::unique_ptr<HandlerTableEntry<EventHandler>>>
         eventHandlers_;
-    std::vector<std::unique_ptr<HandlerTableEntry<EventHandler>>>
-        persistentEventHandlers_;
     std::unique_ptr<HandlerTableEntryBase> sniHandler_;
 
     std::unordered_map<std::string, std::unique_ptr<UIInterface>> uis_;
@@ -268,8 +221,6 @@ private:
     Theme theme_;
     mutable Theme subconfigTheme_;
     bool suspended_ = true;
-    bool isDark_ = false;
-    std::optional<Color> accentColor_ = std::nullopt;
 
     std::unique_ptr<EventSource> deferedEnableTray_;
     std::unique_ptr<PlasmaThemeWatchdog> plasmaThemeWatchdog_;

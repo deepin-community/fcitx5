@@ -19,7 +19,7 @@ namespace fcitx {
 template <char... c>
 struct MetaString final {
 public:
-    using array_type = char const (&)[sizeof...(c) + 1];
+    typedef char const (&array_type)[sizeof...(c) + 1];
 
     static constexpr std::size_t size() { return size_; }
     static constexpr const char *data() { return str_; }
@@ -45,21 +45,21 @@ struct MetaStringCombine;
 
 template <char... c>
 struct MetaStringCombine<MetaString<c...>> {
-    using type = MetaString<c...>;
+    typedef MetaString<c...> type;
 };
 
 template <>
 struct MetaStringCombine<MetaString<'\0'>> {
-    using type = MetaString<>;
+    typedef MetaString<> type;
 };
 
 template <char... c, typename... Rem>
 struct MetaStringCombine<MetaString<c...>, MetaString<'\0'>, Rem...> {
-    using type = typename MetaStringCombine<MetaString<c...>>::type;
+    typedef typename MetaStringCombine<MetaString<c...>>::type type;
 };
 template <char... c, char c2, typename... Rem>
 struct MetaStringCombine<MetaString<c...>, MetaString<c2>, Rem...> {
-    using type = typename MetaStringCombine<MetaString<c..., c2>, Rem...>::type;
+    typedef typename MetaStringCombine<MetaString<c..., c2>, Rem...>::type type;
 };
 
 template <typename...>
@@ -67,18 +67,18 @@ struct ConcatMetaString;
 
 template <>
 struct ConcatMetaString<MetaString<>> {
-    using type = MetaString<>;
+    typedef MetaString<> type;
 };
 
 template <char... c>
 struct ConcatMetaString<MetaString<c...>> {
-    using type = MetaString<c...>;
+    typedef MetaString<c...> type;
 };
 
 template <char... c1s, char... c2s, typename... _Rem>
 struct ConcatMetaString<MetaString<c1s...>, MetaString<c2s...>, _Rem...> {
-    using type =
-        typename ConcatMetaString<MetaString<c1s..., c2s...>, _Rem...>::type;
+    typedef typename ConcatMetaString<MetaString<c1s..., c2s...>, _Rem...>::type
+        type;
 };
 
 template <typename... Args>
@@ -91,13 +91,13 @@ using RemoveMetaStringTailType = typename RemoveMetaStringTail<T>::type;
 
 template <char first, char... next>
 struct RemoveMetaStringTail<MetaString<first, next...>> {
-    using type =
-        ConcatMetaStringType<MetaString<first>,
-                             RemoveMetaStringTailType<MetaString<next...>>>;
+    typedef ConcatMetaStringType<MetaString<first>,
+                                 RemoveMetaStringTailType<MetaString<next...>>>
+        type;
 };
 template <char first>
 struct RemoveMetaStringTail<MetaString<first>> {
-    using type = MetaString<>;
+    typedef MetaString<> type;
 };
 
 template <typename... T>
@@ -109,27 +109,27 @@ using MetaStringBasenameHelperType =
 
 template <>
 struct MetaStringBasenameHelper<> {
-    using type = MetaString<>;
+    typedef MetaString<> type;
 };
 
 template <char... c>
 struct MetaStringBasenameHelper<MetaString<c...>> {
-    using type = MetaString<c...>;
+    typedef MetaString<c...> type;
 };
 
 template <char... c>
 struct MetaStringBasenameHelper<MetaString<'/', c...>> {
-    using type = MetaStringBasenameHelperType<MetaString<c...>>;
+    typedef MetaStringBasenameHelperType<MetaString<c...>> type;
 };
 
 template <char... c, char c2, typename... Rem>
 struct MetaStringBasenameHelper<MetaString<c...>, MetaString<c2>, Rem...> {
-    using type = MetaStringBasenameHelperType<MetaString<c..., c2>, Rem...>;
+    typedef MetaStringBasenameHelperType<MetaString<c..., c2>, Rem...> type;
 };
 
 template <char... c, typename... Rem>
 struct MetaStringBasenameHelper<MetaString<c...>, MetaString<'/'>, Rem...> {
-    using type = MetaStringBasenameHelperType<Rem...>;
+    typedef MetaStringBasenameHelperType<Rem...> type;
 };
 
 template <typename T>
@@ -145,7 +145,7 @@ using MetaStringBasenameType = typename MetaStringBasename<T>::type;
 
 template <char... c>
 struct MetaStringTrim {
-    using type = typename MetaStringCombine<MetaString<c>...>::type;
+    typedef typename MetaStringCombine<MetaString<c>...>::type type;
 };
 
 template <char... c>

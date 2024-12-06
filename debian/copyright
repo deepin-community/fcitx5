@@ -4,9 +4,7 @@ Upstream-Contact: Weng Xuetian <wengxt@gmail.com>
 Source: https://github.com/fcitx/fcitx5
 
 Files: *
-Copyright:
- 2015-2024, CSSlayer <wengxt@gmail.com>
- 2017-2017, Henry Hu <henry.hu.sh@gmail.com>
+Copyright: 2015-2022, CSSlayer <wengxt@gmail.com>
 License: LGPL-2.1-or-later
 
 Files: debian/*
@@ -20,24 +18,6 @@ License: LGPL-2-or-later
 Comment:
  Copy also available at
  https://download.fcitx-im.org/data/
-
-Files:
- src/lib/fcitx-wayland/plasma-window-management/*
-Copyright:
- 2013-2014 Pier Luigi Fiorini
-License: LGPL-2.1-or-later
-
-Files:
- src/lib/fcitx-wayland/wlr-foreign-toplevel-management-unstable-v1/*
-Copyright:
- 2018 Ilia Bozhinov
-License: Expat
-
-Files:
- src/ui/virtualkeyboard/*
-Copyright:
- 2022-2022 liulinsong <liulinsong@kylinos.cn>
-License: LGPL-2.1-or-later
 
 Files:
  src/modules/emoji/data/*
@@ -62,13 +42,6 @@ Files:
  src/lib/fcitx-utils/keydata.h
 Copyright: 1995-1997 Peter Mattis, Spencer Kimball and Josh MacDonald
 License: LGPL-2-or-later
-
-Files:
- src/lib/fcitx-wayland/cursor-shape/cursor-shape-v1.xml
-Copyright:
- 2018 The Chromium Authors
- 2023 Simon Ser
-License: Expat
 
 Files:
  src/modules/unicode/gen.py
@@ -204,25 +177,3 @@ License: Unicode
  not be used in advertising or otherwise to promote the sale, use or other
  dealings in these Data Files or Software without prior written authorization
  of the copyright holder.
-
-License: Expat
- Permission to use, copy, modify, distribute, and sell this
- software and its documentation for any purpose is hereby granted
- without fee, provided that the above copyright notice appear in
- all copies and that both that copyright notice and this permission
- notice appear in supporting documentation, and that the name of
- the copyright holders not be used in advertising or publicity
- pertaining to distribution of the software without specific,
- written prior permission.  The copyright holders make no
- representations about the suitability of this software for any
- purpose.  It is provided "as is" without express or implied
- warranty.
- .
- THE COPYRIGHT HOLDERS DISCLAIM ALL WARRANTIES WITH REGARD TO THIS
- SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
- FITNESS, IN NO EVENT SHALL THE COPYRIGHT HOLDERS BE LIABLE FOR ANY
- SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
- AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
- ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
- THIS SOFTWARE.

@@ -61,25 +61,19 @@ void TestFrontend::destroyInputContext(ICUUID uuid) {
     auto *ic = instance_->inputContextManager().findByUUID(uuid);
     delete ic;
 }
-
-bool TestFrontend::sendKeyEvent(ICUUID uuid, const Key &key, bool isRelease) {
+void TestFrontend::keyEvent(ICUUID uuid, const Key &key, bool isRelease) {
     auto *ic = instance_->inputContextManager().findByUUID(uuid);
     if (!ic) {
-        return false;
+        return;
     }
     if (!ic->hasFocus()) {
         ic->focusIn();
     }
     KeyEvent keyEvent(ic, key, isRelease);
-    auto result = ic->keyEvent(keyEvent);
+    ic->keyEvent(keyEvent);
     FCITX_INFO() << "KeyEvent key: " << key.toString()
                  << " isRelease: " << isRelease
                  << " accepted: " << keyEvent.accepted();
-    return result;
-}
-
-void TestFrontend::keyEvent(ICUUID uuid, const Key &key, bool isRelease) {
-    sendKeyEvent(uuid, key, isRelease);
 }
 
 void TestFrontend::commitString(const std::string &expect) {

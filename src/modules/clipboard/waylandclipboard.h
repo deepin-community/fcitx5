@@ -11,13 +11,15 @@
 #include <thread>
 #include <fcitx-utils/event.h>
 #include <fcitx-utils/eventdispatcher.h>
+#include <fcitx-utils/log.h>
+#include <fcitx-utils/misc_p.h>
 #include <fcitx-utils/signals.h>
-#include <fcitx-utils/trackableobject.h>
 #include <fcitx-utils/unixfd.h>
-#include "fcitx-utils/macros.h"
 #include "display.h"
+#include "wl_seat.h"
 #include "zwlr_data_control_device_v1.h"
 #include "zwlr_data_control_manager_v1.h"
+#include "zwlr_data_control_offer_v1.h"
 
 namespace fcitx {
 
@@ -26,24 +28,11 @@ namespace fcitx {
 // Upon receive DataOffer, DataReaderThread::addTask will be used to
 // initiate a reading task and call the callback if it suceeds.
 
-using DataOfferDataCallback =
-    std::function<void(const std::vector<char> &data)>;
-using DataOfferCallback =
-    std::function<void(const std::vector<char> &data, bool password)>;
+using DataOfferCallback = std::function<void(const std::vector<char> &)>;
 
 class DataOffer;
-
 struct DataOfferTask {
-    DataOfferTask() = default;
-    DataOfferTask(const DataOfferTask &) = delete;
-    DataOfferTask(DataOfferTask &&) = delete;
-
-    DataOfferTask &operator=(const DataOfferTask &) = delete;
-    DataOfferTask &operator=(DataOfferTask &&) = delete;
-
-    uint64_t id_ = 0;
-    TrackableObjectReference<DataOffer> offer_;
-    DataOfferDataCallback callback_;
+    DataOfferCallback callback_;
     std::shared_ptr<UnixFD> fd_;
     std::vector<char> data_;
     std::unique_ptr<EventSourceIO> ioEvent_;
@@ -52,13 +41,12 @@ struct DataOfferTask {
 
 class DataReaderThread {
 public:
-    DataReaderThread(EventDispatcher &dispatcherToMain)
-        : dispatcherToMain_(dispatcherToMain) {}
+    DataReaderThread(EventLoop *main) { dispatcherToMain_.attach(main); }
 
     ~DataReaderThread() {
         if (thread_ && thread_->joinable()) {
             dispatcherToWorker_.schedule([this]() {
-                if (auto *loop = dispatcherToWorker_.eventLoop()) {
+                if (auto loop = dispatcherToWorker_.eventLoop()) {
                     loop->exit();
                 }
             });
@@ -72,46 +60,32 @@ public:
 
     static void run(DataReaderThread *self) { self->realRun(); }
 
-    uint64_t addTask(DataOffer *offer, std::shared_ptr<UnixFD> fd,
-                     DataOfferDataCallback callback);
+    uint64_t addTask(std::shared_ptr<UnixFD> fd, DataOfferCallback callback);
     void removeTask(uint64_t token);
 
 private:
-    // Function that run on reader thread
     void realRun();
-    void addTaskOnWorker(uint64_t id, TrackableObjectReference<DataOffer> offer,
-                         std::shared_ptr<UnixFD> fd,
-                         DataOfferDataCallback callback);
-    void handleTaskIO(DataOfferTask *task, IOEventFlags flags);
-    void handleTaskTimeout(DataOfferTask *task);
-    // End of function that run on reader thread
 
-    EventDispatcher &dispatcherToMain_;
-    std::unique_ptr<std::thread> thread_;
-    uint64_t nextId_ = 1;
-
-    // Value only read/write by the reader thread.
+    EventDispatcher dispatcherToMain_;
     EventDispatcher dispatcherToWorker_;
-    std::unordered_map<uint64_t, DataOfferTask> tasks_;
+    std::unique_ptr<std::thread> thread_;
+    // Value only handled by the reader thread.
+    uint64_t nextId_ = 1;
+    std::unordered_map<uint64_t, std::unique_ptr<DataOfferTask>> *tasks_ =
+        nullptr;
 };
 
-class DataOffer : public TrackableObject<DataOffer> {
+class DataOffer {
 public:
-    DataOffer(wayland::ZwlrDataControlOfferV1 *offer, bool ignorePassword);
+    DataOffer(wayland::ZwlrDataControlOfferV1 *offer);
     ~DataOffer();
 
     void receiveData(DataReaderThread &thread, DataOfferCallback callback);
 
 private:
-    void receiveDataForMime(const std::string &mime,
-                            DataOfferDataCallback callback);
-    void receiveRealData(DataOfferDataCallback callback);
-
     std::list<ScopedConnection> conns_;
     std::unordered_set<std::string> mimeTypes_;
     std::unique_ptr<wayland::ZwlrDataControlOfferV1> offer_;
-    bool ignorePassword_ = true;
-    bool isPassword_ = false;
     UnixFD fd_;
     DataReaderThread *thread_ = nullptr;
     uint64_t taskId_ = 0;
@@ -137,13 +111,13 @@ private:
 class WaylandClipboard {
 
 public:
-    WaylandClipboard(Clipboard *clipboard, std::string name,
+    WaylandClipboard(Clipboard *parent, const std::string &name,
                      wl_display *display);
 
-    void setClipboard(const std::string &str, bool password);
-    void setPrimary(const std::string &str, bool password);
+    void setClipboard(const std::string &str);
+    void setPrimary(const std::string &str);
+    EventLoop *eventLoop();
     auto display() const { return display_; }
-    auto parent() const { return parent_; }
 
 private:
     void refreshSeat();

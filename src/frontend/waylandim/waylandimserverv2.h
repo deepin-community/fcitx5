@@ -8,10 +8,12 @@
 #define _FCITX5_FRONTEND_WAYLANDIM_WAYLANDIMSERVERV2_H_
 
 #include <cstdint>
-#include "fcitx-utils/event.h"
+#include <fcitx-utils/event.h>
+#include <fcitx/focusgroup.h>
+#include <fcitx/instance.h>
+#include <xkbcommon/xkbcommon.h>
 #include "fcitx-utils/misc_p.h"
-#include "virtualinputcontext.h"
-#include "waylandimserverbase.h"
+#include "display.h"
 #include "zwp_input_method_keyboard_grab_v2.h"
 #include "zwp_input_method_manager_v2.h"
 #include "zwp_input_method_v2.h"
@@ -22,19 +24,21 @@ namespace fcitx {
 class WaylandIMModule;
 class WaylandIMInputContextV2;
 
-class WaylandIMServerV2 : public WaylandIMServerBase {
+class WaylandIMServerV2 {
     friend class WaylandIMInputContextV2;
 
 public:
     WaylandIMServerV2(wl_display *display, FocusGroup *group,
                       const std::string &name, WaylandIMModule *waylandim);
 
-    ~WaylandIMServerV2() override;
+    ~WaylandIMServerV2();
 
     InputContextManager &inputContextManager();
 
     void init();
     void refreshSeat();
+    void activate(wayland::ZwpInputMethodV2 *id);
+    void deactivate(wayland::ZwpInputMethodV2 *id);
     void add(WaylandIMInputContextV2 *ic, wayland::WlSeat *seat);
     void remove(wayland::WlSeat *seat);
     Instance *instance();
@@ -42,16 +46,21 @@ public:
     auto *xkbState() { return state_.get(); }
     auto *inputMethodManagerV2() { return inputMethodManagerV2_.get(); }
 
-    bool hasKeyboardGrab() const;
-
 private:
+    FocusGroup *group_;
+    std::string name_;
     bool init_ = false;
+    WaylandIMModule *parent_;
     std::shared_ptr<wayland::ZwpInputMethodManagerV2> inputMethodManagerV2_;
     std::shared_ptr<wayland::ZwpVirtualKeyboardManagerV1>
         virtualKeyboardManagerV1_;
 
+    UniqueCPtr<struct xkb_context, xkb_context_unref> context_;
     std::vector<char> keymapData_;
+    UniqueCPtr<struct xkb_keymap, xkb_keymap_unref> keymap_;
+    UniqueCPtr<struct xkb_state, xkb_state_unref> state_;
 
+    wayland::Display *display_;
     ScopedConnection globalConn_;
 
     struct StateMask {
@@ -63,40 +72,40 @@ private:
         uint32_t mod3_mask = 0;
         uint32_t mod4_mask = 0;
         uint32_t mod5_mask = 0;
+        uint32_t super_mask = 0;
+        uint32_t hyper_mask = 0;
+        uint32_t meta_mask = 0;
     } stateMask_;
+
+    KeyStates modifiers_;
 
     std::unordered_map<wayland::WlSeat *, WaylandIMInputContextV2 *> icMap_;
 };
 
-class WaylandIMInputContextV2 : public VirtualInputContextGlue {
+class WaylandIMInputContextV2 : public InputContext {
 public:
     WaylandIMInputContextV2(InputContextManager &inputContextManager,
                             WaylandIMServerV2 *server,
                             std::shared_ptr<wayland::WlSeat> seat,
                             wayland::ZwpVirtualKeyboardV1 *vk);
-    ~WaylandIMInputContextV2() override;
+    ~WaylandIMInputContextV2();
 
     const char *frontend() const override { return "wayland_v2"; }
 
     auto inputMethodV2() { return ic_.get(); }
 
-    bool hasKeyboardGrab() const { return keyboardGrab_.get(); }
-
 protected:
-    void commitStringDelegate(const InputContext * /*ic*/,
-                              const std::string &text) const override {
-        if (!ic_) {
+    void commitStringImpl(const std::string &text) override {
+        if (!hasFocus()) {
             return;
         }
         ic_->commitString(text.c_str());
         ic_->commit(serial_);
     }
-    void deleteSurroundingTextDelegate(InputContext *ic, int offset,
-                                       unsigned int size) const override;
-    void forwardKeyDelegate(InputContext * /*ic*/,
-                            const ForwardKeyEvent &key) const override;
+    void deleteSurroundingTextImpl(int offset, unsigned int size) override;
+    void forwardKeyImpl(const ForwardKeyEvent &key) override;
 
-    void updatePreeditDelegate(InputContext *ic) const override;
+    void updatePreeditImpl() override;
 
 private:
     void repeat();
@@ -113,10 +122,7 @@ private:
                            uint32_t mods_latched, uint32_t mods_locked,
                            uint32_t group);
     void repeatInfoCallback(int32_t rate, int32_t delay);
-    void sendKeyToVK(uint32_t time, const Key &key, uint32_t state) const;
-
-    int32_t repeatRate() const;
-    int32_t repeatDelay() const;
+    void sendKeyToVK(uint32_t time, uint32_t key, uint32_t state);
 
     WaylandIMServerV2 *server_;
     std::shared_ptr<wayland::WlSeat> seat_;
@@ -124,7 +130,6 @@ private:
     std::unique_ptr<wayland::ZwpInputMethodKeyboardGrabV2> keyboardGrab_;
     std::unique_ptr<wayland::ZwpVirtualKeyboardV1> vk_;
     std::unique_ptr<EventSourceTime> timeEvent_;
-    std::unique_ptr<VirtualInputContextManager> virtualICManager_;
 
     bool pendingActivate_ = false;
     bool pendingDeactivate_ = false;
@@ -137,9 +142,9 @@ private:
     uint32_t repeatTime_ = 0;
     KeySym repeatSym_ = FcitxKey_None;
 
-    std::optional<std::tuple<int32_t, int32_t>> repeatInfo_;
+    int32_t repeatRate_ = 40, repeatDelay_ = 400;
 
-    mutable OrderedMap<uint32_t, uint32_t> pressedVKKey_;
+    OrderedMap<uint32_t, uint32_t> pressedVKKey_;
 };
 
 } // namespace fcitx

@@ -7,6 +7,8 @@
 #ifndef _FCITX_USERINTERFACE_H_
 #define _FCITX_USERINTERFACE_H_
 
+#include <memory>
+#include <fcitx-utils/macros.h>
 #include <fcitx/addoninstance.h>
 
 /// \addtogroup FcitxCore
@@ -44,17 +46,6 @@ public:
     virtual bool available() = 0;
     virtual void suspend() = 0;
     virtual void resume() = 0;
-};
-
-class FCITXCORE_EXPORT VirtualKeyboardUserInterface : public UserInterface {
-public:
-    ~VirtualKeyboardUserInterface() override;
-
-    virtual bool isVirtualKeyboardVisible() const = 0;
-
-    virtual void showVirtualKeyboard() = 0;
-
-    virtual void hideVirtualKeyboard() = 0;
 };
 }; // namespace fcitx
 

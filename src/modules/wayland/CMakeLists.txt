@@ -1,8 +1,8 @@
-add_library(wayland MODULE waylandmodule.cpp waylandeventreader.cpp)
-target_link_libraries(wayland Fcitx5::Core Wayland::Client Fcitx5::Wayland::Core PkgConfig::Gio Pthread::Pthread)
+add_library(wayland MODULE waylandmodule.cpp)
+target_link_libraries(wayland Fcitx5::Core Wayland::Client Fcitx5::Wayland::Core PkgConfig::Gio)
 
 if (ENABLE_DBUS)
-    target_link_libraries(wayland Fcitx5::Module::DBus Fcitx5::Module::Notifications)
+    target_link_libraries(wayland Fcitx5::Module::DBus)
 endif()
 if (ENABLE_X11)
     target_link_libraries(wayland Fcitx5::Module::XCB)

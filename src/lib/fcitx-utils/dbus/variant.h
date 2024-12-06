@@ -9,7 +9,8 @@
 
 #include <memory>
 #include <string>
-#include <fcitx-utils/dbus/message.h>
+#include "fcitxutils_export.h"
+#include "message.h"
 
 /// \addtogroup FcitxUtils
 /// \{
@@ -47,14 +48,6 @@ private:
     std::unique_ptr<VariantTypeRegistryPrivate> d_ptr;
     FCITX_DECLARE_PRIVATE(VariantTypeRegistry);
 };
-
-std::shared_ptr<VariantHelperBase>
-    FCITXUTILS_EXPORT lookupVariantType(const std::string &signature);
-
-template <typename TypeName>
-inline void registerVariantType() {
-    VariantTypeRegistry::defaultRegistry().registerType<TypeName>();
-}
 
 /// Variant type to be used to box or unbox the dbus variant type.
 class FCITXUTILS_EXPORT Variant {

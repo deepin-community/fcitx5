@@ -8,11 +8,8 @@
 #define _FCITX_ADDON_H_
 
 #include <memory>
-#include <string>
-#include <tuple>
 #include <vector>
 #include <fcitx-config/enum.h>
-#include <fcitx-config/rawconfig.h>
 #include <fcitx-utils/i18nstring.h>
 #include <fcitx-utils/macros.h>
 #include <fcitx-utils/semver.h>
@@ -25,8 +22,6 @@ class AddonInfoPrivate;
 FCITX_CONFIG_ENUM(AddonCategory, InputMethod, Frontend, Loader, Module, UI)
 
 enum class OverrideEnabled { NotSet, Enabled, Disabled };
-
-FCITX_CONFIG_ENUM(UIType, PhyscialKeyboard, OnScreenKeyboard);
 
 class FCITXCORE_EXPORT AddonInfo {
 public:
@@ -48,7 +43,6 @@ public:
     optionalDependenciesWithVersion() const;
     bool onDemand() const;
     int uiPriority() const;
-    UIType uiType() const;
     bool isEnabled() const;
     bool isDefaultEnabled() const;
     void setOverrideEnabled(OverrideEnabled overrideEnabled);

@@ -1,0 +1,12 @@
+[Addon]
+Name=KDE Input Method Panel
+Type=SharedLibrary
+Library=libkimpanel
+Category=UI
+Version=5.0.21
+UIPriority=50
+OnDemand=True
+
+[Addon/Dependencies]
+0=dbus
+1=core:5.0.21

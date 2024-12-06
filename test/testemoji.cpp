@@ -5,6 +5,7 @@
  *
  */
 #include <fcntl.h>
+#include <iostream>
 #include <fcitx-utils/log.h>
 #include <fcitx-utils/standardpath.h>
 #include <fcitx-utils/testing.h>

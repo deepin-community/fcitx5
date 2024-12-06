@@ -8,6 +8,7 @@
 #define _FCITX_UTILS_MISC_H_
 
 #include <unistd.h>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
@@ -15,7 +16,6 @@
 #include <utility>
 #include <vector>
 #include <fcitx-utils/macros.h>
-#include "fcitxutils_export.h"
 
 namespace fcitx {
 
@@ -48,11 +48,11 @@ inline const Parent *parentFromMember(const Member *member,
 template <typename Iter>
 class KeyIterator {
 public:
-    using iterator_category = typename Iter::iterator_category;
-    using value_type = typename Iter::value_type::first_type;
-    using difference_type = typename Iter::difference_type;
-    using reference = typename Iter::value_type::first_type &;
-    using pointer = typename Iter::value_type::first_type *;
+    typedef typename Iter::iterator_category iterator_category;
+    typedef typename Iter::value_type::first_type value_type;
+    typedef typename Iter::difference_type difference_type;
+    typedef typename Iter::value_type::first_type &reference;
+    typedef typename Iter::value_type::first_type *pointer;
 
     KeyIterator(Iter iter) : iter_(iter) {}
     FCITX_INLINE_DEFINE_DEFAULT_DTOR_AND_COPY(KeyIterator)
@@ -119,9 +119,8 @@ struct FunctionDeleter {
 };
 template <typename T, auto FreeFunction = std::free>
 using UniqueCPtr = std::unique_ptr<T, FunctionDeleter<FreeFunction>>;
-static_assert(
-    sizeof(char *) == sizeof(UniqueCPtr<char>),
-    "UniqueCPtr size is not same as raw pointer."); // ensure no overhead
+static_assert(sizeof(char *) == sizeof(UniqueCPtr<char>),
+              ""); // ensure no overhead
 
 using UniqueFilePtr = std::unique_ptr<FILE, FunctionDeleter<std::fclose>>;
 
@@ -132,42 +131,6 @@ inline auto makeUniqueCPtr(T *ptr) {
 
 FCITXUTILS_EXPORT ssize_t getline(UniqueCPtr<char> &lineptr, size_t *n,
                                   std::FILE *stream);
-
-/**
- * Util function to check whether fcitx is running in flatpak.
- *
- * If environment variable FCITX_OVERRIDE_FLATPAK is true, it will return true.
- * Otherwise it will simply check the existence of file /.flatpak-info .
- *
- * @since 5.0.24
- */
-FCITXUTILS_EXPORT bool isInFlatpak();
-
-/**
- * Util function that returns whether it is compile against android.
- *
- * @since 5.1.2
- */
-FCITXUTILS_EXPORT constexpr inline bool isAndroid() {
-#if defined(ANDROID) || defined(__ANDROID__)
-    return true;
-#else
-    return false;
-#endif
-}
-
-/**
- * Util function that returns whether it is compile against apple.
- *
- * @since 5.1.7
- */
-FCITXUTILS_EXPORT constexpr inline bool isApple() {
-#if defined(__APPLE__)
-    return true;
-#else
-    return false;
-#endif
-}
 
 } // namespace fcitx
 

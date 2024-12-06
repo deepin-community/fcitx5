@@ -7,11 +7,8 @@
 #include "config.h"
 
 #include <unistd.h>
-#include <memory>
 #include <stdexcept>
 #include <utility>
-#include "fcitx-utils/event.h"
-#include "fcitx-utils/misc_p.h"
 #include "../../charutils.h"
 #include "../../log.h"
 #include "../../stringutils.h"
@@ -22,118 +19,6 @@
 namespace fcitx::dbus {
 
 FCITX_DEFINE_LOG_CATEGORY(libdbus_logcategory, "libdbus");
-
-class BusWatches : public std::enable_shared_from_this<BusWatches> {
-    struct Private {};
-
-public:
-    BusWatches(BusPrivate &bus, Private) : bus_(bus.watch()) {}
-
-    void addWatch(DBusWatch *watch) {
-        watches_[watch] = std::make_shared<DBusWatch *>(watch);
-        refreshWatch();
-    }
-    bool removeWatch(DBusWatch *watch) {
-        watches_.erase(watch);
-        refreshWatch();
-        return watches_.empty();
-    }
-    void refreshWatch() {
-        if (watches_.empty() || !bus_.isValid()) {
-            ioEvent_.reset();
-            return;
-        }
-
-        int fd = dbus_watch_get_unix_fd(watches_.begin()->first);
-        IOEventFlags flags;
-        for (auto [watch, _] : watches_) {
-            if (!dbus_watch_get_enabled(watch)) {
-                continue;
-            }
-            int dflags = dbus_watch_get_flags(watch);
-            if (dflags & DBUS_WATCH_READABLE) {
-                flags |= IOEventFlag::In;
-            }
-            if (dflags & DBUS_WATCH_WRITABLE) {
-                flags |= IOEventFlag::Out;
-            }
-        }
-
-        FCITX_LIBDBUS_DEBUG()
-            << "IOWatch for dbus fd: " << fd << " flags: " << flags;
-        if (flags == 0) {
-            ioEvent_.reset();
-            return;
-        }
-
-        if (!ioEvent_) {
-            ioEvent_ = bus_.get()->loop_->addIOEvent(
-                fd, flags, [this](EventSourceIO *, int, IOEventFlags flags) {
-                    // Ensure this is valid.
-                    // At this point, callback is always valid, so no need to
-                    // keep "this".
-                    auto lock = shared_from_this();
-                    // Create a copy of watcher pointers, so we can safely
-                    // remove the watcher during the loop.
-                    std::vector<std::weak_ptr<DBusWatch *>> watchesView;
-                    for (auto [_, watchRef] : watches_) {
-                        watchesView.push_back(watchRef);
-                    }
-
-                    for (auto watchRef : watchesView) {
-                        auto watchStrongRef = watchRef.lock();
-                        if (!watchStrongRef) {
-                            continue;
-                        }
-                        auto watch = *watchStrongRef;
-                        if (!dbus_watch_get_enabled(watch)) {
-                            continue;
-                        }
-
-                        int dflags = 0;
-
-                        if ((dbus_watch_get_flags(watch) &
-                             DBUS_WATCH_READABLE) &&
-                            (flags & IOEventFlag::In)) {
-                            dflags |= DBUS_WATCH_READABLE;
-                        }
-                        if ((dbus_watch_get_flags(watch) &
-                             DBUS_WATCH_WRITABLE) &&
-                            (flags & IOEventFlag::Out)) {
-                            dflags |= DBUS_WATCH_WRITABLE;
-                        }
-                        if (flags & IOEventFlag::Err) {
-                            dflags |= DBUS_WATCH_ERROR;
-                        }
-                        if (flags & IOEventFlag::Hup) {
-                            dflags |= DBUS_WATCH_HANGUP;
-                        }
-                        if (!dflags) {
-                            continue;
-                        }
-                        dbus_watch_handle(watch, dflags);
-                        if (auto *bus = bus_.get()) {
-                            bus->dispatch();
-                        }
-                    }
-                    return true;
-                });
-        } else {
-            ioEvent_->setEvents(flags);
-        }
-    }
-
-    static std::shared_ptr<BusWatches> create(BusPrivate &bus) {
-        return std::make_shared<BusWatches>(bus, Private());
-    }
-
-private:
-    TrackableObjectReference<BusPrivate> bus_;
-    // We the value as shared ptr so we know when the watch is removed during
-    // the loop.
-    std::unordered_map<DBusWatch *, std::shared_ptr<DBusWatch *>> watches_;
-    std::unique_ptr<EventSourceIO> ioEvent_;
-};
 
 DBusHandlerResult DBusMessageCallback(DBusConnection *, DBusMessage *message,
                                       void *userdata) {
@@ -223,59 +108,6 @@ std::string DBusObjectVTableSlot::getXml() const {
     xml += objPriv_->getXml(obj_);
     xml += xmlInterfaceFooter;
     return xml;
-}
-
-BusPrivate::BusPrivate(Bus *bus)
-    : bus_(bus),
-      matchRuleSet_(
-          [this](const MatchRule &rule) {
-              if (!conn_) {
-                  return false;
-              }
-              ScopedDBusError error;
-              if (needWatchService(rule)) {
-                  nameCache()->addWatch(rule.service());
-              }
-              FCITX_LIBDBUS_DEBUG() << "Add dbus match: " << rule.rule();
-              dbus_bus_add_match(conn_.get(), rule.rule().c_str(),
-                                 &error.error());
-              bool isError = dbus_error_is_set(&error.error());
-              return !isError;
-          },
-          [this](const MatchRule &rule) {
-              if (!conn_) {
-                  return;
-              }
-              if (needWatchService(rule)) {
-                  nameCache()->removeWatch(rule.service());
-              }
-              FCITX_LIBDBUS_DEBUG() << "Remove dbus match: " << rule.rule();
-              dbus_bus_remove_match(conn_.get(), rule.rule().c_str(), nullptr);
-          }),
-      objectRegistration_(
-          [this](const std::string &path) {
-              if (!conn_) {
-                  return false;
-              }
-              DBusObjectPathVTable vtable;
-              memset(&vtable, 0, sizeof(vtable));
-
-              vtable.message_function = DBusObjectPathVTableMessageCallback;
-              return dbus_connection_register_object_path(
-                         conn_.get(), path.c_str(), &vtable, this) != 0;
-          },
-          [this](const std::string &path) {
-              if (!conn_) {
-                  return;
-              }
-
-              dbus_connection_unregister_object_path(conn_.get(), path.c_str());
-          }) {}
-
-BusPrivate::~BusPrivate() {
-    if (conn_) {
-        dbus_connection_flush(conn_.get());
-    }
 }
 
 DBusObjectVTableSlot *BusPrivate::findSlot(const std::string &path,
@@ -501,7 +333,7 @@ fail:
 
 Bus::~Bus() {
     FCITX_D();
-    if (d->loop_) {
+    if (d->attached_) {
         detachEventLoop();
     }
 }
@@ -536,37 +368,73 @@ Message Bus::createSignal(const char *path, const char *interface,
 
 void DBusToggleWatch(DBusWatch *watch, void *data) {
     auto *bus = static_cast<BusPrivate *>(data);
-    if (auto watchers =
-            findValue(bus->ioWatchers_, dbus_watch_get_unix_fd(watch))) {
-        watchers->get()->refreshWatch();
+    auto iter = bus->ioWatchers_.find(watch);
+    if (iter != bus->ioWatchers_.end()) {
+        iter->second->setEnabled(dbus_watch_get_enabled(watch));
+        iter->second->setFd(dbus_watch_get_unix_fd(watch));
+        int dflags = dbus_watch_get_flags(watch);
+        IOEventFlags flags;
+        if (dflags & DBUS_WATCH_READABLE) {
+            flags |= IOEventFlag::In;
+        }
+        if (dflags & DBUS_WATCH_WRITABLE) {
+            flags |= IOEventFlag::Out;
+        }
+        iter->second->setEvents(flags);
     }
 }
 
 dbus_bool_t DBusAddWatch(DBusWatch *watch, void *data) {
     auto *bus = static_cast<BusPrivate *>(data);
+    int dflags = dbus_watch_get_flags(watch);
     int fd = dbus_watch_get_unix_fd(watch);
-    FCITX_LIBDBUS_DEBUG() << "DBusAddWatch fd: " << fd
-                          << " flags: " << dbus_watch_get_flags(watch);
-    auto &watchers = bus->ioWatchers_[fd];
-    if (!watchers) {
-        watchers = BusWatches::create(*bus);
+    IOEventFlags flags;
+    if (dflags & DBUS_WATCH_READABLE) {
+        flags |= IOEventFlag::In;
     }
-    watchers->addWatch(watch);
+    if (dflags & DBUS_WATCH_WRITABLE) {
+        flags |= IOEventFlag::Out;
+    }
+    auto ref = bus->watch();
+    try {
+        bus->ioWatchers_.emplace(
+            watch, bus->loop_->addIOEvent(
+                       fd, flags,
+                       [ref, watch](EventSourceIO *, int, IOEventFlags flags) {
+                           if (!dbus_watch_get_enabled(watch)) {
+                               return true;
+                           }
+                           const auto &refPivot = ref;
+                           int dflags = 0;
+
+                           if (flags & IOEventFlag::In) {
+                               dflags |= DBUS_WATCH_READABLE;
+                           }
+                           if (flags & IOEventFlag::Out) {
+                               dflags |= DBUS_WATCH_WRITABLE;
+                           }
+                           if (flags & IOEventFlag::Err) {
+                               dflags |= DBUS_WATCH_ERROR;
+                           }
+                           if (flags & IOEventFlag::Hup) {
+                               dflags |= DBUS_WATCH_HANGUP;
+                           }
+                           dbus_watch_handle(watch, dflags);
+                           if (auto *bus = refPivot.get()) {
+                               bus->dispatch();
+                           }
+                           return true;
+                       }));
+    } catch (const EventLoopException &e) {
+        return false;
+    }
+    DBusToggleWatch(watch, data);
     return true;
 }
 
 void DBusRemoveWatch(DBusWatch *watch, void *data) {
-    FCITX_LIBDBUS_DEBUG() << "DBusRemoveWatch fd: "
-                          << dbus_watch_get_unix_fd(watch);
     auto *bus = static_cast<BusPrivate *>(data);
-    auto iter = bus->ioWatchers_.find(dbus_watch_get_unix_fd(watch));
-    if (iter == bus->ioWatchers_.end()) {
-        return;
-    }
-
-    if (iter->second.get()->removeWatch(watch)) {
-        bus->ioWatchers_.erase(iter);
-    }
+    bus->ioWatchers_.erase(watch);
 }
 
 dbus_bool_t DBusAddTimeout(DBusTimeout *timeout, void *data) {
@@ -583,7 +451,7 @@ dbus_bool_t DBusAddTimeout(DBusTimeout *timeout, void *data) {
             bus->loop_->addTimeEvent(
                 CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + interval * 1000ull, 0,
                 [timeout, ref](EventSourceTime *event, uint64_t) {
-                    const auto refPivot = ref;
+                    const auto &refPivot = ref;
                     if (dbus_timeout_get_enabled(timeout)) {
                         event->setNextInterval(
                             dbus_timeout_get_interval(timeout) * 1000ull);
@@ -621,7 +489,7 @@ void DBusDispatchStatusCallback(DBusConnection *, DBusDispatchStatus status,
 
 void Bus::attachEventLoop(EventLoop *loop) {
     FCITX_D();
-    if (d->loop_) {
+    if (d->attached_) {
         return;
     }
     d->loop_ = loop;
@@ -662,11 +530,7 @@ void Bus::detachEventLoop() {
                                                  nullptr, nullptr);
     d->deferEvent_.reset();
     d->loop_ = nullptr;
-}
-
-EventLoop *Bus::eventLoop() const {
-    FCITX_D();
-    return d->loop_;
+    d->attached_ = false;
 }
 
 std::unique_ptr<Slot> Bus::addMatch(const MatchRule &rule,
@@ -689,7 +553,6 @@ std::unique_ptr<Slot> Bus::addMatch(const MatchRule &rule,
 
 std::unique_ptr<Slot> Bus::addFilter(MessageCallback callback) {
     FCITX_D();
-
     auto slot = std::make_unique<DBusFilterSlot>();
     slot->handler_ = d->filterHandlers_.add(std::move(callback));
 

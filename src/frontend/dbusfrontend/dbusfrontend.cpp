@@ -27,12 +27,7 @@ namespace fcitx {
 
 namespace {
 
-enum {
-    BATCHED_COMMIT_STRING = 0,
-    BATCHED_PREEDIT,
-    BATCHED_FORWARD_KEY,
-    BATCHED_DELETE_SURROUNDING
-};
+enum { BATCHED_COMMIT_STRING = 0, BATCHED_PREEDIT, BATCHED_FORWARD_KEY };
 
 using DBusBlockedEvent = dbus::DBusStruct<uint32_t, dbus::Variant>;
 
@@ -60,15 +55,6 @@ buildFormattedTextVector(const Text &text) {
             text.stringAt(i), static_cast<int>(text.formatAt(i))));
     }
     return vector;
-}
-
-std::string
-getArgument(const std::unordered_map<std::string, std::string> &args,
-            const std::string &name, const std::string &defaultValue = "") {
-    if (auto *value = findValue(args, name)) {
-        return *value;
-    }
-    return defaultValue;
 }
 
 } // namespace
@@ -105,9 +91,8 @@ class DBusInputContext1 : public InputContext,
                           public dbus::ObjectVTable<DBusInputContext1> {
 public:
     DBusInputContext1(int id, InputContextManager &icManager, InputMethod1 *im,
-                      const std::string &sender,
-                      const std::unordered_map<std::string, std::string> &args)
-        : InputContext(icManager, getArgument(args, "program")),
+                      const std::string &sender, const std::string &program)
+        : InputContext(icManager, program),
           path_("/org/freedesktop/portal/inputcontext/" + std::to_string(id)),
           im_(im), handler_(im_->serviceWatcher().watchService(
                        sender,
@@ -126,26 +111,7 @@ public:
                 }
                 return method(std::move(message));
             });
-
-        setClientControlVirtualkeyboardShow(
-            getArgument(args, "clientControlVirtualkeyboardShow", "false") ==
-            "true");
-        setClientControlVirtualkeyboardHide(
-            getArgument(args, "clientControlVirtualkeyboardHide", "false") ==
-            "true");
         created();
-
-        setFocusGroup(
-            im->instance()->defaultFocusGroup(getArgument(args, "display")));
-
-        vkVisibilityChanged_ = im_->instance()->watchEvent(
-            EventType::VirtualKeyboardVisibilityChanged,
-            EventWatcherPhase::PreInputMethod, [this](Event &) {
-                virtualKeyboardVisibilityChangedTo(
-                    name_, im_->instance()
-                               ->userInterfaceManager()
-                               .isVirtualKeyboardVisible());
-            });
     }
 
     ~DBusInputContext1() { InputContext::destroy(); }
@@ -184,20 +150,15 @@ public:
     }
 
     void deleteSurroundingTextImpl(int offset, unsigned int size) override {
-        if (blocked_) {
-            blockedEvents_.emplace_back(
-                BATCHED_DELETE_SURROUNDING,
-                dbus::DBusStruct<int32_t, uint32_t>(offset, size));
-        } else {
-            deleteSurroundingTextDBusTo(name_, offset, size);
-        }
+        deleteSurroundingTextDBusTo(name_, offset, size);
     }
 
     void updateClientSideUIImpl() override {
-        auto instance = im_->instance();
-        auto preedit = instance->outputFilter(this, inputPanel().preedit());
-        auto auxUp = instance->outputFilter(this, inputPanel().auxUp());
-        auto auxDown = instance->outputFilter(this, inputPanel().auxDown());
+        auto preedit =
+            im_->instance()->outputFilter(this, inputPanel().preedit());
+        auto auxUp = im_->instance()->outputFilter(this, inputPanel().auxUp());
+        auto auxDown =
+            im_->instance()->outputFilter(this, inputPanel().auxDown());
         auto candidateList = inputPanel().candidateList();
         int cursorIndex = 0;
 
@@ -219,9 +180,9 @@ public:
                 Text labelText = candidate.hasCustomLabel()
                                      ? candidate.customLabel()
                                      : candidateList->label(i);
-                labelText = instance->outputFilter(this, labelText);
+                labelText = im_->instance()->outputFilter(this, labelText);
                 Text candidateText =
-                    instance->outputFilter(this, candidate.textWithComment());
+                    im_->instance()->outputFilter(this, candidate.text());
                 candidates.emplace_back(std::make_tuple(
                     labelText.toString(), candidateText.toString()));
             }
@@ -397,28 +358,6 @@ public:
         invokeAction(event);
     }
 
-    bool isVirtualKeyboardVisibleDBus() const {
-        CHECK_SENDER_OR_RETURN false;
-
-        return isVirtualKeyboardVisible();
-    }
-
-    void showVirtualKeyboardDBus() {
-        CHECK_SENDER_OR_RETURN;
-
-        if (!hasFocus()) {
-            focusIn();
-        }
-
-        showVirtualKeyboard();
-    }
-
-    void hideVirtualKeyboardDBus() const {
-        CHECK_SENDER_OR_RETURN;
-
-        hideVirtualKeyboard();
-    }
-
     void setBlocked() {
         assert(!blocked_);
         blocked_ = true;
@@ -429,8 +368,6 @@ public:
         event = std::move(blockedEvents_);
         blockedEvents_.clear();
     }
-
-    void sendFocusOut() { notifyFocusOutTo(name_); }
 
 private:
     FCITX_OBJECT_VTABLE_METHOD(focusInDBus, "FocusIn", "", "");
@@ -457,13 +394,6 @@ private:
     FCITX_OBJECT_VTABLE_METHOD(selectCandidate, "SelectCandidate", "i", "");
     FCITX_OBJECT_VTABLE_METHOD(invokeActionDBus, "InvokeAction", "ui", "");
 
-    FCITX_OBJECT_VTABLE_METHOD(isVirtualKeyboardVisibleDBus,
-                               "IsVirtualKeyboardVisible", "", "b");
-    FCITX_OBJECT_VTABLE_METHOD(showVirtualKeyboardDBus, "ShowVirtualKeyboard",
-                               "", "");
-    FCITX_OBJECT_VTABLE_METHOD(hideVirtualKeyboardDBus, "HideVirtualKeyboard",
-                               "", "");
-
     FCITX_OBJECT_VTABLE_SIGNAL(commitStringDBus, "CommitString", "s");
     FCITX_OBJECT_VTABLE_SIGNAL(currentIM, "CurrentIM", "sss");
     FCITX_OBJECT_VTABLE_SIGNAL(updateFormattedPreedit, "UpdateFormattedPreedit",
@@ -481,10 +411,6 @@ private:
     FCITX_OBJECT_VTABLE_SIGNAL(updateClientSideUI, "UpdateClientSideUI",
                                "a(si)ia(si)a(si)a(ss)iibb");
     FCITX_OBJECT_VTABLE_SIGNAL(forwardKeyDBus, "ForwardKey", "uub");
-    FCITX_OBJECT_VTABLE_SIGNAL(notifyFocusOut, "NotifyFocusOut", "");
-
-    FCITX_OBJECT_VTABLE_SIGNAL(virtualKeyboardVisibilityChanged,
-                               "VirtualKeyboardVisibilityChanged", "b");
 
     dbus::ObjectPath path_;
     InputMethod1 *im_;
@@ -494,7 +420,6 @@ private:
     std::optional<uint64_t> supportedCapability_;
     bool blocked_ = false;
     std::vector<DBusBlockedEvent> blockedEvents_;
-    std::unique_ptr<HandlerTableEntry<EventHandler>> vkVisibilityChanged_;
 };
 
 std::tuple<dbus::ObjectPath, std::vector<uint8_t>>
@@ -505,11 +430,19 @@ InputMethod1::createInputContext(
         const auto &[key, value] = p.data();
         strMap[key] = value;
     }
+    std::string program;
+    auto iter = strMap.find("program");
+    if (iter != strMap.end()) {
+        program = iter->second;
+    }
+
+    std::string *display = findValue(strMap, "display");
 
     auto sender = currentMessage()->sender();
     auto *ic = new DBusInputContext1(module_->nextIcIdx(),
                                      instance_->inputContextManager(), this,
-                                     sender, strMap);
+                                     sender, program);
+    ic->setFocusGroup(instance_->defaultFocusGroup(display ? *display : ""));
 
     bus_->addObjectVTable(ic->path().path(), FCITX_INPUTCONTEXT_DBUS_INTERFACE,
                           *ic);
@@ -564,7 +497,7 @@ DBusFrontendModule::DBusFrontendModule(Instance *instance)
         [this](Event &event) {
             auto &activated = static_cast<InputMethodActivatedEvent &>(event);
             auto *ic = activated.inputContext();
-            if (ic->frontendName() == "dbus") {
+            if (strcmp(ic->frontend(), "dbus") == 0) {
                 if (const auto *entry = instance_->inputMethodManager().entry(
                         activated.name())) {
                     static_cast<DBusInputContext1 *>(ic)->updateIM(entry);
@@ -574,23 +507,11 @@ DBusFrontendModule::DBusFrontendModule(Instance *instance)
     events_.emplace_back(instance_->watchEvent(
         EventType::UIChanged, EventWatcherPhase::Default, [this](Event &) {
             instance_->inputContextManager().foreach([](InputContext *ic) {
-                if (ic->frontendName() == "dbus") {
+                if (strcmp(ic->frontend(), "dbus") == 0) {
                     static_cast<DBusInputContext1 *>(ic)->updateCapability();
                 }
                 return true;
             });
-        }));
-    events_.emplace_back(instance_->watchEvent(
-        EventType::InputContextFocusOut, EventWatcherPhase::PreInputMethod,
-        [](Event &event) {
-            // Right now we do this regardless of it's coming from client or
-            // server. We may want to save some dbus message if we can
-            // distinguish between two different type of focus out event.
-            auto &focusOut = static_cast<FocusOutEvent &>(event);
-            InputContext *ic = focusOut.inputContext();
-            if (ic->frontendName() == "dbus") {
-                static_cast<DBusInputContext1 *>(ic)->sendFocusOut();
-            }
         }));
 }
 

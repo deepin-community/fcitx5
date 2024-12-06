@@ -1,5 +1,6 @@
 #ifndef ORG_KDE_KWIN_BLUR
 #define ORG_KDE_KWIN_BLUR
+#include <memory>
 #include <wayland-client.h>
 #include "fcitx-utils/signals.h"
 #include "wayland-blur-client-protocol.h"

@@ -1,5 +1,6 @@
 #ifndef WL_COMPOSITOR
 #define WL_COMPOSITOR
+#include <memory>
 #include <wayland-client.h>
 #include "fcitx-utils/signals.h"
 namespace fcitx::wayland {

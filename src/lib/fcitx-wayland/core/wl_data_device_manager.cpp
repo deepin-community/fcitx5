@@ -1,4 +1,5 @@
 #include "wl_data_device_manager.h"
+#include <cassert>
 #include "wl_data_device.h"
 #include "wl_data_source.h"
 #include "wl_seat.h"
