@@ -1,1 +1,6 @@
 0001-fix-kde-config-fcitx5-package-name-in-fcitx5-configt.patch
+0005-configtool-opens-dde-control-center-when-using-DDE.patch
+0006-Revert-disable-ctrl-shift-enumerate-key-by-default.patch
+0007-Add-Sogou-to-the-default-zh_CN-input-method-list.patch
+0008-fix-remove-the-restart-icon.patch
+0009-configtool-opens-dde-control-center-when-using-deepin25.patch
