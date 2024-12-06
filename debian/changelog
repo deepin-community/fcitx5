@@ -1,27 +1,24 @@
-fcitx5 (5.1.10-1deepin7) unstable; urgency=medium
+fcitx5 (5.1.11-2) unstable; urgency=medium
 
-  * Processing Deepin25 Jump Control Center
+  [ Pino Toscano ]
+  * Make fcitx5 build and hopefully install also on non-Linux architectures:
+    - add the dh-exec build dependency to add architecture filtering in install
+      files
+    - install the Wayland-related files only on Linux
+    - limit the fcitx5-module-wayland provides in fcitx5-modules as linux-any,
+      as Wayland modules are available only on Linux
 
- -- caixiangrong <caixiangrong@uniontech.com>  Thu, 05 Dec 2024 16:35:43 +0800
+  [ Boyuan Yang ]
+  * debian/control: Bump Standards-Version to 4.7.0.
+  * debian/control: Move main package description to source package section.
 
-fcitx5 (5.1.10-1deepin6) unstable; urgency=medium
+ -- Boyuan Yang <byang@debian.org>  Sat, 12 Oct 2024 11:04:06 -0400
 
-  * add enable autostart
+fcitx5 (5.1.11-1) unstable; urgency=medium
 
- -- Chengqi E <echengqi@uniontech.com>  Fri, 22 Nov 2024 16:25:33 +0800
+  * New upstream release.
 
-fcitx5 (5.1.10-1deepin5) unstable; urgency=medium
-
-  * remove the restart icon from the right-click menu
-
- -- xionglinlin <xionglinlin@uniontech.com>  Wed, 16 Oct 2024 16:25:33 +0800
-
-fcitx5 (5.1.10-1deepin4) unstable; urgency=medium
-
-  * Use gcc 12.
-  * Set Sogo to the default zh_CN input method list.
-
- -- xiangzelong <xiangzelong@deepin.org>  Thu, 15 Aug 2024 15:19:29 +0800
+ -- Boyuan Yang <byang@debian.org>  Tue, 08 Oct 2024 18:29:55 -0400
 
 fcitx5 (5.1.10-1) unstable; urgency=medium
 
