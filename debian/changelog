@@ -1,3 +1,9 @@
+fcitx5 (5.1.11-2deepin2) unstable; urgency=medium
+
+  * Disable the default shortcut key for altTriggerKeys
+
+ -- Wang Yu <wangyu@uniontech.com>  Wed, 11 Dec 2024 11:03:51 +0800
+
 fcitx5 (5.1.11-2deepin1) unstable; urgency=medium
 
   * New upstream release.
