@@ -10,14 +10,14 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <fcitx-utils/utf8.h>
-#include <fcitx/inputmethodentry.h>
 #include "fcitx-utils/fs.h"
 #include "fcitx-utils/macros.h"
 #include "fcitx-utils/misc.h"
 #include "fcitx-utils/standardpath.h"
 #include "fcitx-utils/stringutils.h"
+#include "fcitx-utils/utf8.h"
 #include "fcitx/inputcontext.h"
+#include "fcitx/inputmethodentry.h"
 #include "quickphrase.h"
 #include "quickphrase_public.h"
 #include "spell_public.h"
@@ -120,6 +120,12 @@ bool SpellQuickPhraseProvider::populate(
             return true;
         }
     }
+
+    // Do not give spell hint if input contains url like character.
+    if (userInput.find_first_of(".@/+%") != std::string::npos) {
+        return true;
+    }
+
     const auto result = spell->call<ISpell::hint>(
         lang, userInput, instance_->globalConfig().defaultPageSize());
     for (const auto &word : result) {

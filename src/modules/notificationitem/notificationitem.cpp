@@ -13,6 +13,7 @@
 #include "fcitx-utils/endian_p.h"
 #include "fcitx-utils/i18n.h"
 #include "fcitx/addonfactory.h"
+#include "fcitx/addoninstance.h"
 #include "fcitx/addonmanager.h"
 #include "fcitx/misc_p.h"
 #include "classicui_public.h"
@@ -27,6 +28,7 @@
 
 FCITX_DEFINE_LOG_CATEGORY(notificationitem, "notificationitem");
 #define SNI_DEBUG() FCITX_LOGC(::notificationitem, Debug)
+#define SNI_ERROR() FCITX_LOGC(::notificationitem, Error)
 
 namespace fcitx {
 
@@ -53,20 +55,24 @@ public:
     }
     void activate(int, int) { parent_->instance()->toggle(); }
     void secondaryActivate(int, int) {}
-    std::string iconName() {
-        static bool preferSymbolic = !isKDE();
-        std::string icon;
-        if (preferSymbolic) {
-            icon = "input-keyboard-symbolic";
+    std::string keyboardIconName() const {
+        if (isKDE()) {
+            return "input-keyboard";
         } else {
-            icon = "input-keyboard";
+            return "input-keyboard-symbolic";
         }
+    }
+    std::string iconName() {
+        std::string icon;
+
         if (auto *ic = parent_->menu()->lastRelevantIc()) {
             icon = parent_->instance()->inputMethodIcon(ic);
         }
-        if (icon == "input-keyboard" && preferSymbolic) {
-            return "input-keyboard-symbolic";
+
+        if (icon.empty() || icon == "input-keyboard") {
+            icon = keyboardIconName();
         }
+
         return IconTheme::iconName(icon);
     }
 
@@ -363,7 +369,8 @@ void NotificationItem::maybeScheduleRegister() {
 }
 
 void NotificationItem::enable() {
-    if (enabled_) {
+    enabled_ += 1;
+    if (enabled_ > 1) {
         return;
     }
 
@@ -373,13 +380,20 @@ void NotificationItem::enable() {
 }
 
 void NotificationItem::disable() {
-    if (!enabled_) {
-        return;
-    }
+    instance_->eventDispatcher().scheduleWithContext(
+        lifeTimeTracker_.watch(), [this]() {
+            if (enabled_ == 0) {
+                SNI_ERROR()
+                    << "NotificationItem::disable called without enable.";
+                return;
+            }
 
-    SNI_DEBUG() << "Disable SNI";
-    enabled_ = false;
-    setRegistered(false);
+            SNI_DEBUG() << "Disable SNI";
+            enabled_ -= 1;
+            if (enabled_ == 0) {
+                setRegistered(false);
+            }
+        });
 }
 
 void NotificationItem::cleanUp() {
@@ -414,4 +428,4 @@ class NotificationItemFactory : public AddonFactory {
 
 } // namespace fcitx
 
-FCITX_ADDON_FACTORY(fcitx::NotificationItemFactory)
+FCITX_ADDON_FACTORY_V2(notificationitem, fcitx::NotificationItemFactory)

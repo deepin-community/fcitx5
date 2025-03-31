@@ -5,9 +5,16 @@
  *
  */
 #include "stringutils.h"
+#include <cassert>
 #include <climits>
 #include <cstring>
+#include <initializer_list>
+#include <optional>
 #include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+#include <fcitx-utils/fcitxutils_export.h>
 #include "charutils.h"
 #include "macros.h"
 
@@ -407,4 +414,13 @@ std::string escapeForValue(std::string_view str) {
 
     return value;
 }
+
+bool consumePrefix(std::string_view &str, std::string_view prefix) {
+    if (stringutils::startsWith(str, prefix)) {
+        str = str.substr(prefix.size());
+        return true;
+    }
+    return false;
+}
+
 } // namespace fcitx::stringutils

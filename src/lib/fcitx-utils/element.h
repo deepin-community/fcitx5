@@ -7,8 +7,11 @@
 #ifndef _FCITX_UTILS_ELEMENT_H_
 #define _FCITX_UTILS_ELEMENT_H_
 
+#include <list>
+#include <memory>
 #include <fcitx-utils/connectableobject.h>
-#include "fcitxutils_export.h"
+#include <fcitx-utils/fcitxutils_export.h>
+#include <fcitx-utils/macros.h>
 
 /// \addtogroup FcitxUtils
 /// \{

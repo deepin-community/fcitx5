@@ -6,16 +6,25 @@
  */
 #include "waylandim.h"
 #include <memory>
+#include <string>
+#include <utility>
+#include "fcitx-utils/log.h"
 #include "fcitx-utils/misc_p.h"
+#include "fcitx/addonfactory.h"
+#include "fcitx/addoninstance.h"
+#include "fcitx/addonmanager.h"
 #include "fcitx/inputcontext.h"
+#include "fcitx/instance.h"
 #include "fcitx/misc_p.h"
 #include "appmonitor.h"
+#include "display.h"
 #include "plasmaappmonitor.h"
 #include "virtualinputcontext.h"
 #include "wayland_public.h"
 #include "waylandimserver.h"
 #include "waylandimserverv2.h"
 #include "wlrappmonitor.h"
+#include "zwp_input_method_v2.h"
 
 FCITX_DEFINE_LOG_CATEGORY(waylandim, "waylandim")
 
@@ -23,6 +32,7 @@ namespace fcitx {
 
 WaylandIMModule::WaylandIMModule(Instance *instance) : instance_(instance) {
     reloadConfig();
+    persistentVirtualKeyboard_ = *config_.persistentVirtualKeyboard;
     createdCallback_ =
         wayland()->call<IWaylandModule::addConnectionCreatedCallback>(
             [this](const std::string &name, wl_display *display,
@@ -61,12 +71,13 @@ wayland::ZwpInputMethodV2 *WaylandIMModule::getInputMethodV2(InputContext *ic) {
 }
 
 bool WaylandIMModule::hasKeyboardGrab(const std::string &display) const {
-    if (auto server = findValue(servers_, display); server && *server) {
+    if (const auto *server = findValue(servers_, display); server && *server) {
         if (server->get()->hasKeyboardGrab()) {
             return true;
         }
     }
-    if (auto serverV2 = findValue(serversV2_, display); serverV2 && *serverV2) {
+    if (const auto *serverV2 = findValue(serversV2_, display);
+        serverV2 && *serverV2) {
         if (serverV2->get()->hasKeyboardGrab()) {
             return true;
         }
@@ -111,4 +122,4 @@ public:
 };
 } // namespace fcitx
 
-FCITX_ADDON_FACTORY(fcitx::WaylandIMModuleFactory);
+FCITX_ADDON_FACTORY_V2(waylandim, fcitx::WaylandIMModuleFactory);

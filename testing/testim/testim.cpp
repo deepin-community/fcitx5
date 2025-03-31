@@ -5,8 +5,8 @@
  *
  */
 #include "testim.h"
-#include <fcitx/addonfactory.h>
-#include <fcitx/addonmanager.h>
+#include "fcitx/addonfactory.h"
+#include "fcitx/addonmanager.h"
 
 namespace fcitx {
 
@@ -32,4 +32,4 @@ public:
 
 } // namespace fcitx
 
-FCITX_ADDON_FACTORY(fcitx::TestIMFactory);
+FCITX_ADDON_FACTORY_V2(testim, fcitx::TestIMFactory);

@@ -65,7 +65,7 @@ ecm_setup_version(PROJECT
                   PACKAGE_VERSION_FILE "${CMAKE_CURRENT_BINARY_DIR}/Fcitx5CoreConfigVersion.cmake"
                   SOVERSION 7)
 
-add_library(Fcitx5Core SHARED ${FCITX_CORE_SOURCES})
+add_library(Fcitx5Core ${FCITX_CORE_SOURCES})
 set_target_properties(Fcitx5Core
   PROPERTIES VERSION ${Fcitx5Core_VERSION}
   SOVERSION ${Fcitx5Core_SOVERSION}
@@ -73,7 +73,7 @@ set_target_properties(Fcitx5Core
   )
 target_include_directories(Fcitx5Core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/..>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_FULL_INCLUDEDIR}/Fcitx5/Core>)
 target_link_libraries(Fcitx5Core PUBLIC Fcitx5::Config Fcitx5::Utils PRIVATE LibIntl::LibIntl ${FMT_TARGET})
 if (ENABLE_KEYBOARD)

@@ -7,11 +7,15 @@
 #ifndef _FCITX_UTILS_HANDLERTABLE_DETAILS_H_
 #define _FCITX_UTILS_HANDLERTABLE_DETAILS_H_
 
-#include <list>
+// IWYU pragma: private, include <fcitx-utils/handlertable.h>
+
+#include <cstddef>
+#include <iterator>
 #include <memory>
 #include <vector>
+#include <fcitx-utils/fcitxutils_export.h>
 #include <fcitx-utils/intrusivelist.h>
-#include "fcitxutils_export.h"
+#include <fcitx-utils/macros.h>
 
 namespace fcitx {
 

@@ -5,8 +5,16 @@
  *
  */
 #include "variant.h"
+#include <cstdint>
+#include <memory>
+#include <mutex>
 #include <shared_mutex>
-#include "fcitx-utils/misc_p.h"
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include "../macros.h"
+#include "../misc_p.h"
+#include "message.h"
 
 namespace fcitx::dbus {
 
