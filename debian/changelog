@@ -1,3 +1,10 @@
+fcitx5 (5.1.12-2deepin1) unstable; urgency=medium
+
+  * Update deepin patcher
+  * Enable XDGAUTOSTART.
+
+ -- xiangzelong <xiangzelong@deepin.org>  Mon, 31 Mar 2025 14:02:22 +0800
+
 fcitx5 (5.1.12-2) unstable; urgency=medium
 
   * Rebuild for Debian 13 release.
