@@ -5,3 +5,4 @@
 0008-fix-remove-the-restart-icon.patch
 0009-configtool-opens-dde-control-center-when-using-deepin25.patch
 0010-disable-the-default-shortcut-key-for-altTriggerKeys.patch
+0011-add-log-management-for-fcitx5-start-script.patch
