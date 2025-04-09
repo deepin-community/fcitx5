@@ -24,7 +24,7 @@ Index: fcitx5-community/data/fcitx5-start.sh
 ===================================================================
 --- /dev/null
 +++ fcitx5-community/data/fcitx5-start.sh
-@@ -0,0 +1,44 @@
+@@ -0,0 +1,45 @@
 +#!/usr/bin/env bash
 +
 +# Log management function
@@ -48,16 +48,17 @@ Index: fcitx5-community/data/fcitx5-start.sh
 +
 +run_fcitx5() {
 +    if which fcitx5 > /dev/null 2>&1; then
-+        # If fcitx5 is running and no -r flag, try to force kill it first
-+        if pgrep -u "$USER" fcitx5 >/dev/null && [[ ! "$@" =~ "-r" ]]; then
-+            pkill -9 -u "$USER" fcitx5
-+            sleep 0.1  # Give some time for the process to be killed
-+            # If process still exists, use -r flag
-+            if pgrep -u "$USER" fcitx5 >/dev/null; then
++        # Check if fcitx5 is running
++        if pgrep -u "$USER" fcitx5 >/dev/null; then
++            # If -r flag doesn't exist in args (either alone or in combinations like -rd, -dr), add it
++            if [[ ! "$*" =~ (^|-)[[:space:]]*[a-z]*r[a-z]* ]]; then
 +                exec fcitx5 -r "$@" >> "$FCITX_LOG" 2>&1
++            else
++                exec fcitx5 "$@" >> "$FCITX_LOG" 2>&1
 +            fi
++        else
++            exec fcitx5 "$@" >> "$FCITX_LOG" 2>&1
 +        fi
-+        exec fcitx5 "$@" >> "$FCITX_LOG" 2>&1
 +    fi
 +}
 +
