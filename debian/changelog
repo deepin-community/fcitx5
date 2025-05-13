@@ -1,3 +1,9 @@
+fcitx5 (5.1.11-2deepin6) unstable; urgency=medium
+
+  * remove send event to topLevel flag
+
+ -- Wang Yu <wangyu@uniontch.com>  Tue, 13 May 2025 15:10:15 +0800
+
 fcitx5 (5.1.11-2deepin5) unstable; urgency=medium
 
   * improve -r flag handling in fcitx5-start script
