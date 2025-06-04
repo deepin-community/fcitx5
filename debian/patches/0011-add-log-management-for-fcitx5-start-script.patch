@@ -1,0 +1,85 @@
+Index: fcitx5-community/data/CMakeLists.txt
+===================================================================
+--- fcitx5-community.orig/data/CMakeLists.txt
++++ fcitx5-community/data/CMakeLists.txt
+@@ -6,6 +6,8 @@ configure_file(${CMAKE_CURRENT_SOURCE_DI
+                ${CMAKE_CURRENT_BINARY_DIR}/org.fcitx.Fcitx5.desktop.in @ONLY)
+ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fcitx5-diagnose.sh
+                ${CMAKE_CURRENT_BINARY_DIR}/fcitx5-diagnose ESCAPE_QUOTES @ONLY)
++configure_file(${CMAKE_CURRENT_SOURCE_DIR}/fcitx5-start.sh
++               ${CMAKE_CURRENT_BINARY_DIR}/fcitx5-start ESCAPE_QUOTES @ONLY)
+ 
+ fcitx5_translate_desktop_file(${CMAKE_CURRENT_BINARY_DIR}/fcitx5-configtool.desktop.in
+                               fcitx5-configtool.desktop)
+@@ -28,6 +30,8 @@ install(FILES fcitx5-configtool.sh RENAM
+ GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/fcitx5-diagnose" DESTINATION "${FCITX_INSTALL_BINDIR}" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+ GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
++install(FILES "${CMAKE_CURRENT_BINARY_DIR}/fcitx5-start" DESTINATION "${FCITX_INSTALL_BINDIR}" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
++GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+ 
+ install(DIRECTORY default DESTINATION "${FCITX_INSTALL_PKGDATADIR}" COMPONENT config)
+ 
+Index: fcitx5-community/data/fcitx5-start.sh
+===================================================================
+--- /dev/null
++++ fcitx5-community/data/fcitx5-start.sh
+@@ -0,0 +1,45 @@
++#!/usr/bin/env bash
++
++# Log management function
++function manage_log()
++{
++    # Set log directory and file
++    FCITX_LOG_DIR="$HOME/.cache/fcitx5"
++    FCITX_LOG="$FCITX_LOG_DIR/fcitx5.log"
++
++    # Create log directory if not exists
++    mkdir -p "$FCITX_LOG_DIR"
++
++    # Remove logs older than 7 days
++    find "$FCITX_LOG_DIR" -name 'fcitx5.log*' -mtime +7 -delete 2>/dev/null
++
++    # Clear log file if it's larger than 10MB
++    if [ -f "$FCITX_LOG" ] && [ $(stat -f%z "$FCITX_LOG" 2>/dev/null || stat -c%s "$FCITX_LOG" 2>/dev/null) -gt 10485760 ]; then
++        : > "$FCITX_LOG"
++    fi
++}
++
++run_fcitx5() {
++    if which fcitx5 > /dev/null 2>&1; then
++        # Check if fcitx5 is running
++        if pgrep -u "$USER" fcitx5 >/dev/null; then
++            # If -r flag doesn't exist in args (either alone or in combinations like -rd, -dr), add it
++            if [[ ! "$*" =~ (^|-)[[:space:]]*[a-z]*r[a-z]* ]]; then
++                exec fcitx5 -r "$@" >> "$FCITX_LOG" 2>&1
++            else
++                exec fcitx5 "$@" >> "$FCITX_LOG" 2>&1
++            fi
++        else
++            exec fcitx5 "$@" >> "$FCITX_LOG" 2>&1
++        fi
++    fi
++}
++
++function trystart()
++{
++    manage_log
++
++    run_fcitx5 "$@"
++}
++
++trystart "$@"
+Index: fcitx5-community/data/org.fcitx.Fcitx5.desktop.in.in
+===================================================================
+--- fcitx5-community.orig/data/org.fcitx.Fcitx5.desktop.in.in
++++ fcitx5-community/data/org.fcitx.Fcitx5.desktop.in.in
+@@ -2,7 +2,7 @@
+ Name=Fcitx 5
+ GenericName=Input Method
+ Comment=Start Input Method
+-Exec=@FCITX_INSTALL_BINDIR@/fcitx5
++Exec=@FCITX_INSTALL_BINDIR@/fcitx5-start -d
+ Icon=@FCITX_ICON_NAME@
+ Terminal=false
+ Type=Application

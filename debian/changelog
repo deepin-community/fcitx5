@@ -1,3 +1,18 @@
+fcitx5 (5.1.12-2deepin1) unstable; urgency=medium
+
+  * configtool opens dde-control-center when using DDE.
+  * revert disable ctrl-shift enumerate key by default.
+  * add Sogou to the default zh_CN input method list.
+  * remove the restart icon from the right-click menu.
+  * configtool opens dde control center when using deepin25.
+  * disable the default shortcut key for altTriggerKeys.
+  * add enable autostart.
+  * add log management for fcitx5-start script.
+  * improve -r flag handling in fcitx5-start script.
+  * remove send event to topLevel flag.
+
+ -- lhdjply <lhdjply@126.com>  Wed, 4 Jun 2025 08:24:48 +0800
+
 fcitx5 (5.1.12-2) unstable; urgency=medium
 
   * Rebuild for Debian 13 release.
