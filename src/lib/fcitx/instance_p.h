@@ -11,16 +11,16 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
-#include "fcitx-utils/event.h"
-#include "fcitx-utils/eventdispatcher.h"
-#include "fcitx-utils/handlertable.h"
-#include "fcitx-utils/misc.h"
-#include "fcitx-utils/trackableobject.h"
+#include <fcitx-utils/event.h>
+#include <fcitx-utils/eventdispatcher.h>
+#include <fcitx-utils/handlertable.h>
+#include <fcitx-utils/misc.h>
+#include <fcitx-utils/trackableobject.h>
+#include <fcitx/inputcontextproperty.h>
+#include <fcitx/inputmethodmanager.h>
+#include <fcitx/instance.h>
+#include <fcitx/userinterfacemanager.h>
 #include "config.h"
-#include "inputcontextproperty.h"
-#include "inputmethodmanager.h"
-#include "instance.h"
-#include "userinterfacemanager.h"
 
 #ifdef ENABLE_KEYBOARD
 #include <xkbcommon/xkbcommon-compose.h>
@@ -56,6 +56,7 @@ struct InputState : public InputContextProperty {
     CheckInputMethodChanged *imChanged_ = nullptr;
     int keyReleased_ = -1;
     Key lastKeyPressed_;
+    uint64_t lastKeyPressedTime_ = 0;
     bool totallyReleased_ = true;
     bool firstTrigger_ = false;
     size_t pendingGroupIndex_ = 0;

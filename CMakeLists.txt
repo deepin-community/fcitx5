@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.6.0)
-project(fcitx VERSION 5.1.11)
+cmake_minimum_required(VERSION 3.13)
+project(fcitx VERSION 5.1.12)
 set(FCITX_VERSION ${PROJECT_VERSION})
 
 find_package(ECM REQUIRED 1.0.0)
@@ -20,7 +20,8 @@ include(CheckSymbolExists)
 #######################################################################
 # Options
 #######################################################################
-option(ENABLE_TEST "Build Test" On)
+option(ENABLE_TESTING_ADDONS "Build testing frontend, im and ui addons" On)
+option(ENABLE_TEST "Build Test (Need ENABLE_TESTING_ADDONS=On)" On)
 option(ENABLE_COVERAGE "Build the project with gcov support (Need ENABLE_TEST=On)" Off)
 set(GCOV_TOOL "gcov" CACHE STRING "Path to gcov tool used by coverage.")
 set(DEFAULT_XKB_RULES "evdev" CACHE STRING "Xkb rules name")
@@ -31,12 +32,15 @@ option(ENABLE_DBUS "Enable DBus" On)
 option(ENABLE_DOC "Build doxygen" Off)
 option(ENABLE_SERVER "Build a fcitx as server, disable this option if you want to use fcitx as an embedded library." On)
 option(ENABLE_KEYBOARD "Enable key event translation with XKB and build keyboard engine" On)
-option(USE_SYSTEMD "Use systemd for event loop and dbus, will fallback to libuv/libdbus if not found." On)
+option(USE_SYSTEMD "Use systemd for event loop and dbus, will fallback to libuv/libdbus if not found. Only used when EVENT_LOOP_BACKEND is auto." On)
 option(ENABLE_XDGAUTOSTART "Enable xdg autostart desktop file installation" On)
 option(USE_FLATPAK_ICON "Use flatpak icon name for desktop files" Off)
 option(ENABLE_EMOJI "Enable emoji module" On)
 option(ENABLE_LIBUUID "Use libuuid for uuid generation" On)
+option(BUILD_SPELL_DICT "Build en_dict.fscd for English spell check" On)
+option(BUILD_SHARED_LIBS "Build library as shared libs" On)
 set(NO_PREEDIT_APPS "gvim.*,wps.*,wpp.*,et.*" CACHE STRING "Disable preedit for follwing app by default.")
+set(EVENT_LOOP_BACKEND "auto" CACHE STRING "Set the underlying event loop implementation, valid values are auto,systemd,libuv,none")
 
 if (ENABLE_EMOJI)
     find_package(ZLIB REQUIRED)
@@ -46,35 +50,67 @@ if ((ENABLE_WAYLAND OR ENABLE_X11) AND NOT ENABLE_KEYBOARD)
     message(FATAL_ERROR "X11 and Wayland require ENABLE_KEYBOARD to be set to ON.")
 endif ()
 
-
 #######################################################################
 # Find packages
 #######################################################################
 
 find_package(PkgConfig REQUIRED)
 
-if (USE_SYSTEMD)
-find_package(Systemd)
-endif ()
+set(CANDIDATE_EVENT_LOOP_BACKENDS)
+
+if (EVENT_LOOP_BACKEND STREQUAL "auto")
+    if (USE_SYSTEMD)
+        list(APPEND CANDIDATE_EVENT_LOOP_BACKENDS systemd)
+    endif()
+
+    list(APPEND CANDIDATE_EVENT_LOOP_BACKENDS libuv)
+elseif (EVENT_LOOP_BACKEND STREQUAL "systemd")
+    list(APPEND CANDIDATE_EVENT_LOOP_BACKENDS systemd)
+elseif (EVENT_LOOP_BACKEND STREQUAL "libuv")
+    list(APPEND CANDIDATE_EVENT_LOOP_BACKENDS libuv)
+elseif (EVENT_LOOP_BACKEND STREQUAL "none")
+    list(APPEND CANDIDATE_EVENT_LOOP_BACKENDS none)
+endif()
+
+set(FCITX_EVENT_LOOP_BACKEND "")
+foreach(CANDIDATE_EVENT_LOOP_BACKEND IN LISTS CANDIDATE_EVENT_LOOP_BACKENDS)
+    if (CANDIDATE_EVENT_LOOP_BACKEND STREQUAL systemd)
+        find_package(Systemd)
+        if (TARGET Systemd::Systemd)
+            set(FCITX_EVENT_LOOP_BACKEND "systemd")
+            break()
+        endif()
+    elseif (CANDIDATE_EVENT_LOOP_BACKEND STREQUAL libuv)
+        if (NOT LIBUV_TARGET)
+            if (NOT (TARGET PkgConfig::LibUV))
+                pkg_check_modules(LibUV IMPORTED_TARGET "libuv")
+                set(LIBUV_TARGET PkgConfig::LibUV)
+            endif()
+        endif()
+
+        if (TARGET "${LIBUV_TARGET}")
+            set(FCITX_EVENT_LOOP_BACKEND "libuv")
+            break()
+        endif()
+    elseif (CANDIDATE_EVENT_LOOP_BACKEND STREQUAL none)
+        set(FCITX_EVENT_LOOP_BACKEND "none")
+        break()
+    endif()
+endforeach()
+
+if (ENABLE_DBUS AND NOT (FCITX_EVENT_LOOP_BACKEND STREQUAL systemd))
+    pkg_check_modules(DBus REQUIRED IMPORTED_TARGET "dbus-1")
+    pkg_get_variable(DBUS_SYSTEM_BUS_DEFAULT_ADDRESS "dbus-1" "system_bus_default_address")
+endif()
+
+if (FCITX_EVENT_LOOP_BACKEND STREQUAL "")
+    message(FATAL_ERROR "Failed to find a valid event loop backend. Backends checked: ${CANDIDATE_EVENT_LOOP_BACKENDS}")
+endif()
 
 if (USE_FLATPAK_ICON)
     set(FCITX_ICON_NAME "org.fcitx.Fcitx5")
 else()
     set(FCITX_ICON_NAME "fcitx")
-endif()
-
-if (NOT TARGET Systemd::Systemd)
-    if (ENABLE_DBUS)
-        pkg_check_modules(DBus REQUIRED IMPORTED_TARGET "dbus-1")
-        pkg_get_variable(DBUS_SYSTEM_BUS_DEFAULT_ADDRESS "dbus-1" "system_bus_default_address")
-    endif()
-
-    if (NOT LIBUV_TARGET)
-        if (NOT (TARGET PkgConfig::LibUV))
-            pkg_check_modules(LibUV REQUIRED IMPORTED_TARGET "libuv")
-        endif()
-        set(LIBUV_TARGET PkgConfig::LibUV)
-    endif()
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "BSD|DragonFly")
@@ -192,7 +228,10 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 add_subdirectory(src)
 add_subdirectory(data)
 add_subdirectory(po)
-add_subdirectory(testing)
+
+if (ENABLE_TESTING_ADDONS)
+  add_subdirectory(testing)
+endif()
 
 #######################################################################
 # Test features

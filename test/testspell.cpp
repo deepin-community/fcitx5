@@ -5,15 +5,24 @@
  *
  */
 #include "fcitx-utils/eventdispatcher.h"
+#include "fcitx-utils/key.h"
+#include "fcitx-utils/keysym.h"
+#include "fcitx-utils/log.h"
+#include "fcitx-utils/macros.h"
 #include "fcitx-utils/testing.h"
+#include "fcitx/addoninstance.h"
+#include "fcitx/addonloader.h"
 #include "fcitx/addonmanager.h"
+#include "fcitx/inputmethodgroup.h"
 #include "fcitx/inputmethodmanager.h"
 #include "fcitx/instance.h"
-#include "keyboard.h"
 #include "testdir.h"
 #include "testfrontend_public.h"
 
 using namespace fcitx;
+
+FCITX_DEFINE_STATIC_ADDON_REGISTRY(staticAddon);
+FCITX_IMPORT_ADDON_FACTORY(staticAddon, keyboard);
 
 void scheduleEvent(EventDispatcher *dispatcher, Instance *instance) {
     dispatcher->schedule([instance]() {
@@ -64,18 +73,12 @@ int main() {
          "testing/testim"},
         {"test", "src/modules", FCITX5_SOURCE_DIR "/src/modules"});
 
-    static KeyboardEngineFactory keyboardFactory;
-
-    StaticAddonRegistry staticAddon = {
-        std::make_pair<std::string, AddonFactory *>("keyboard",
-                                                    &keyboardFactory)};
-
     char arg0[] = "testspell";
     char arg1[] = "--disable=all";
     char arg2[] = "--enable=keyboard,testfrontend,spell,testui";
     char *argv[] = {arg0, arg1, arg2};
     Instance instance(FCITX_ARRAY_SIZE(argv), argv);
-    instance.addonManager().registerDefaultLoader(&staticAddon);
+    instance.addonManager().registerDefaultLoader(&staticAddon());
     EventDispatcher dispatcher;
     dispatcher.attach(&instance.eventLoop());
     scheduleEvent(&dispatcher, &instance);

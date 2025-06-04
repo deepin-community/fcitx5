@@ -10,11 +10,12 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
-#include "fcitxutils_export.h"
-#include "log.h"
-#include "macros.h"
+#include <fcitx-utils/fcitxutils_export.h>
+#include <fcitx-utils/log.h>
+#include <fcitx-utils/macros.h>
 
 namespace fcitx {
 
@@ -59,7 +60,7 @@ public:
     FCITX_DECLARE_PROPERTY(std::vector<std::string>, buildIds, setBuildIds);
     bool isPreRelease() const;
 
-    int compare(const SemanticVersion &version) const noexcept;
+    int compare(const SemanticVersion &other) const noexcept;
 
 private:
     uint32_t major_ = 0;

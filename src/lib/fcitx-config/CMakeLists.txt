@@ -28,7 +28,7 @@ ecm_setup_version(PROJECT
                   PACKAGE_VERSION_FILE "${CMAKE_CURRENT_BINARY_DIR}/Fcitx5ConfigConfigVersion.cmake"
                   SOVERSION 6)
 
-add_library(Fcitx5Config SHARED ${FCITX_CONFIG_SOURCES})
+add_library(Fcitx5Config ${FCITX_CONFIG_SOURCES})
 set_target_properties(Fcitx5Config
   PROPERTIES VERSION ${Fcitx5Config_VERSION}
   SOVERSION ${Fcitx5Config_SOVERSION}
@@ -36,7 +36,7 @@ set_target_properties(Fcitx5Config
   )
 target_include_directories(Fcitx5Config PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/..>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_FULL_INCLUDEDIR}/Fcitx5/Config>)
 target_link_libraries(Fcitx5Config PUBLIC Fcitx5::Utils)
 

@@ -1,39 +1,17 @@
-fcitx5 (5.1.11-2deepin6) unstable; urgency=medium
+fcitx5 (5.1.12-2) unstable; urgency=medium
 
-  * remove send event to topLevel flag
+  * Rebuild for Debian 13 release.
+  * debian/control: Bump Standards-Version to 4.7.2.
 
- -- Wang Yu <wangyu@uniontch.com>  Tue, 13 May 2025 15:10:15 +0800
+ -- Boyuan Yang <byang@debian.org>  Thu, 20 Mar 2025 18:34:12 -0400
 
-fcitx5 (5.1.11-2deepin5) unstable; urgency=medium
-
-  * improve -r flag handling in fcitx5-start script
-
- -- Wang Yu <wangyu@uniontch.com>  Wed, 09 Apr 2025 10:40:27 +0800
-
-fcitx5 (5.1.11-2deepin4) unstable; urgency=medium
-
-  * add log management for fcitx5-start script.
-
- -- Wang Yu <wangyu@uniontch.com>  Tue, 01 Apr 2025 14:36:50 +0800
-
-fcitx5 (5.1.11-2deepin3) unstable; urgency=medium
-
-  * add enable autostart
-
- -- Chengqi E <echengqi@uniontech.com>  Fri, 10 Jan 2025 13:50:33 +0800
-
-fcitx5 (5.1.11-2deepin2) unstable; urgency=medium
-
-  * Disable the default shortcut key for altTriggerKeys
-
- -- Wang Yu <wangyu@uniontech.com>  Wed, 11 Dec 2024 11:03:51 +0800
-
-fcitx5 (5.1.11-2deepin1) unstable; urgency=medium
+fcitx5 (5.1.12-1) unstable; urgency=medium
 
   * New upstream release.
-  * Remove useless patch. 
+  * debian/maint/*: Dropped, patch no longer needed.
+  * debian/patches/*: Dropped, patch no longer needed.
 
- -- xiangzelong <xiangzelong@deepin.org>  Fri, 06 Dec 2024 17:18:39 +0800
+ -- Boyuan Yang <byang@debian.org>  Thu, 23 Jan 2025 09:52:05 -0500
 
 fcitx5 (5.1.11-2) unstable; urgency=medium
 

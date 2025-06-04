@@ -7,11 +7,12 @@
 #ifndef _FCITX_CONFIG_DBUSHELPER_H_
 #define _FCITX_CONFIG_DBUSHELPER_H_
 
+#include <string>
 #include <vector>
 #include <fcitx-config/configuration.h>
+#include <fcitx-config/fcitxconfig_export.h>
 #include <fcitx-config/rawconfig.h>
 #include <fcitx-utils/dbus/message.h>
-#include "fcitxconfig_export.h"
 
 namespace fcitx {
 
