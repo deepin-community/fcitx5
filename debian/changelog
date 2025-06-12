@@ -1,3 +1,9 @@
+fcitx5 (5.1.11-2deepin7) unstable; urgency=medium
+
+  * unify ShareInputState behavior across platforms
+
+ -- Wang Yu <wangyu@uniontch.com>  Thu, 12 Jun 2025 11:34:40 +0800
+
 fcitx5 (5.1.11-2deepin6) unstable; urgency=medium
 
   * remove send event to topLevel flag
