@@ -1,0 +1,14 @@
+Index: fcitx5-community/src/lib/fcitx/globalconfig.cpp
+===================================================================
+--- fcitx5-community.orig/src/lib/fcitx/globalconfig.cpp
++++ fcitx5-community/src/lib/fcitx/globalconfig.cpp
+@@ -146,8 +146,7 @@ FCITX_CONFIGURATION(
+     OptionWithAnnotation<PropertyPropagatePolicy,
+                          PropertyPropagatePolicyI18NAnnotation>
+         shareState{this, "ShareInputState", _("Share Input State"),
+-                   isAndroid() ? PropertyPropagatePolicy::All
+-                               : PropertyPropagatePolicy::No};
++                   PropertyPropagatePolicy::All};
+     Option<bool> preeditEnabledByDefault{this, "PreeditEnabledByDefault",
+                                          _("Show preedit in application"),
+                                          true};

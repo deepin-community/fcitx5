@@ -7,3 +7,4 @@
 0010-disable-the-default-shortcut-key-for-altTriggerKeys.patch
 0011-add-log-management-for-fcitx5-start-script.patch
 0012-remove-send-event-to-topLevel-flag.patch
+0013-fix-unify-shareInputstate-behavior-across-platforms.patch
