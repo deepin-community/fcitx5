@@ -1,3 +1,9 @@
+fcitx5 (5.1.11-2deepin8) unstable; urgency=medium
+
+  * update default shortcut key for altTriggerKeys in fcitx5
+
+ -- Wang Yu <wangyu@uniontch.com>  Mon, 16 Jun 2025 14:02:37 +0800
+
 fcitx5 (5.1.11-2deepin7) unstable; urgency=medium
 
   * unify ShareInputState behavior across platforms
