@@ -1,3 +1,9 @@
+fcitx5 (5.1.11-2deepin9) unstable; urgency=medium
+
+  * Add zh-HK translation support
+
+ -- Wang Yu <wangyu@uniontch.com>  Fri, 04 Jul 2025 14:02:48 +0800
+
 fcitx5 (5.1.11-2deepin8) unstable; urgency=medium
 
   * update default shortcut key for altTriggerKeys in fcitx5
