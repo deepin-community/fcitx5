@@ -1,3 +1,9 @@
+fcitx5 (5.1.11-2deepin10) unstable; urgency=medium
+
+  * default-la.
+
+ -- lichenggang <lichenggang@deepin.org>  Tue, 12 Aug 2025 14:00:24 +0800
+
 fcitx5 (5.1.11-2deepin9) unstable; urgency=medium
 
   * Add zh-HK translation support
