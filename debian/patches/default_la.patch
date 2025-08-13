@@ -1,0 +1,6 @@
+
+--- /dev/null
++++ fcitx5-5.1.11/data/default/lo_LA
+@@ -0,0 +1,2 @@
++[DefaultInputMethod]
++0=keyboard-la-stea
