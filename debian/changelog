@@ -1,3 +1,9 @@
+fcitx5 (5.1.11-2deepin11) unstable; urgency=medium
+
+  * improve Sogou input method positioning in default list
+
+ -- Wang Yu <wangyu@uniontch.com>  Thu, 14 Aug 2025 14:33:43 +0800
+
 fcitx5 (5.1.11-2deepin10) unstable; urgency=medium
 
   * default-la.
