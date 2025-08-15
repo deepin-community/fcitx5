@@ -1,3 +1,9 @@
+fcitx5 (5.1.11-2deepin12) unstable; urgency=medium
+
+  * Add zh-HK translation support
+
+ -- Wang Yu <wangyu@uniontch.com>  Fri, 15 Aug 2025 17:55:07 +0800
+
 fcitx5 (5.1.11-2deepin11) unstable; urgency=medium
 
   * improve Sogou input method positioning in default list
