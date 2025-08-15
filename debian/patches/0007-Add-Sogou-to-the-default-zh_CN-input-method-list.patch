@@ -55,7 +55,7 @@ index 4aaae06..47b2d8a 100644
          }
 +        if (!appendInputMethods.empty()) {
 +            group.inputMethodList().insert(
-+                group.inputMethodList().begin(),
++                group.inputMethodList().end(),
 +                std::make_move_iterator(appendInputMethods.begin()),
 +                std::make_move_iterator(appendInputMethods.end()));
 +        }
