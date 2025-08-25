@@ -1,0 +1,23 @@
+Index: fcitx5-community/data/fcitx5-configtool.desktop.in.in
+===================================================================
+--- fcitx5-community.orig/data/fcitx5-configtool.desktop.in.in
++++ fcitx5-community/data/fcitx5-configtool.desktop.in.in
+@@ -8,5 +8,6 @@ Type=Application
+ Categories=Settings;
+ X-KDE-StartupNotify=false
+ StartupNotify=false
++NoDisplay=true
+ X-AppStream-Ignore=true
+ NotShowIn=KDE
+Index: fcitx5-community/data/org.fcitx.Fcitx5.desktop.in.in
+===================================================================
+--- fcitx5-community.orig/data/org.fcitx.Fcitx5.desktop.in.in
++++ fcitx5-community/data/org.fcitx.Fcitx5.desktop.in.in
+@@ -8,6 +8,7 @@ Terminal=false
+ Type=Application
+ Categories=System;Utility;
+ StartupNotify=false
++NoDisplay=true
+ X-GNOME-AutoRestart=false
+ X-GNOME-Autostart-Notify=false
+ X-KDE-autostart-after=panel

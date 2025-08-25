@@ -1,3 +1,9 @@
+fcitx5 (5.1.11-2deepin13) unstable; urgency=medium
+
+  * hide fcitx5 desktop in the start menu.
+
+ -- Wang Yu <wangyu@uniontch.com>  Mon, 25 Aug 2025 15:44:38 +0800
+
 fcitx5 (5.1.11-2deepin12) unstable; urgency=medium
 
   * Add zh-HK translation support
