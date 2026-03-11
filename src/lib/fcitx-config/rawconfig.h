@@ -7,19 +7,21 @@
 #ifndef _FCITX_CONFIG_RAWCONFIG_H_
 #define _FCITX_CONFIG_RAWCONFIG_H_
 
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
+#include <fcitx-config/fcitxconfig_export.h>
 #include <fcitx-utils/log.h>
 #include <fcitx-utils/macros.h>
-#include "fcitxconfig_export.h"
 
 namespace fcitx {
 
 class RawConfig;
 
-typedef std::shared_ptr<RawConfig> RawConfigPtr;
+using RawConfigPtr = std::shared_ptr<RawConfig>;
 
 class RawConfigPrivate;
 class FCITXCONFIG_EXPORT RawConfig {
@@ -106,8 +108,8 @@ private:
     std::unique_ptr<RawConfigPrivate> d_ptr;
 };
 
-FCITXUTILS_EXPORT
-LogMessageBuilder &operator<<(LogMessageBuilder &log, const RawConfig &config);
+FCITXCONFIG_EXPORT LogMessageBuilder &operator<<(LogMessageBuilder &log,
+                                                 const RawConfig &config);
 } // namespace fcitx
 
 #endif // _FCITX_CONFIG_RAWCONFIG_H_

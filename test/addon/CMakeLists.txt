@@ -1,5 +1,8 @@
-add_library(dummyaddon MODULE dummyaddon.cpp)
+add_fcitx5_addon(dummyaddon dummyaddon.cpp)
 target_link_libraries(dummyaddon Fcitx5::Core)
+
+add_fcitx5_addon(dummyaddondeps dummyaddondeps.cpp)
+target_link_libraries(dummyaddondeps Fcitx5::Utils)
 
 set(COPY_ADDON_DEPENDS unicode.conf.in-fmt quickphrase.conf.in-fmt xcb.conf.in-fmt spell.conf.in-fmt)
 

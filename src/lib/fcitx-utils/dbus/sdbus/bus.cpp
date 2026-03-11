@@ -5,11 +5,27 @@
  *
  */
 
+#include "../../dbus/bus.h"
+#include <cerrno>
+#include <cstdint>
+#include <cstdlib>
+#include <exception>
+#include <memory>
 #include <stdexcept>
+#include <string>
+#include <string_view>
+#include <utility>
+#include "../../dbus/matchrule.h"
+#include "../../dbus/message.h"
+#include "../../dbus/objectvtable.h"
+#include "../../event.h"
+#include "../../flags.h"
 #include "../../log.h"
+#include "../../macros.h"
 #include "bus_p.h"
 #include "message_p.h"
 #include "objectvtable_p_sdbus.h"
+#include "sd-bus-wrap.h"
 
 namespace fcitx::dbus {
 
@@ -17,11 +33,9 @@ Slot::~Slot() {}
 
 class BusPrivate {
 public:
-    BusPrivate() : bus_(nullptr) {}
-
     ~BusPrivate() { sd_bus_flush_close_unref(bus_); }
 
-    sd_bus *bus_;
+    sd_bus *bus_ = nullptr;
     EventLoop *eventLoop_ = nullptr;
 };
 
@@ -117,9 +131,15 @@ void Bus::attachEventLoop(EventLoop *loop) {
     if (d->eventLoop_) {
         return;
     }
-    sd_event *event = static_cast<sd_event *>(loop->nativeHandle());
-    if (sd_bus_attach_event(d->bus_, event, 0) >= 0) {
-        d->eventLoop_ = loop;
+    if (loop->implementation() == std::string_view("sd-event")) {
+        sd_event *event = static_cast<sd_event *>(loop->nativeHandle());
+        if (sd_bus_attach_event(d->bus_, event, 0) >= 0) {
+            d->eventLoop_ = loop;
+        }
+    } else {
+        // TODO: support sd-bus + generic event loop implementation.
+        throw std::invalid_argument(
+            "not support sd-bus with non-sdevent implementation.");
     }
 }
 
@@ -136,7 +156,8 @@ EventLoop *Bus::eventLoop() const {
     return d->eventLoop_;
 }
 
-int SDMessageCallback(sd_bus_message *m, void *userdata, sd_bus_error *) {
+int SDMessageCallback(sd_bus_message *m, void *userdata,
+                      sd_bus_error * /*unused*/) {
     auto *slot = static_cast<SDSlot *>(userdata);
     if (!slot) {
         return 0;
@@ -148,7 +169,7 @@ int SDMessageCallback(sd_bus_message *m, void *userdata, sd_bus_error *) {
     } catch (const std::exception &e) {
         // some abnormal things threw
         FCITX_ERROR() << e.what();
-        abort();
+        std::abort();
     }
     return 1;
 }

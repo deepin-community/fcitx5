@@ -11,7 +11,7 @@
 #include <string>
 #include <fcitx-utils/log.h>
 #include <fcitx-utils/macros.h>
-#include "fcitxcore_export.h"
+#include <fcitx/fcitxcore_export.h>
 
 /// \addtogroup FcitxCore
 /// \{
@@ -79,9 +79,8 @@ private:
     FCITX_DECLARE_PRIVATE(SurroundingText);
 };
 
-FCITXCORE_EXPORT
-LogMessageBuilder &operator<<(LogMessageBuilder &log,
-                              const SurroundingText &surroundingText);
+FCITXCORE_EXPORT LogMessageBuilder &
+operator<<(LogMessageBuilder &log, const SurroundingText &surroundingText);
 
 } // namespace fcitx
 

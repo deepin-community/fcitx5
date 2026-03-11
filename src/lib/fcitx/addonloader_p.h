@@ -7,22 +7,44 @@
 #ifndef _FCITX_ADDONLOADER_P_H_
 #define _FCITX_ADDONLOADER_P_H_
 
+#include <memory>
 #include <stdexcept>
-#include "fcitx-utils/library.h"
-#include "fcitx-utils/standardpath.h"
-#include "addonfactory.h"
-#include "addoninfo.h"
-#include "addoninstance.h"
-#include "addonloader.h"
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
+#include <fcitx-utils/library.h>
+#include <fcitx-utils/standardpath.h>
+#include <fcitx-utils/stringutils.h>
+#include <fcitx/addonfactory.h>
+#include <fcitx/addoninfo.h>
+#include <fcitx/addoninstance.h>
+#include <fcitx/addonloader.h>
 
 namespace fcitx {
 
+namespace {
+constexpr char FCITX_ADDON_FACTORY_ENTRY[] = "fcitx_addon_factory_instance";
+}
+
 class SharedLibraryFactory {
 public:
-    SharedLibraryFactory(Library lib) : library_(std::move(lib)) {
-        auto *funcPtr = library_.resolve("fcitx_addon_factory_instance");
+    SharedLibraryFactory(const AddonInfo &info, std::vector<Library> libraries)
+        : libraries_(std::move(libraries)) {
+        std::string v2Name = stringutils::concat(FCITX_ADDON_FACTORY_ENTRY, "_",
+                                                 info.uniqueName());
+        if (libraries_.empty()) {
+            throw std::runtime_error("Got empty libraries.");
+        }
+
+        // Only resolve with last library.
+        auto &library = libraries_.back();
+        auto *funcPtr = library.resolve(v2Name.data());
         if (!funcPtr) {
-            throw std::runtime_error(library_.error());
+            funcPtr = library.resolve(FCITX_ADDON_FACTORY_ENTRY);
+        }
+        if (!funcPtr) {
+            throw std::runtime_error(library.error());
         }
         auto func = Library::toFunction<AddonFactory *()>(funcPtr);
         factory_ = func();
@@ -34,7 +56,7 @@ public:
     AddonFactory *factory() { return factory_; }
 
 private:
-    Library library_;
+    std::vector<Library> libraries_;
     AddonFactory *factory_;
 };
 

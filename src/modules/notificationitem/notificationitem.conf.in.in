@@ -1,12 +1,12 @@
 [Addon]
 Name=Status Notifier
 Comment=DBus based new Freedesktop.org tray icon
-Type=SharedLibrary
+Type=@FCITX_ADDON_TYPE@
 Library=libnotificationitem
 Category=Module
 Version=@PROJECT_VERSION@
 OnDemand=True
 
 [Addon/Dependencies]
-0=dbus
-
+0=core:@PROJECT_VERSION@
+1=dbus

@@ -8,14 +8,16 @@
 #define _FCITX_UTILS_MISC_H_
 
 #include <unistd.h>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
 #include <memory>
 #include <string>
-#include <utility>
+#include <type_traits>
 #include <vector>
+#include <fcitx-utils/fcitxutils_export.h>
 #include <fcitx-utils/macros.h>
-#include "fcitxutils_export.h"
 
 namespace fcitx {
 
@@ -163,6 +165,19 @@ FCITXUTILS_EXPORT constexpr inline bool isAndroid() {
  */
 FCITXUTILS_EXPORT constexpr inline bool isApple() {
 #if defined(__APPLE__)
+    return true;
+#else
+    return false;
+#endif
+}
+
+/**
+ * Util function that returns whether it is compile against emscripten.
+ *
+ * @since 5.1.12
+ */
+FCITXUTILS_EXPORT constexpr inline bool isEmscripten() {
+#if defined(__EMSCRIPTEN__)
     return true;
 #else
     return false;

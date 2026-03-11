@@ -8,11 +8,11 @@
 #define _FCITX_UTILS_ENDIAN_P_H_
 
 #include <cstdint>
-#if defined(__linux__) || defined(__GLIBC__)
-#include <endian.h>
+#if defined(__linux__) || defined(__GLIBC__) || defined(__EMSCRIPTEN__)
+#include <endian.h> // IWYU pragma: export
 #elif defined(__APPLE__)
 
-#include <libkern/OSByteOrder.h>
+#include <libkern/OSByteOrder.h> // IWYU pragma: export
 
 #define htobe16(x) OSSwapHostToBigInt16(x)
 #define htole16(x) OSSwapHostToLittleInt16(x)
@@ -30,7 +30,7 @@
 #define le64toh(x) OSSwapLittleToHostInt64(x)
 
 #else
-#include <sys/endian.h>
+#include <sys/endian.h> // IWYU pragma: export
 #endif
 
 enum { BYTE_ORDER_MSB_FIRST = 1, BYTE_ORDER_LSB_FIRST = 0 };

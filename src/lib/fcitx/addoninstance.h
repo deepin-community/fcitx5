@@ -16,7 +16,7 @@
 #include <fcitx-utils/metastring.h>
 #include <fcitx/addoninfo.h>
 #include <fcitx/addoninstance_details.h> // IWYU pragma: export
-#include "fcitxcore_export.h"
+#include <fcitx/fcitxcore_export.h>
 
 /// \addtogroup FcitxCore
 /// \{
@@ -192,12 +192,44 @@ private:
 
 #define FCITX_ADDON_FACTORY(ClassName)                                         \
     extern "C" {                                                               \
-    FCITXCORE_EXPORT                                                           \
-    ::fcitx::AddonFactory *fcitx_addon_factory_instance() {                    \
+    FCITXCORE_EXPORT ::fcitx::AddonFactory *fcitx_addon_factory_instance() {   \
         static ClassName factory;                                              \
         return &factory;                                                       \
     }                                                                          \
     }
+
+#define FCITX_ADDON_FACTORY_V2(AddonName, ClassName)                           \
+    extern "C" {                                                               \
+    FCITXCORE_EXPORT ::fcitx::AddonFactory *                                   \
+        fcitx_addon_factory_instance_##AddonName() {                           \
+        static ClassName factory;                                              \
+        return &factory;                                                       \
+    }                                                                          \
+    }
+
+#define FCITX_DEFINE_STATIC_ADDON_REGISTRY(Name, ...)                          \
+    ::fcitx::StaticAddonRegistry &Name() {                                     \
+        static ::fcitx::StaticAddonRegistry registry{__VA_ARGS__};             \
+        return registry;                                                       \
+    }
+
+#define FCITX_ADDON_FACTORY_V2_BACKWARDS(AddonName, ClassName)                 \
+    FCITX_ADDON_FACTORY_V2(AddonName, ClassName)                               \
+    FCITX_ADDON_FACTORY(ClassName)
+
+#define FCITX_IMPORT_ADDON_FACTORY(StaticRegistryGetter, AddonName)            \
+    extern "C" {                                                               \
+    ::fcitx::AddonFactory *fcitx_addon_factory_instance_##AddonName();         \
+    }                                                                          \
+    class StaticAddonRegistrar_##AddonName {                                   \
+    public:                                                                    \
+        StaticAddonRegistrar_##AddonName() {                                   \
+            (StaticRegistryGetter)().emplace(                                  \
+                FCITX_STRINGIFY(AddonName),                                    \
+                fcitx_addon_factory_instance_##AddonName());                   \
+        }                                                                      \
+    };                                                                         \
+    StaticAddonRegistrar_##AddonName staticAddonRegistrar_##AddonName
 
 /// A convenient macro to obtain the addon pointer of another addon.
 #define FCITX_ADDON_DEPENDENCY_LOADER(NAME, ADDONMANAGER)                      \
