@@ -12,6 +12,8 @@
 #include "fcitx-utils/key.h"
 #include "fcitx-utils/log.h"
 #include "fcitx-utils/utf8.h"
+#include "fcitx/addonfactory.h"
+#include "fcitx/addoninstance.h"
 #include "fcitx/addonmanager.h"
 #include "fcitx/candidatelist.h"
 #include "fcitx/inputcontext.h"
@@ -32,7 +34,7 @@ public:
 
     void showVirtualKeyboard() { parent_->showVirtualKeyboardForcibly(); }
 
-    void hideVirtualKeyboard() { parent_->hideVirtualKeyboard(); }
+    void hideVirtualKeyboard() { parent_->hideVirtualKeyboardForcibly(); }
 
     void toggleVirtualKeyboard() { parent_->toggleVirtualKeyboard(); }
 
@@ -323,13 +325,25 @@ void VirtualKeyboard::showVirtualKeyboardForcibly() {
     showVirtualKeyboard();
 }
 
+void VirtualKeyboard::hideVirtualKeyboardForcibly() {
+    if (!available_) {
+        return;
+    }
+
+    hideVirtualKeyboard();
+
+    if (!instance_->virtualKeyboardAutoShow()) {
+        instance_->setInputMethodMode(InputMethodMode::PhysicalKeyboard);
+    }
+}
+
 void VirtualKeyboard::toggleVirtualKeyboard() {
     if (!available_) {
         return;
     }
 
     if (visible_) {
-        hideVirtualKeyboard();
+        hideVirtualKeyboardForcibly();
     } else {
         showVirtualKeyboardForcibly();
     }
@@ -535,4 +549,4 @@ public:
 };
 } // namespace fcitx
 
-FCITX_ADDON_FACTORY(fcitx::VirtualKeyboardFactory);
+FCITX_ADDON_FACTORY_V2(virtualkeyboard, fcitx::VirtualKeyboardFactory);

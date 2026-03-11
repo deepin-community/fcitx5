@@ -13,9 +13,10 @@
 #include <unistd.h>
 #include <cstdint>
 #include <cstring>
-#include "charutils.h"
-#include "event.h"
-#include "unixfd.h"
+#include <fcitx-utils/charutils.h>
+#include <fcitx-utils/eventloopinterface.h>
+#include <fcitx-utils/fs.h>
+#include <fcitx-utils/unixfd.h>
 
 #ifdef TEST_DISABLE_LIBUUID
 #undef ENABLE_LIBUUID

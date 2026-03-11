@@ -7,10 +7,13 @@
 #ifndef _FCITX_UTILS_DBUS_MATCHRULE_H_
 #define _FCITX_UTILS_DBUS_MATCHRULE_H_
 
+#include <cstddef>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 #include <fcitx-utils/dbus/message.h>
+#include <fcitx-utils/fcitxutils_export.h>
 #include <fcitx-utils/macros.h>
 
 /// \addtogroup FcitxUtils
@@ -18,8 +21,7 @@
 /// \file
 /// \brief API for DBus matching rule.
 
-namespace fcitx {
-namespace dbus {
+namespace fcitx::dbus {
 
 class MatchRulePrivate;
 class Message;
@@ -71,8 +73,7 @@ private:
     FCITX_DECLARE_PRIVATE(MatchRule);
 };
 
-} // namespace dbus
-} // namespace fcitx
+} // namespace fcitx::dbus
 
 namespace std {
 

@@ -17,10 +17,11 @@
 #include <iterator>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
-#include "fcitxutils_export.h"
-#include "stringutils_details.h"
+#include <fcitx-utils/fcitxutils_export.h>
+#include <fcitx-utils/stringutils_details.h> // IWYU pragma: export
 
 namespace fcitx::stringutils {
 
@@ -58,8 +59,7 @@ trimInplace(std::string_view str);
 /// \brief Trim the white space in string view
 /// \see trimInplace
 /// \since 5.0.16
-FCITXUTILS_EXPORT
-std::string_view trimView(std::string_view);
+FCITXUTILS_EXPORT std::string_view trimView(std::string_view);
 
 /// \brief Trim the white space in str.
 /// \see trimInplace
@@ -181,6 +181,17 @@ unescapeForValue(std::string_view str);
  * \since 5.0.16
  */
 FCITXUTILS_EXPORT std::string escapeForValue(std::string_view str);
+
+/**
+ * Return a substring of input str if str starts with given prefix.
+ *
+ * \param str input string
+ * \param prefix to check
+ * \see startsWith
+ * \since 5.1.12
+ */
+FCITXUTILS_EXPORT bool consumePrefix(std::string_view &str,
+                                     std::string_view prefix);
 
 } // namespace fcitx::stringutils
 

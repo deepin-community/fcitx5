@@ -6,15 +6,36 @@
  */
 #include "waylandimserverv2.h"
 #include <sys/mman.h>
+#include <sys/types.h>
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
 #include <ctime>
-#include "fcitx-utils/keysymgen.h"
+#include <memory>
+#include <string>
+#include <tuple>
+#include <utility>
+#include <xkbcommon/xkbcommon.h>
+#include "fcitx-utils/capabilityflags.h"
+#include "fcitx-utils/event.h"
+#include "fcitx-utils/eventloopinterface.h"
+#include "fcitx-utils/key.h"
+#include "fcitx-utils/keysym.h"
+#include "fcitx-utils/macros.h"
+#include "fcitx-utils/textformatflags.h"
 #include "fcitx-utils/unixfd.h"
 #include "fcitx-utils/utf8.h"
+#include "fcitx/event.h"
 #include "fcitx/inputcontext.h"
+#include "fcitx/instance.h"
 #include "virtualinputcontext.h"
 #include "wayland-text-input-unstable-v3-client-protocol.h"
+#include "wayland_public.h"
 #include "waylandim.h"
+#include "waylandimserverbase.h"
 #include "wl_seat.h"
+#include "zwp_input_method_manager_v2.h"
+#include "zwp_virtual_keyboard_manager_v1.h"
 
 namespace fcitx {
 
@@ -100,9 +121,8 @@ void WaylandIMServerV2::refreshSeat() {
         if (icMap_.count(seat.get())) {
             continue;
         }
-        auto *ic = new WaylandIMInputContextV2(
-            inputContextManager(), this, seat,
-            virtualKeyboardManagerV1_->createVirtualKeyboard(seat.get()));
+        auto *ic =
+            new WaylandIMInputContextV2(inputContextManager(), this, seat);
         ic->setFocusGroup(group_);
         ic->setCapabilityFlags(baseFlags);
     }
@@ -122,11 +142,14 @@ void WaylandIMServerV2::remove(wayland::WlSeat *seat) {
 
 WaylandIMInputContextV2::WaylandIMInputContextV2(
     InputContextManager &inputContextManager, WaylandIMServerV2 *server,
-    std::shared_ptr<wayland::WlSeat> seat, wayland::ZwpVirtualKeyboardV1 *vk)
+    std::shared_ptr<wayland::WlSeat> seat)
     : VirtualInputContextGlue(inputContextManager), server_(server),
       seat_(std::move(seat)),
-      ic_(server->inputMethodManagerV2()->getInputMethod(seat_.get())),
-      vk_(vk) {
+      ic_(server->inputMethodManagerV2()->getInputMethod(seat_.get())) {
+    if (server_->parent()->persistentVirtualKeyboard()) {
+        vk_.reset(server_->virtualKeyboardManagerV1()->createVirtualKeyboard(
+            seat_.get()));
+    }
     server->add(this, seat_.get());
     ic_->surroundingText().connect(
         [this](const char *text, uint32_t cursor, uint32_t anchor) {
@@ -164,13 +187,23 @@ WaylandIMInputContextV2::WaylandIMInputContextV2(
                                     Key(FcitxKey_None, KeyStates(), vkkey + 8),
                                     WL_KEYBOARD_KEY_STATE_RELEASED);
                     }
-                    vk_->modifiers(0, 0, 0, 0);
                 }
                 focusOutWrapper();
+            }
+            if (!server_->parent()->persistentVirtualKeyboard()) {
+                vk_.reset();
+                vkReady_ = false;
             }
         }
         if (pendingActivate_) {
             pendingActivate_ = false;
+            if (!server_->parent()->persistentVirtualKeyboard()) {
+                vk_.reset();
+                vkReady_ = false;
+                vk_.reset(
+                    server_->virtualKeyboardManagerV1()->createVirtualKeyboard(
+                        seat_.get()));
+            }
             // There can be only one grab. Always release old grab first.
             // It is possible when switching between two client, there will be
             // two activate. In that case we will have already one grab. The
@@ -420,9 +453,11 @@ void WaylandIMInputContextV2::keymapCallback(uint32_t format, int32_t fd,
     server_->stateMask_.mod5_mask =
         1 << xkb_keymap_mod_get_index(server_->keymap_.get(), "Mod5");
 
-    if (keymapChanged) {
-        vk_->keymap(format, scopeFD.fd(), size);
-        vkReady_ = true;
+    if (keymapChanged || !vkReady_) {
+        if (vk_) {
+            vk_->keymap(format, scopeFD.fd(), size);
+            vkReady_ = true;
+        }
     }
 
     server_->parent_->wayland()->call<IWaylandModule::reloadXkbOption>();
@@ -501,8 +536,9 @@ void WaylandIMInputContextV2::modifiersCallback(uint32_t /*serial*/,
     server_->instance()->updateXkbStateMask(
         server_->group()->display(), mods_depressed, mods_latched, mods_locked);
     mask = xkb_state_serialize_mods(
-        server_->state_.get(), static_cast<xkb_state_component>(
-                                   XKB_STATE_DEPRESSED | XKB_STATE_LATCHED));
+        server_->state_.get(),
+        static_cast<xkb_state_component>(XKB_STATE_MODS_DEPRESSED |
+                                         XKB_STATE_MODS_LATCHED));
 
     server_->modifiers_ = 0;
     if (mask & server_->stateMask_.shift_mask) {

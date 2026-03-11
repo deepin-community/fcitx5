@@ -6,9 +6,24 @@
  */
 
 #include "xcbinputwindow.h"
+#include <unistd.h>
+#include <algorithm>
+#include <climits>
+#include <cstdint>
+#include <vector>
+#include <cairo.h>
+#include <xcb/xcb.h>
 #include <xcb/xcb_aux.h>
+#include <xcb/xcb_ewmh.h>
 #include <xcb/xcb_icccm.h>
+#include <xcb/xproto.h>
 #include "fcitx-utils/rect.h"
+#include "fcitx/inputcontext.h"
+#include "inputwindow.h"
+#include "theme.h"
+#include "xcb_public.h"
+#include "xcbui.h"
+#include "xcbwindow.h"
 
 namespace fcitx::classicui {
 
@@ -18,10 +33,10 @@ XCBInputWindow::XCBInputWindow(XCBUI *ui)
           ui_->displayName(), "_KDE_NET_WM_BLUR_BEHIND_REGION", false)) {}
 
 void XCBInputWindow::postCreateWindow() {
-    if (ui_->ewmh()->_NET_WM_WINDOW_TYPE_POPUP_MENU &&
+    if (ui_->ewmh()->_NET_WM_WINDOW_TYPE_COMBO &&
         ui_->ewmh()->_NET_WM_WINDOW_TYPE) {
-        xcb_ewmh_set_wm_window_type(
-            ui_->ewmh(), wid_, 1, &ui_->ewmh()->_NET_WM_WINDOW_TYPE_POPUP_MENU);
+        xcb_ewmh_set_wm_window_type(ui_->ewmh(), wid_, 1,
+                                    &ui_->ewmh()->_NET_WM_WINDOW_TYPE_COMBO);
     }
 
     if (ui_->ewmh()->_NET_WM_PID) {
@@ -165,6 +180,7 @@ void XCBInputWindow::update(InputContext *inputContext) {
     if (!visible()) {
         if (oldVisible) {
             xcb_unmap_window(ui_->connection(), wid_);
+            hoverIndex_ = -1;
         }
         return;
     }
