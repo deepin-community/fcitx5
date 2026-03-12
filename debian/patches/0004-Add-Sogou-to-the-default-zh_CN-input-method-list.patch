@@ -1,0 +1,64 @@
+From: zsien <quezhiyong@deepin.org>
+Date: Tue, 23 Jul 2024 16:42:14 +0800
+Subject: Add Sogou to the default zh_CN input method list
+
+---
+ data/default/zh_CN         |  3 +++
+ src/lib/fcitx/instance.cpp | 19 +++++++++++++++++++
+ 2 files changed, 22 insertions(+)
+
+Index: fcitx5-community/data/default/zh_CN
+===================================================================
+--- fcitx5-community.orig/data/default/zh_CN
++++ fcitx5-community/data/default/zh_CN
+@@ -1,3 +1,6 @@
+ [DefaultInputMethod]
+ 0=pinyin
+ 1=rime
++
++[AppendInputMethods]
++0=com.sogou.ime.ng.fcitx5.deepin
+Index: fcitx5-community/src/lib/fcitx/instance.cpp
+===================================================================
+--- fcitx5-community.orig/src/lib/fcitx/instance.cpp
++++ fcitx5-community/src/lib/fcitx/instance.cpp
+@@ -71,6 +71,8 @@ constexpr uint64_t AutoSaveIdleTime = 60
+ FCITX_CONFIGURATION(DefaultInputMethod,
+                     Option<std::vector<std::string>> defaultInputMethods{
+                         this, "DefaultInputMethod", "DefaultInputMethod"};
++                    Option<std::vector<std::string>> appendInputMethods{
++                        this, "AppendInputMethods", "AppendInputMethods"};
+                     Option<std::vector<std::string>> extraLayouts{
+                         this, "ExtraLayout", "ExtraLayout"};);
+ 
+@@ -361,6 +363,17 @@ void InstancePrivate::buildDefaultGroup(
+         }
+     }
+ 
++    std::vector<std::string> appendInputMethods;
++    for (const auto &im : defaultIMConfig.appendInputMethods.value()) {
++        if (im == defaultIM) {
++            continue;
++        }
++
++        if (imManager_.entry(im)) {
++            appendInputMethods.push_back(im);
++        }
++    }
++
+     // Create a group for each layout.
+     std::vector<std::string> groupOrders;
+     for (const auto &imLayout : imLayouts) {
+@@ -379,6 +392,12 @@ void InstancePrivate::buildDefaultGroup(
+             group.inputMethodList().emplace_back(
+                 InputMethodGroupItem(defaultIM));
+         }
++        if (!appendInputMethods.empty()) {
++            group.inputMethodList().insert(
++                group.inputMethodList().end(),
++                std::make_move_iterator(appendInputMethods.begin()),
++                std::make_move_iterator(appendInputMethods.end()));
++        }
+         FCITX_INFO() << "Items in " << groupName << ": "
+                      << group.inputMethodList();
+         group.setDefaultLayout(imLayout);
