@@ -1,5 +1,6 @@
 #! /usr/bin/dh-exec
 [linux-any] etc/xdg/Xwayland-session.d/20-fcitx-x11
+[linux-any] etc/xdg/autostart/
 usr/bin/
 [linux-any] usr/libexec/
 usr/share/applications/

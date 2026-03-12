@@ -1,0 +1,13 @@
+Index: fcitx5-community/src/lib/fcitx/globalconfig.cpp
+===================================================================
+--- fcitx5-community.orig/src/lib/fcitx/globalconfig.cpp
++++ fcitx5-community/src/lib/fcitx/globalconfig.cpp
+@@ -53,7 +53,7 @@ FCITX_CONFIGURATION(
+         this,
+         "AltTriggerKeys",
+         _("Temporally switch between first and current Input Method"),
+-        {Key("Shift_L")},
++        {Key("Control+Shift+space")},
+         KeyListConstrain({KeyConstrainFlag::AllowModifierLess,
+                           KeyConstrainFlag::AllowModifierOnly})};
+     KeyListOption enumerateForwardKeys{

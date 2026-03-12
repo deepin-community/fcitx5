@@ -1,0 +1,13 @@
+0001-fix-kde-config-fcitx5-package-name-in-fcitx5-configt.patch
+0002-configtool-opens-dde-control-center-when-using-DDE.patch
+0003-Revert-disable-ctrl-shift-enumerate-key-by-default.patch
+0004-Add-Sogou-to-the-default-zh_CN-input-method-list.patch
+0005-fix-remove-the-restart-icon.patch
+0006-update-the-default-shortcut-key-for-altTriggerKeys.patch
+0007-add-log-management-for-fcitx5-start-script.patch
+0008-remove-send-event-to-topLevel-flag.patch
+0009-fix-unify-shareInputstate-behavior-across-platforms.patch
+0010-Added-zh-HK-po-translation.patch
+0011-default_la.patch
+0012-Added-lo-po-translation.patch
+0013-hide-fcitx5-desktop-in-the-start-menu.patch

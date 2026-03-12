@@ -1,3 +1,11 @@
+fcitx5 (5.1.12-2deepin1) unstable; urgency=medium
+
+  * Merge patches from master branch.
+  * debian/rules: Enable XDGAUTOSTART.
+  * debian/fcitx5.install: Add autostart file installation.
+
+ -- Wang Yu <wangyu@uniontech.com>  Tue, 11 Mar 2026 16:15:00 +0800
+
 fcitx5 (5.1.12-2) unstable; urgency=medium
 
   * Rebuild for Debian 13 release.
