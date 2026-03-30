@@ -1,0 +1,14 @@
+From: UnionTech <packaging@uniontech.com>
+Date: Mon, 30 Mar 2026 20:40:00 +0800
+Subject: UOS: use sogou uos in default zh_CN list
+
+Only override the appended input method for UOS builds.
+
+Index: fcitx5-community/data/default/zh_CN
+===================================================================
+--- fcitx5-community.orig/data/default/zh_CN
++++ fcitx5-community/data/default/zh_CN
+@@ -5,2 +5,2 @@
+ [AppendInputMethods]
+-0=com.sogou.ime.ng.fcitx5.deepin
++0=com.sogou.ime.ng.fcitx5.uos

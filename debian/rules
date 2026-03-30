@@ -8,10 +8,26 @@ ifneq (linux,$(DEB_HOST_ARCH_OS))
 config-opt += -DUSE_SYSTEMD=OFF -DENABLE_WAYLAND=OFF
 endif
 
+ifeq (,$(filter uos Uos UOS,$(shell lsb_release -i -s)))
+    DEBUG_SHELL_FLAG = /usr/bin/bash
+    UOS_SYSTEM = no
+else
+    DEBUG_SHELL_FLAG = "/sbin/agetty -o '-p -- \\\\\\\\u' --noclear - linux"
+    UOS_SYSTEM = yes
+endif
+
 %:
 	dh $@
 
 override_dh_auto_configure:
+ifeq (yes,$(UOS_SYSTEM))
+	if patch -p1 --dry-run -R < debian/patches/0014-uos-override-sogou-for-uos.patch >/dev/null 2>&1; then \
+		echo "UOS: sogou uos patch already applied, skipping"; \
+	else \
+		echo "UOS: applying sogou uos override patch"; \
+		patch -p1 < debian/patches/0014-uos-override-sogou-for-uos.patch; \
+	fi
+endif
 	dh_auto_configure -- $(config-opt)
 
 override_dh_auto_test:
