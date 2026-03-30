@@ -1,3 +1,10 @@
+fcitx5 (5.1.12-2deepin2) unstable; urgency=medium
+
+  * d/rules: apply UOS-only patch to override Sogou default entry.
+  * debian/patches: add 0014-uos-override-sogou-for-uos.patch.
+
+ -- dengzhongyuan <dengzhongyuan@uniontech.com>  Mon, 30 Mar 2026 19:41:55 +0800
+
 fcitx5 (5.1.12-2deepin1) unstable; urgency=medium
 
   * Merge patches from master branch.

@@ -45,6 +45,7 @@ Build-Depends:
  unicode-cldr-core,
  uuid-dev,
  wayland-protocols [linux-any],
+ lsb-release
 Standards-Version: 4.7.2
 Rules-Requires-Root: no
 Homepage: https://github.com/fcitx/fcitx5
