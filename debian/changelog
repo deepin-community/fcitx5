@@ -1,3 +1,11 @@
+fcitx5 (5.1.12-2deepin3) unstable; urgency=medium
+
+  * debian/patches: add 0015-disable-showInputMethodInformation-by-default.patch.
+  * debian/patches: update enumerate key bindings with Control_L/R support.
+  * Disable ShowInputMethodInformation popup by default.
+
+ -- Wang Yu <wangyu@uniontech.com>  Thu, 16 Apr 2026 21:26:20 +0800
+
 fcitx5 (5.1.12-2deepin2) unstable; urgency=medium
 
   * d/rules: apply UOS-only patch to override Sogou default entry.
