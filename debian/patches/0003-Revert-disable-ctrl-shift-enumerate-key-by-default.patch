@@ -7,7 +7,7 @@ Index: fcitx5-community/src/lib/fcitx/globalconfig.cpp
          "EnumerateForwardKeys",
          _("Enumerate Input Method Forward"),
 -        {},
-+        {Key("Control+Shift_L")},
++        {Key("Control+Shift_L"), Key("Control+Shift+Control_L")},
          KeyListConstrain({KeyConstrainFlag::AllowModifierLess,
                            KeyConstrainFlag::AllowModifierOnly})};
      KeyListOption enumerateBackwardKeys{
@@ -15,7 +15,7 @@ Index: fcitx5-community/src/lib/fcitx/globalconfig.cpp
          "EnumerateBackwardKeys",
          _("Enumerate Input Method Backward"),
 -        {},
-+        {Key("Control+Shift_R")},
++        {Key("Control+Shift_R"), Key("Control+Shift+Control_R")},
          KeyListConstrain({KeyConstrainFlag::AllowModifierLess,
                            KeyConstrainFlag::AllowModifierOnly})};
      Option<bool> enumerateSkipFirst{

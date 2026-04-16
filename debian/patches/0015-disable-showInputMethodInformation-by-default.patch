@@ -1,0 +1,13 @@
+Index: fcitx5-community/src/lib/fcitx/globalconfig.cpp
+===================================================================
+--- fcitx5-community.orig/src/lib/fcitx/globalconfig.cpp
++++ fcitx5-community/src/lib/fcitx/globalconfig.cpp
+@@ -174,7 +174,7 @@ FCITX_CONFIGURATION(
+                                          true};
+     Option<bool> showInputMethodInformation{
+         this, "ShowInputMethodInformation",
+-        _("Show Input Method Information when switch input method"), true};
++        _("Show Input Method Information when switch input method"), false};
+     Option<bool> showInputMethodInformationWhenFocusIn{
+         this, "showInputMethodInformationWhenFocusIn",
+         _("Show Input Method Information when changing focus"), false};
