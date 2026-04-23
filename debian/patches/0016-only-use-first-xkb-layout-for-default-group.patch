@@ -1,0 +1,32 @@
+From: Wang Yu <wangyu@uniontech.com>
+Date: Mon, 21 Apr 2026 00:00:00 +0800
+Subject: Only use the first XKB layout for default group
+
+When the system has multiple XKB layouts configured (e.g. "us,cn"),
+buildDefaultGroup() would create multiple input method groups. This
+patch makes it only use the first layout to avoid creating unnecessary
+groups.
+
+---
+ src/lib/fcitx/instance.cpp | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/src/lib/fcitx/instance.cpp b/src/lib/fcitx/instance.cpp
+index d23a957..7ac9b78 100644
+--- a/src/lib/fcitx/instance.cpp
++++ b/src/lib/fcitx/instance.cpp
+@@ -271,8 +271,12 @@ void InstancePrivate::buildDefaultGroup() {
+         if (xcb) {
+             auto rules = xcb->call<IXCBModule::xkbRulesNames>(x11Name);
+             if (!rules[2].empty()) {
+-                layouts = rules[2];
+-                variants = rules[3];
++                auto layoutList =
++                    stringutils::split(rules[2], ",", stringutils::SplitBehavior::KeepEmpty);
++                auto variantList =
++                    stringutils::split(rules[3], ",", stringutils::SplitBehavior::KeepEmpty);
++                layouts = layoutList.empty() ? "" : layoutList[0];
++                variants = variantList.empty() ? "" : variantList[0];
+                 infoFound = true;
+                 return false;
+             }
