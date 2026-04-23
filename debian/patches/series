@@ -12,3 +12,4 @@
 0012-Added-lo-po-translation.patch
 0013-hide-fcitx5-desktop-in-the-start-menu.patch
 0015-disable-showInputMethodInformation-by-default.patch
+0016-only-use-first-xkb-layout-for-default-group.patch

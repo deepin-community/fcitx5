@@ -1,3 +1,10 @@
+fcitx5 (5.1.12-2deepin4) unstable; urgency=medium
+
+  * debian/patches: add 0016-only-use-first-xkb-layout-for-default-group.patch.
+  * Only use the first XKB layout when building default input method group.
+
+ -- Wang Yu <wangyu@uniontech.com>  Wed, 23 Apr 2026 10:00:00 +0800
+
 fcitx5 (5.1.12-2deepin3) unstable; urgency=medium
 
   * debian/patches: add 0015-disable-showInputMethodInformation-by-default.patch.
