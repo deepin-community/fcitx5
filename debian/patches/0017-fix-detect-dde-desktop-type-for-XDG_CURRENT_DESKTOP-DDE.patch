@@ -1,0 +1,20 @@
+Description: Fix DDE desktop type detection when XDG_CURRENT_DESKTOP=DDE
+ DDE sets XDG_CURRENT_DESKTOP to "DDE" (not "Deepin"), which was not
+ recognized by getDesktopType(). This caused the exit menu item to appear
+ on DDE despite being intended to be hidden.
+ .
+ Use starts_with("dde") to match "dde" and any "DDE:xxx" multi-value formats.
+Author: Wang Yu <wangyu@uniontech.com>
+Last-Update: 2026-04-24
+
+--- fcitx5-community.orig/src/lib/fcitx/misc_p.h
++++ fcitx5-community/src/lib/fcitx/misc_p.h
+@@ -168,7 +168,7 @@ static inline DesktopType getDesktopType
+             return DesktopType::GNOME;
+         } else if (desktop == "xfce") {
+             return DesktopType::XFCE;
+-        } else if (desktop == "deepin") {
++        } else if (desktop == "deepin" || stringutils::startsWith(desktop, "dde")) {
+             return DesktopType::DEEPIN;
+         } else if (desktop == "ukui") {
+             return DesktopType::UKUI;

@@ -1,3 +1,10 @@
+fcitx5 (5.1.12-2deepin5) unstable; urgency=medium
+
+  * debian/patches: add 0017-fix-detect-dde-desktop-type-for-XDG_CURRENT_DESKTOP-DDE.patch.
+  * Fix DDE desktop type detection when XDG_CURRENT_DESKTOP=DDE.
+
+ -- Wang Yu <wangyu@uniontech.com>  Sun, 27 Apr 2026 10:00:00 +0800
+
 fcitx5 (5.1.12-2deepin4) unstable; urgency=medium
 
   * debian/patches: add 0016-only-use-first-xkb-layout-for-default-group.patch.
