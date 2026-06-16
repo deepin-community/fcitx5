@@ -1,3 +1,10 @@
+fcitx5 (5.1.12-2deepin6) unstable; urgency=medium
+
+  * debian/patches: add 0018-show-current-input-method-name-in-sni-tooltip.patch.
+  * Show current input method name in SNI tooltip.
+
+ -- Wang Yu <wangyu@uniontech.com>  Tue, 16 Jun 2026 11:20:28 +0800
+
 fcitx5 (5.1.12-2deepin5) unstable; urgency=medium
 
   * debian/patches: add 0017-fix-detect-dde-desktop-type-for-XDG_CURRENT_DESKTOP-DDE.patch.
