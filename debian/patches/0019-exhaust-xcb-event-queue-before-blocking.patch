@@ -1,0 +1,44 @@
+From: Weng Xuetian <wengxt@gmail.com>
+Date: Tue, 25 Mar 2025 23:40:52 -0700
+Subject: [PATCH] Ensure we exhaust the xcb event queue before back to blocking.
+
+We added xcb_flush when we introduce postEvent. However, we only try to
+exhaust xcb event queue on if it is triggered by a xcb event. In some rare
+case, we may missed some xcb event to be processed.
+
+Fix #1304.
+
+Origin: upstream, commit 5a8752922f34539da621bf65e78e094789eab573
+Bug: https://github.com/fcitx/fcitx5/issues/1304
+---
+ src/modules/xcb/xcbconnection.cpp  | 1 -
+ src/modules/xcb/xcbeventreader.cpp | 1 +
+ 2 files changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/modules/xcb/xcbconnection.cpp b/src/modules/xcb/xcbconnection.cpp
+index b4c1cfe0..a5d7d782 100644
+--- a/src/modules/xcb/xcbconnection.cpp
++++ b/src/modules/xcb/xcbconnection.cpp
+@@ -348,7 +348,6 @@ void XCBConnection::processEvent() {
+             }
+         }
+     }
+-    reader_->wakeUp();
+ }
+
+ bool XCBConnection::filterEvent(xcb_connection_t *,
+diff --git a/src/modules/xcb/xcbeventreader.cpp b/src/modules/xcb/xcbeventreader.cpp
+index 58f85744..041d4677 100644
+--- a/src/modules/xcb/xcbeventreader.cpp
++++ b/src/modules/xcb/xcbeventreader.cpp
+@@ -21,6 +21,7 @@ XCBEventReader::XCBEventReader(XCBConnection *conn)
+             }
+             FCITX_XCB_DEBUG() << "xcb_flush";
+             xcb_flush(conn_->connection());
++            wakeUp();
+             return true;
+         });
+     thread_ = std::make_unique<std::thread>(&XCBEventReader::runThread, this);
+--
+2.45.2
+

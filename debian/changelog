@@ -1,3 +1,10 @@
+fcitx5 (5.1.12-2deepin7) unstable; urgency=medium
+
+  * debian/patches: add 0019-exhaust-xcb-event-queue-before-blocking.patch.
+  * Backport upstream 5a875292: fix rare missed xcb events (#1304).
+
+ -- Wang Yu <wangyu@uniontech.com>  Mon, 22 Jun 2026 14:33:46 +0800
+
 fcitx5 (5.1.12-2deepin6) unstable; urgency=medium
 
   * debian/patches: add 0018-show-current-input-method-name-in-sni-tooltip.patch.
