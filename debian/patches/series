@@ -17,3 +17,4 @@
 0018-show-current-input-method-name-in-sni-tooltip.patch
 0019-exhaust-xcb-event-queue-before-blocking.patch
 0021-support-client-virtual-keyboard-show.patch
+0022-add-configurable-virtualkeyboard-addon.patch

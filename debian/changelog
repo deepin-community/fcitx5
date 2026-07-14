@@ -1,3 +1,10 @@
+fcitx5 (5.1.12-2deepin8) unstable; urgency=medium
+
+  * debian/patches: add virtual keyboard client UI and configuration patches.
+  * Add configurable virtual keyboard display control.
+
+ -- Wang Yu <wangyu@uniontech.com>  Tue, 14 Jul 2026 16:38:31 +0800
+
 fcitx5 (5.1.12-2deepin7) unstable; urgency=medium
 
   * debian/patches: add 0019-exhaust-xcb-event-queue-before-blocking.patch.
