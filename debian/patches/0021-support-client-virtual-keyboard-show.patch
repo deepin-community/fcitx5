@@ -1,0 +1,23 @@
+Index: src/frontend/dbusfrontend/dbusfrontend.cpp
+===================================================================
+--- a/src/frontend/dbusfrontend/dbusfrontend.cpp
++++ b/src/frontend/dbusfrontend/dbusfrontend.cpp
+@@ -573,9 +588,17 @@ DBusFrontendModule::DBusFrontendModule(I
+         }));
+     events_.emplace_back(instance_->watchEvent(
+         EventType::UIChanged, EventWatcherPhase::Default, [this](Event &) {
+-            instance_->inputContextManager().foreach([](InputContext *ic) {
++            instance_->inputContextManager().foreach([this](InputContext *ic) {
+                 if (ic->frontendName() == "dbus") {
+                     static_cast<DBusInputContext1 *>(ic)->updateCapability();
++                    if (ic->capabilityFlags().test(
++                            CapabilityFlag::ClientSideInputPanel) &&
++                        instance_->currentUI() == "virtualkeyboard" &&
++                        !ic->inputPanel().empty()) {
++                        ic->inputPanel().reset();
++                        static_cast<DBusInputContext1 *>(ic)
++                            ->updateClientSideUIImpl();
++                    }
+                 }
+                 return true;
+             });
