@@ -1,3 +1,9 @@
+fcitx5 (5.1.12-2deepin9) unstable; urgency=medium
+
+  * debian/patches: fix virtual keyboard show/restart/load/translation issues in 0022.
+
+ -- Wang Yu <wangyu@uniontech.com>  Tue, 15 Jul 2026 10:10:00 +0800
+
 fcitx5 (5.1.12-2deepin8) unstable; urgency=medium
 
   * debian/patches: add virtual keyboard client UI and configuration patches.

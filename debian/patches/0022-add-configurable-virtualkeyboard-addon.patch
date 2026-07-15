@@ -1,8 +1,132 @@
+Index: src/ui/virtualkeyboard/CMakeLists.txt
+===================================================================
+--- a/src/ui/virtualkeyboard/CMakeLists.txt
++++ b/src/ui/virtualkeyboard/CMakeLists.txt
+@@ -1,4 +1,7 @@
+-add_fcitx5_addon(virtualkeyboard virtualkeyboard.cpp)
++add_fcitx5_addon(virtualkeyboard
++    virtualkeyboard.cpp
++    inputmodepolicy.cpp
++)
+ 
+ target_link_libraries(virtualkeyboard
+     Fcitx5::Core Fcitx5::Module::DBus Fcitx5::Module::NotificationItem)
+Index: src/ui/virtualkeyboard/inputmodepolicy.cpp
+===================================================================
+--- /dev/null
++++ b/src/ui/virtualkeyboard/inputmodepolicy.cpp
+@@ -0,0 +1,52 @@
++/*
++ * SPDX-FileCopyrightText: 2026 UnionTech Software Technology Co., Ltd.
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ *
++ */
++
++#include "inputmodepolicy.h"
++#include "fcitx/event.h"
++#include "fcitx/instance.h"
++
++namespace fcitx {
++
++InputModePolicy::InputModePolicy(Instance *instance) : instance_(instance) {
++    instance_->setVirtualKeyboardAutoShow(true);
++    instance_->setVirtualKeyboardAutoHide(true);
++}
++
++void InputModePolicy::setInputModeStrategy(InputModeStrategy strategy) {
++    if (inputModeStrategy_ == strategy) {
++        return;
++    }
++
++    inputModeStrategy_ = strategy;
++    instance_->setInputMethodMode(
++        strategy == InputModeStrategy::AlwaysOnScreenKeyboard
++            ? InputMethodMode::OnScreenKeyboard
++            : InputMethodMode::PhysicalKeyboard);
++}
++
++// Under AlwaysOnScreenKeyboard keep the mode put: focusIn auto-show runs in
++// the ReservedFirst phase, so nothing could restore the mode if we switched
++// away here, and the VK would stop showing for good.
++void InputModePolicy::handlePhysicalKeyEvent() {
++    if (inputModeStrategy_ == InputModeStrategy::AlwaysOnScreenKeyboard) {
++        return;
++    }
++
++    instance_->setInputMethodMode(InputMethodMode::PhysicalKeyboard);
++}
++
++void InputModePolicy::handleShowVirtualKeyboardForcibly() {
++    instance_->setInputMethodMode(InputMethodMode::OnScreenKeyboard);
++}
++
++void InputModePolicy::handleHideVirtualKeyboardForcibly() {
++    if (!instance_->virtualKeyboardAutoShow()) {
++        instance_->setInputMethodMode(InputMethodMode::PhysicalKeyboard);
++    }
++}
++
++} // namespace fcitx
+Index: src/ui/virtualkeyboard/inputmodepolicy.h
+===================================================================
+--- /dev/null
++++ b/src/ui/virtualkeyboard/inputmodepolicy.h
+@@ -0,0 +1,49 @@
++/*
++ * SPDX-FileCopyrightText: 2026 UnionTech Software Technology Co., Ltd.
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ *
++ */
++#ifndef _FCITX_UI_VIRTUALKEYBOARD_INPUTMODEPOLICY_H_
++#define _FCITX_UI_VIRTUALKEYBOARD_INPUTMODEPOLICY_H_
++
++namespace fcitx {
++
++class Instance;
++
++enum class InputModeStrategy {
++    AlwaysOnPhysicalKeyboard,
++    AlwaysOnScreenKeyboard,
++};
++
++// Arbitrates the global InputMethodMode on behalf of the virtual keyboard UI.
++// Lives in the UI addon (not Instance) because the on/off policy is a UI
++// concern under the current config; revisiting upstream would move the
++// auto-show recovery into Instance instead.
++class InputModePolicy {
++public:
++    explicit InputModePolicy(Instance *instance);
++
++    void setInputModeStrategy(InputModeStrategy strategy);
++
++    void handlePhysicalKeyEvent();
++    void handleShowVirtualKeyboardForcibly();
++    void handleHideVirtualKeyboardForcibly();
++
++private:
++    Instance *instance_;
++    // Default OnScreenKeyboard so that, when config enables the VK, the first
++    // setInputModeStrategy(AlwaysOnScreenKeyboard) is a no-op and does NOT call
++    // setInputMethodMode during the addon constructor — calling it there posts
++    // InputMethodModeChanged synchronously, which runs updateAvailability and
++    // re-enters loadAddons ("loadAddons is not reentrant"). The disabled path
++    // sets PhysicalKeyboard, but Instance already defaults to PhysicalKeyboard,
++    // so setInputMethodMode short-circuits there too. Do not change this
++    // default without re-checking the constructor reentrancy constraint.
++    InputModeStrategy inputModeStrategy_ =
++        InputModeStrategy::AlwaysOnScreenKeyboard;
++};
++
++} // namespace fcitx
++
++#endif // _FCITX_UI_VIRTUALKEYBOARD_INPUTMODEPOLICY_H_
 Index: src/ui/virtualkeyboard/virtualkeyboard.conf.in.in
 ===================================================================
 --- a/src/ui/virtualkeyboard/virtualkeyboard.conf.in.in
 +++ b/src/ui/virtualkeyboard/virtualkeyboard.conf.in.in
-@@ -5,6 +5,7 @@
+@@ -5,6 +5,7 @@ Type=@FCITX_ADDON_TYPE@
  Library=libvirtualkeyboard
  Category=UI
  Version=@PROJECT_VERSION@
@@ -14,15 +138,38 @@ Index: src/ui/virtualkeyboard/virtualkeyboard.cpp
 ===================================================================
 --- a/src/ui/virtualkeyboard/virtualkeyboard.cpp
 +++ b/src/ui/virtualkeyboard/virtualkeyboard.cpp
-@@ -212,6 +212,7 @@
+@@ -6,6 +6,8 @@
+  */
+ 
+ #include "virtualkeyboard.h"
++#include "inputmodepolicy.h"
++#include "fcitx-utils/event.h"
+ #include "fcitx-utils/dbus/message.h"
+ #include "fcitx-utils/dbus/objectvtable.h"
+ #include "fcitx-utils/dbus/servicewatcher.h"
+@@ -211,14 +213,17 @@ PageableCandidateList *VirtualKeyboardBackend::getPageableCandidateList() {
+ 
  VirtualKeyboard::VirtualKeyboard(Instance *instance)
      : instance_(instance), bus_(dbus()->call<IDBusModule::bus>()),
-       watcher_(*bus_) {
-+    reloadConfig();
+-      watcher_(*bus_) {
++      watcher_(*bus_),
++      inputModePolicy_(std::make_unique<InputModePolicy>(instance)) {
++    loadConfig(false);
++
      entry_ = watcher_.watchService(
          VirtualKeyboardName, [this](const std::string &, const std::string &,
                                      const std::string &newOwner) {
-@@ -226,6 +227,25 @@
+             FCITX_INFO() << "VirtualKeyboard new owner: " << newOwner;
+-            setAvailable(!newOwner.empty());
+-
+-            setVisible(false);
++            if (newOwner.empty()) {
++                setVisible(false);
++            }
+         });
+ 
+     initVirtualKeyboardService();
+@@ -226,6 +231,59 @@ VirtualKeyboard::VirtualKeyboard(Instance *instance)
  
  VirtualKeyboard::~VirtualKeyboard() = default;
  
@@ -31,43 +178,86 @@ Index: src/ui/virtualkeyboard/virtualkeyboard.cpp
 +void VirtualKeyboard::setConfig(const RawConfig &config) {
 +    config_.load(config, true);
 +    safeSaveAsIni(config_, "conf/virtualkeyboard.conf");
-+    updateInputMethodMode();
++    updateConfiguredAvailability(true);
 +}
 +
-+void VirtualKeyboard::reloadConfig() {
++void VirtualKeyboard::reloadConfig() { loadConfig(true); }
++
++void VirtualKeyboard::loadConfig(bool notify) {
 +    readAsIni(config_, "conf/virtualkeyboard.conf");
-+    updateInputMethodMode();
++    updateConfiguredAvailability(notify);
 +}
 +
-+void VirtualKeyboard::updateInputMethodMode() {
-+    instance_->setInputMethodMode(config_.enableVirtualKeyboard.value()
-+                                      ? InputMethodMode::OnScreenKeyboard
-+                                      : InputMethodMode::PhysicalKeyboard);
++void VirtualKeyboard::updateConfiguredAvailability(bool notify) {
++    const bool enabled = config_.enableVirtualKeyboard.value();
++
++    if (notify) {
++        setAvailable(enabled);
++    } else {
++        available_ = enabled;
++    }
++
++    if (enabled) {
++        inputModePolicy_->setInputModeStrategy(
++            InputModeStrategy::AlwaysOnScreenKeyboard);
++        if (!notify) {
++            // On restart, Instance defaults to PhysicalKeyboard mode, so the
++            // VK UI is never selected and auto-show silently fails. We can't
++            // switch to OnScreen synchronously here: setInputMethodMode posts
++            // InputMethodModeChanged, which re-enters loadAddons during the
++            // addon's own construction. setInputModeStrategy also early-returns
++            // (its default already matches). Defer the mode switch to the next
++            // event-loop iteration, after construction/loadAddons completes.
++            applyDeferredOnScreenMode();
++        }
++    } else {
++        setVisible(false);
++        inputModePolicy_->setInputModeStrategy(
++            InputModeStrategy::AlwaysOnPhysicalKeyboard);
++    }
++}
++
++void VirtualKeyboard::applyDeferredOnScreenMode() {
++    deferModeEvent_ = instance_->eventLoop().addDeferEvent(
++        [this](EventSource *) {
++            instance_->setInputMethodMode(InputMethodMode::OnScreenKeyboard);
++            return true;
++        });
++    deferModeEvent_->setOneShot();
 +}
 +
  void VirtualKeyboard::suspend() {
      if (auto *sni = notificationitem()) {
          sni->call<INotificationItem::disable>();
-@@ -288,7 +308,7 @@
+@@ -276,7 +334,7 @@ void VirtualKeyboard::resume() {
+                 return;
+             }
+ 
+-            instance_->setInputMethodMode(InputMethodMode::PhysicalKeyboard);
++            inputModePolicy_->handlePhysicalKeyEvent();
+         }));
  }
  
- void VirtualKeyboard::showVirtualKeyboard() {
--    if (!available_) {
-+    if (!config_.enableVirtualKeyboard.value() || !available_) {
+@@ -320,7 +378,7 @@ void VirtualKeyboard::showVirtualKeyboardForcibly() {
          return;
      }
  
-@@ -316,6 +336,10 @@
+-    instance_->setInputMethodMode(InputMethodMode::OnScreenKeyboard);
++    inputModePolicy_->handleShowVirtualKeyboardForcibly();
+ 
+     showVirtualKeyboard();
+ }
+@@ -332,9 +390,7 @@ void VirtualKeyboard::hideVirtualKeyboardForcibly() {
+ 
+     hideVirtualKeyboard();
+ 
+-    if (!instance_->virtualKeyboardAutoShow()) {
+-        instance_->setInputMethodMode(InputMethodMode::PhysicalKeyboard);
+-    }
++    inputModePolicy_->handleHideVirtualKeyboardForcibly();
  }
  
- void VirtualKeyboard::showVirtualKeyboardForcibly() {
-+    if (!config_.enableVirtualKeyboard.value()) {
-+        return;
-+    }
-+
-     if (!available_) {
-         return;
-     }
+ void VirtualKeyboard::toggleVirtualKeyboard() {
 Index: src/ui/virtualkeyboard/virtualkeyboard.h
 ===================================================================
 --- a/src/ui/virtualkeyboard/virtualkeyboard.h
@@ -83,14 +273,19 @@ Index: src/ui/virtualkeyboard/virtualkeyboard.h
  #include "fcitx/addonfactory.h"
  #include "fcitx/addoninstance.h"
  #include "fcitx/addonmanager.h"
-@@ -20,12 +23,20 @@
+@@ -17,15 +20,25 @@
+ namespace fcitx {
+ 
+ class CandidateList;
++struct EventSource;
++class InputModePolicy;
  class VirtualKeyboardBackend;
  class VirtualKeyboardService;
  
 +FCITX_CONFIGURATION(VirtualKeyboardConfig,
 +                    Option<bool> enableVirtualKeyboard{
 +                        this, "EnableVirtualKeyboard",
-+                        _("Force virtual keyboard"), false};);
++                        _("Enable virtual keyboard"), false};);
 +
  class VirtualKeyboard : public VirtualKeyboardUserInterface {
  public:
@@ -104,16 +299,27 @@ Index: src/ui/virtualkeyboard/virtualkeyboard.h
      void suspend() override;
      void resume() override;
      bool available() override { return available_; }
-@@ -47,6 +58,7 @@
+@@ -47,6 +60,9 @@ public:
  
  private:
      void initVirtualKeyboardService();
-+    void updateInputMethodMode();
++    void loadConfig(bool notify);
++    void updateConfiguredAvailability(bool notify);
++    void applyDeferredOnScreenMode();
  
      void setAvailable(bool available);
  
-@@ -85,6 +97,7 @@
+@@ -78,13 +94,16 @@ private:
+     Instance *instance_;
+     dbus::Bus *bus_;
+     dbus::ServiceWatcher watcher_;
++    std::unique_ptr<InputModePolicy> inputModePolicy_;
+     std::unique_ptr<VirtualKeyboardBackend> proxy_;
+     std::unique_ptr<VirtualKeyboardService> service_;
+     std::unique_ptr<dbus::ServiceWatcherEntry> entry_;
+     std::vector<std::unique_ptr<HandlerTableEntry<EventHandler>>>
          eventHandlers_;
++    std::unique_ptr<EventSource> deferModeEvent_;
      bool available_ = false;
      bool visible_ = false;
 +    VirtualKeyboardConfig config_;
@@ -124,12 +330,12 @@ Index: po/fcitx5.pot
 ===================================================================
 --- a/po/fcitx5.pot
 +++ b/po/fcitx5.pot
-@@ -103,6 +103,10 @@
+@@ -103,6 +103,10 @@ msgstr ""
  msgid "A virtual keyboard backend based on DBus"
  msgstr ""
  
 +#: src/ui/virtualkeyboard/virtualkeyboard.h:31
-+msgid "Force virtual keyboard"
++msgid "Enable virtual keyboard"
 +msgstr ""
 +
  #: src/ui/classic/theme.h:210
@@ -139,13 +345,13 @@ Index: po/zh_CN.po
 ===================================================================
 --- a/po/zh_CN.po
 +++ b/po/zh_CN.po
-@@ -111,6 +111,10 @@
+@@ -111,6 +111,10 @@ msgstr "<未指派>"
  msgid "A virtual keyboard backend based on DBus"
  msgstr "一个基于 DBus 的虚拟键盘后端"
  
 +#: src/ui/virtualkeyboard/virtualkeyboard.h:31
-+msgid "Force virtual keyboard"
-+msgstr "强制使用虚拟键盘"
++msgid "Enable virtual keyboard"
++msgstr "启用虚拟键盘"
 +
  #: src/ui/classic/theme.h:210
  msgid "Accent Colors"
@@ -154,13 +360,13 @@ Index: po/zh_TW.po
 ===================================================================
 --- a/po/zh_TW.po
 +++ b/po/zh_TW.po
-@@ -117,6 +117,10 @@
+@@ -117,6 +117,10 @@ msgstr "<未指定>"
  msgid "A virtual keyboard backend based on DBus"
  msgstr "一個基於 DBus 的虛擬鍵盤後端"
  
 +#: src/ui/virtualkeyboard/virtualkeyboard.h:31
-+msgid "Force virtual keyboard"
-+msgstr "強制使用虛擬鍵盤"
++msgid "Enable virtual keyboard"
++msgstr "啟用虛擬鍵盤"
 +
  #: src/ui/classic/theme.h:210
  msgid "Accent Colors"
@@ -169,13 +375,13 @@ Index: po/ca.po
 ===================================================================
 --- a/po/ca.po
 +++ b/po/ca.po
-@@ -108,6 +108,10 @@
+@@ -108,6 +108,10 @@ msgstr "<no assignat>"
  msgid "A virtual keyboard backend based on DBus"
  msgstr ""
  
 +#: src/ui/virtualkeyboard/virtualkeyboard.h:31
-+msgid "Force virtual keyboard"
-+msgstr "Força l'ús del teclat virtual"
++msgid "Enable virtual keyboard"
++msgstr "Activa el teclat virtual"
 +
  #: src/ui/classic/theme.h:210
  msgid "Accent Colors"
@@ -184,13 +390,13 @@ Index: po/da.po
 ===================================================================
 --- a/po/da.po
 +++ b/po/da.po
-@@ -108,6 +108,10 @@
+@@ -108,6 +108,10 @@ msgstr "<ikke tildelt>"
  msgid "A virtual keyboard backend based on DBus"
  msgstr ""
  
 +#: src/ui/virtualkeyboard/virtualkeyboard.h:31
-+msgid "Force virtual keyboard"
-+msgstr ""
++msgid "Enable virtual keyboard"
++msgstr "Aktivér virtuelt tastatur"
 +
  #: src/ui/classic/theme.h:210
  msgid "Accent Colors"
@@ -199,13 +405,13 @@ Index: po/de.po
 ===================================================================
 --- a/po/de.po
 +++ b/po/de.po
-@@ -110,6 +110,10 @@
+@@ -110,6 +110,10 @@ msgstr "<not assigned>"
  msgid "A virtual keyboard backend based on DBus"
  msgstr "Eine virtuelle Tastatur basierend auf DBus"
  
 +#: src/ui/virtualkeyboard/virtualkeyboard.h:31
-+msgid "Force virtual keyboard"
-+msgstr "Virtuelle Tastatur erzwingen"
++msgid "Enable virtual keyboard"
++msgstr "Virtuelle Tastatur aktivieren"
 +
  #: src/ui/classic/theme.h:210
  msgid "Accent Colors"
@@ -214,13 +420,13 @@ Index: po/es.po
 ===================================================================
 --- a/po/es.po
 +++ b/po/es.po
-@@ -106,6 +106,10 @@
+@@ -106,6 +106,10 @@ msgstr ""
  msgid "A virtual keyboard backend based on DBus"
  msgstr ""
  
 +#: src/ui/virtualkeyboard/virtualkeyboard.h:31
-+msgid "Force virtual keyboard"
-+msgstr "Forzar teclado virtual"
++msgid "Enable virtual keyboard"
++msgstr "Activar teclado virtual"
 +
  #: src/ui/classic/theme.h:210
  msgid "Accent Colors"
@@ -229,13 +435,13 @@ Index: po/fr.po
 ===================================================================
 --- a/po/fr.po
 +++ b/po/fr.po
-@@ -109,6 +109,10 @@
+@@ -109,6 +109,10 @@ msgstr "<non attribué>"
  msgid "A virtual keyboard backend based on DBus"
  msgstr ""
  
 +#: src/ui/virtualkeyboard/virtualkeyboard.h:31
-+msgid "Force virtual keyboard"
-+msgstr "Forcer le clavier virtuel"
++msgid "Enable virtual keyboard"
++msgstr "Activer le clavier virtuel"
 +
  #: src/ui/classic/theme.h:210
  msgid "Accent Colors"
@@ -244,13 +450,13 @@ Index: po/he.po
 ===================================================================
 --- a/po/he.po
 +++ b/po/he.po
-@@ -109,6 +109,10 @@
+@@ -109,6 +109,10 @@ msgstr ""
  msgid "A virtual keyboard backend based on DBus"
  msgstr ""
  
 +#: src/ui/virtualkeyboard/virtualkeyboard.h:31
-+msgid "Force virtual keyboard"
-+msgstr "כפה מקלדת וירטואלית"
++msgid "Enable virtual keyboard"
++msgstr "הפעלת מקלדת וירטואלית"
 +
  #: src/ui/classic/theme.h:210
  msgid "Accent Colors"
@@ -259,13 +465,13 @@ Index: po/ja.po
 ===================================================================
 --- a/po/ja.po
 +++ b/po/ja.po
-@@ -110,6 +110,10 @@
+@@ -110,6 +110,10 @@ msgstr "<not assigned>"
  msgid "A virtual keyboard backend based on DBus"
  msgstr "DBus ベースの仮想キーボードバックエンド"
  
 +#: src/ui/virtualkeyboard/virtualkeyboard.h:31
-+msgid "Force virtual keyboard"
-+msgstr "仮想キーボードを強制する"
++msgid "Enable virtual keyboard"
++msgstr "仮想キーボードを有効にする"
 +
  #: src/ui/classic/theme.h:210
  msgid "Accent Colors"
@@ -274,13 +480,13 @@ Index: po/ko.po
 ===================================================================
 --- a/po/ko.po
 +++ b/po/ko.po
-@@ -111,6 +111,10 @@
+@@ -111,6 +111,10 @@ msgstr "<할당 안됨>"
  msgid "A virtual keyboard backend based on DBus"
  msgstr ""
  
 +#: src/ui/virtualkeyboard/virtualkeyboard.h:31
-+msgid "Force virtual keyboard"
-+msgstr "가상 키보드 강제 사용"
++msgid "Enable virtual keyboard"
++msgstr "가상 키보드 활성화"
 +
  #: src/ui/classic/theme.h:210
  msgid "Accent Colors"
@@ -289,13 +495,13 @@ Index: po/ru.po
 ===================================================================
 --- a/po/ru.po
 +++ b/po/ru.po
-@@ -111,6 +111,10 @@
+@@ -111,6 +111,10 @@ msgstr "<не назначен>"
  msgid "A virtual keyboard backend based on DBus"
  msgstr "Серверная часть виртуальной клавиатуры на основе DBus"
  
 +#: src/ui/virtualkeyboard/virtualkeyboard.h:31
-+msgid "Force virtual keyboard"
-+msgstr "Принудительно использовать виртуальную клавиатуру"
++msgid "Enable virtual keyboard"
++msgstr "Включить виртуальную клавиатуру"
 +
  #: src/ui/classic/theme.h:210
  msgid "Accent Colors"
@@ -304,13 +510,13 @@ Index: po/vi.po
 ===================================================================
 --- a/po/vi.po
 +++ b/po/vi.po
-@@ -107,6 +107,10 @@
+@@ -107,6 +107,10 @@ msgstr "<not assigned>"
  msgid "A virtual keyboard backend based on DBus"
  msgstr ""
  
 +#: src/ui/virtualkeyboard/virtualkeyboard.h:31
-+msgid "Force virtual keyboard"
-+msgstr "Buộc sử dụng bàn phím ảo"
++msgid "Enable virtual keyboard"
++msgstr "Bật bàn phím ảo"
 +
  #: src/ui/classic/theme.h:210
  msgid "Accent Colors"
