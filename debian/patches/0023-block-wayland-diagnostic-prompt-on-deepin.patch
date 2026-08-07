@@ -1,0 +1,18 @@
+Description: Suppress Wayland diagnostics on Deepin
+ Deepin has requested that Fcitx not display Wayland diagnostic messages in
+ its desktop environment.
+Author: groveer <guoyao@uniontech.com>
+Origin: upstream, https://github.com/fcitx/fcitx5/pull/1629
+Last-Update: 2026-08-07
+
+--- a/src/modules/wayland/waylandmodule.cpp
++++ b/src/modules/wayland/waylandmodule.cpp
+@@ -637,6 +637,8 @@ void WaylandModule::selfDiagnose() {
+                   "see "
+                   "https://fcitx-im.org/wiki/Using_Fcitx_5_on_Wayland#GNOME"));
+         }
++    } else if (desktop == DesktopType::DEEPIN) {
++        // Per Deepin upstream request, do not show this message for them.
+     } else {
+         // It is not clear whether compositor is supported, only warn if wayland
+         // im is being used..

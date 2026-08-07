@@ -18,3 +18,4 @@
 0019-exhaust-xcb-event-queue-before-blocking.patch
 0021-support-client-virtual-keyboard-show.patch
 0022-add-configurable-virtualkeyboard-addon.patch
+0023-block-wayland-diagnostic-prompt-on-deepin.patch
