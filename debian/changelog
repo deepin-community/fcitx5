@@ -1,3 +1,10 @@
+fcitx5 (5.1.12-2deepin10) unstable; urgency=medium
+
+  * debian/patches: add 0023-block-wayland-diagnostic-prompt-on-deepin.patch.
+  * Suppress Wayland diagnostic prompts in the Deepin desktop environment.
+
+ -- Wang Yu <wangyu@uniontech.com>  Fri, 7 Aug 2026 14:30:00 +0800
+
 fcitx5 (5.1.12-2deepin9) unstable; urgency=medium
 
   * debian/patches: fix virtual keyboard show/restart/load/translation issues in 0022.
