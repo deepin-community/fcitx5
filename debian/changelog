@@ -1,3 +1,10 @@
+fcitx5 (5.1.12-2deepin11) unstable; urgency=medium
+
+  * debian/patches: add 0024-preserve-current-im-when-updating-input-method-group.patch.
+  * Preserve the current input method when updating the input method group.
+
+ -- Wang Yu <wangyu@uniontech.com>  Sun, 10 Aug 2026 13:20:00 +0800
+
 fcitx5 (5.1.12-2deepin10) unstable; urgency=medium
 
   * debian/patches: add 0023-block-wayland-diagnostic-prompt-on-deepin.patch.
