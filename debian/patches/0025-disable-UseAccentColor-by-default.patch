@@ -1,0 +1,21 @@
+Description: Disable UseAccentColor by default in classicui
+ Change the default value of the "UseAccentColor" option in the classic UI
+ from true to false, so the candidate window no longer follows the system
+ accent color unless the user explicitly enables it.
+Author: wangyu <wangyu@uniontech.com>
+Forwarded: not-needed
+Last-Update: 2026-08-21
+
+diff --git a/src/ui/classic/classicui.h b/src/ui/classic/classicui.h
+index b79510b..0d14b11 100644
+--- a/src/ui/classic/classicui.h
++++ b/src/ui/classic/classicui.h
+@@ -168,7 +168,7 @@ FCITX_CONFIGURATION(
+     Option<bool> useAccentColor{
+         this, "UseAccentColor",
+         _("Follow system accent color if it is supported by theme and desktop"),
+-        true};
++        false};
+     OptionWithAnnotation<bool, ToolTipAnnotation> perScreenDPI{
+         this,
+         "PerScreenDPI",

@@ -1,3 +1,10 @@
+fcitx5 (5.1.12-2deepin12) unstable; urgency=medium
+
+  * debian/patches: add 0025-disable-UseAccentColor-by-default.patch.
+  * Disable UseAccentColor by default in the classic UI.
+
+ -- Wang Yu <wangyu@uniontech.com>  Fri, 21 Aug 2026 10:28:17 +0800
+
 fcitx5 (5.1.12-2deepin11) unstable; urgency=medium
 
   * debian/patches: add 0024-preserve-current-im-when-updating-input-method-group.patch.
