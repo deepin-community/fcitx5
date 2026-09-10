@@ -1,3 +1,9 @@
+fcitx5 (5.1.12-2deepin13) unstable; urgency=medium
+
+  * Rebuild with LTO enabled (dpkg vendor feature optimize/lto).
+
+ -- tunaichao <tunaichao@uniontech.com>  Thu, 10 Sep 2026 16:53:36 +0800
+
 fcitx5 (5.1.12-2deepin12) unstable; urgency=medium
 
   * debian/patches: add 0025-disable-UseAccentColor-by-default.patch.
