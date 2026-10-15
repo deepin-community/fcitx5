@@ -1,0 +1,41 @@
+Description: Fix restart signal and addon teardown handling
+ Avoid collecting a backtrace while handling SIGTERM so restart-triggered
+ shutdown does not perform stack unwinding in the signal handler. Unload
+ addons before finalizing the input context manager so addon-owned input
+ contexts are destroyed before the manager clears its remaining contexts.
+Author: wangyu <wangyu@uniontech.com>
+Forwarded: not-needed
+Last-Update: 2026-10-15
+
+diff --git a/src/lib/fcitx/instance.cpp b/src/lib/fcitx/instance.cpp
+index d23a957..6a37c7b 100644
+--- a/src/lib/fcitx/instance.cpp
++++ b/src/lib/fcitx/instance.cpp
+@@ -1244,8 +1244,8 @@ Instance::Instance(int argc, char **argv) {
+ 
+ Instance::~Instance() {
+     FCITX_D();
+-    d->icManager_.finalize();
+     d->addonManager_.unload();
++    d->icManager_.finalize();
+     d->notifications_ = nullptr;
+     d->icManager_.setInstance(nullptr);
+ }
+diff --git a/src/server/errorhandler.cpp b/src/server/errorhandler.cpp
+index 9550e1a..7db9a51 100644
+--- a/src/server/errorhandler.cpp
++++ b/src/server/errorhandler.cpp
+@@ -120,6 +120,13 @@ void OnException(int signo) {
+         return;
+     }
+ 
++    if (signo == SIGTERM) {
++        uint8_t sig = (signo & 0xff);
++        fcitx::fs::safeWrite(selfpipe[1], &sig, 1);
++        signal(signo, OnException);
++        return;
++    }
++
+     MinimalBuffer buffer;
+     int fd = -1;
+ 
