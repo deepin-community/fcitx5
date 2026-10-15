@@ -21,3 +21,4 @@
 0023-block-wayland-diagnostic-prompt-on-deepin.patch
 0024-preserve-current-im-when-updating-input-method-group.patch
 0025-disable-UseAccentColor-by-default.patch
+0026-fix-restart-teardown.patch

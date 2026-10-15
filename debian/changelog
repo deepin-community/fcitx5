@@ -1,3 +1,11 @@
+fcitx5 (5.1.12-2deepin14) unstable; urgency=medium
+
+  * debian/patches: add 0026-fix-restart-teardown.patch.
+  * Avoid backtrace collection on SIGTERM and unload addons before finalizing
+    the input context manager to prevent restart-related crashes.
+
+ -- Wang Yu <wangyu@uniontech.com>  Thu, 15 Oct 2026 09:30:11 +0800
+
 fcitx5 (5.1.12-2deepin13) unstable; urgency=medium
 
   * Rebuild with LTO enabled (dpkg vendor feature optimize/lto).
